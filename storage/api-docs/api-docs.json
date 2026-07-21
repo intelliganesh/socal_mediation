@@ -1,0 +1,819 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Socal Mediation Center API",
+        "description": "REST APIs for Socal mediation and legal consultation booking flows.",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "/api",
+            "description": "Application API"
+        }
+    ],
+    "paths": {
+        "/v1/consultation-types": {
+            "get": {
+                "tags": [
+                    "Consultation Type Catalog"
+                ],
+                "summary": "List available consultation types",
+                "operationId": "fe3078d8b8b53c6e6d753c86798f722e",
+                "parameters": [
+                    {
+                        "name": "application",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "socal",
+                                "legal"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Consultation type catalog",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "OK"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/ConsultationType"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/legal-services": {
+            "get": {
+                "tags": [
+                    "Consultation Type Catalog"
+                ],
+                "summary": "List selectable legal service categories",
+                "operationId": "449b8dd89af589e31fb1a6cf90660357",
+                "parameters": [
+                    {
+                        "name": "application",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "socal",
+                                "legal"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Legal service catalog",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "OK"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/LegalService"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/consultations/draft": {
+            "post": {
+                "tags": [
+                    "Consultations"
+                ],
+                "summary": "Create or save a draft consultation",
+                "description": "Creates the draft after consultation type selection. Optional fields can be sent from the details form to preserve partially completed data while the status remains draft.",
+                "operationId": "f24f08a3bb792234caea075eae9f8dbf",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "consultation_type_id"
+                                ],
+                                "properties": {
+                                    "consultation_type_id": {
+                                        "type": "integer",
+                                        "example": 3
+                                    },
+                                    "legal_service_name": {
+                                        "type": "string",
+                                        "example": "Business, Payment & Contract Disputes",
+                                        "nullable": true
+                                    },
+                                    "consultation_mode": {
+                                        "type": "string",
+                                        "example": "online",
+                                        "nullable": true,
+                                        "enum": [
+                                            "online",
+                                            "offline",
+                                            "phone"
+                                        ]
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "example": "Briefly describe the legal guidance or assistance needed.",
+                                        "nullable": true
+                                    },
+                                    "referral_source": {
+                                        "type": "string",
+                                        "example": "Google",
+                                        "nullable": true
+                                    },
+                                    "primary_client": {
+                                        "$ref": "#/components/schemas/ParticipantPayload"
+                                    },
+                                    "participants": {
+                                        "type": "array",
+                                        "items": {
+                                            "$ref": "#/components/schemas/ParticipantPayload"
+                                        },
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Draft consultation created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Draft consultation created."
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/Consultation"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/consultations/{consultation}": {
+            "get": {
+                "tags": [
+                    "Consultations"
+                ],
+                "summary": "Get a consultation by UUID",
+                "operationId": "7afb8bdee805c3e8498845e4f0f4c383",
+                "parameters": [
+                    {
+                        "name": "consultation",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Consultation detail",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "OK"
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/Consultation"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Consultation not found"
+                    }
+                }
+            }
+        },
+        "/v1/consultations/{consultation}/complete": {
+            "post": {
+                "tags": [
+                    "Consultations",
+                    "Payments"
+                ],
+                "summary": "Complete consultation details, schedule the slot, and send payment links",
+                "description": "Send only schedule and payment fields when client details were already saved on the draft. Any client/detail fields included here override the draft values before payment links are created.",
+                "operationId": "9a3e9f517de780db1b670233c30e99ae",
+                "parameters": [
+                    {
+                        "name": "consultation",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "starts_at",
+                                    "payment_mode"
+                                ],
+                                "properties": {
+                                    "legal_service_name": {
+                                        "type": "string",
+                                        "example": "Business, Payment & Contract Disputes",
+                                        "nullable": true
+                                    },
+                                    "consultation_mode": {
+                                        "type": "string",
+                                        "example": "online",
+                                        "enum": [
+                                            "online",
+                                            "offline",
+                                            "phone"
+                                        ]
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "example": "Need help reviewing a dispute before mediation.",
+                                        "nullable": true
+                                    },
+                                    "referral_source": {
+                                        "type": "string",
+                                        "example": "Google",
+                                        "nullable": true
+                                    },
+                                    "primary_client": {
+                                        "$ref": "#/components/schemas/ParticipantPayload"
+                                    },
+                                    "participants": {
+                                        "type": "array",
+                                        "items": {
+                                            "$ref": "#/components/schemas/ParticipantPayload"
+                                        }
+                                    },
+                                    "starts_at": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2026-08-14T09:00:00-07:00"
+                                    },
+                                    "professional_id": {
+                                        "type": "integer",
+                                        "example": 1,
+                                        "nullable": true
+                                    },
+                                    "timezone": {
+                                        "type": "string",
+                                        "example": "America/Los_Angeles",
+                                        "nullable": true
+                                    },
+                                    "payment_mode": {
+                                        "type": "string",
+                                        "example": "split",
+                                        "enum": [
+                                            "full",
+                                            "split"
+                                        ]
+                                    },
+                                    "payment_method": {
+                                        "type": "string",
+                                        "example": "card",
+                                        "nullable": true,
+                                        "enum": [
+                                            "card",
+                                            "ach"
+                                        ]
+                                    },
+                                    "payment_participant_emails": {
+                                        "description": "For split payments, omit this field to split across all participants, or pass selected participant emails.",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "format": "email"
+                                        },
+                                        "example": [
+                                            "client@example.com",
+                                            "other@example.com"
+                                        ],
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Consultation completed and payment links created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Consultation completed and payment links sent."
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/Consultation"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed, invalid service name, unavailable slot, or invalid payment split"
+                    }
+                }
+            }
+        },
+        "/v1/availability": {
+            "get": {
+                "tags": [
+                    "Consultations"
+                ],
+                "summary": "Return duration-based available slots for a consultation type and month",
+                "description": "The day window comes from BOOKING_DAY_START and BOOKING_DAY_END. Slot spacing comes from the selected consultation type duration, and each slot is marked unavailable when it overlaps an application booking or Outlook busy event.",
+                "operationId": "dc46d90a1ee3cef5f47d540a7c896d01",
+                "parameters": [
+                    {
+                        "name": "consultation_type_id",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 3
+                        }
+                    },
+                    {
+                        "name": "month",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "2026-08"
+                        }
+                    },
+                    {
+                        "name": "professional_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Monthly availability",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "OK"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/AvailabilityDay"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                }
+            }
+        },
+        "/v1/payments/converge/webhook": {
+            "post": {
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Accept Converge payment status callbacks",
+                "operationId": "0fe2f4a0d69c8624ba796ca8a40242a0",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "provider_reference",
+                                    "status"
+                                ],
+                                "properties": {
+                                    "provider_reference": {
+                                        "type": "string",
+                                        "example": "conv_abc123"
+                                    },
+                                    "status": {
+                                        "type": "string",
+                                        "example": "paid",
+                                        "enum": [
+                                            "paid",
+                                            "failed",
+                                            "cancelled"
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Webhook accepted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Webhook accepted."
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/Consultation"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Payment request not found"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ApiEnvelope": {
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "OK"
+                    },
+                    "data": {
+                        "type": "object",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "ConsultationType": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 3
+                    },
+                    "application": {
+                        "type": "string",
+                        "example": "socal",
+                        "enum": [
+                            "socal",
+                            "legal"
+                        ]
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Full Day Mediation"
+                    },
+                    "slug": {
+                        "type": "string",
+                        "example": "socal-full-day-mediation"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "duration_minutes": {
+                        "type": "integer",
+                        "example": 480
+                    },
+                    "price_cents": {
+                        "type": "integer",
+                        "example": 520000
+                    },
+                    "currency": {
+                        "type": "string",
+                        "example": "USD"
+                    },
+                    "max_participants": {
+                        "type": "integer",
+                        "example": 5
+                    },
+                    "allows_split_payment": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "allows_phone": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "allows_online": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "allows_offline": {
+                        "type": "boolean",
+                        "example": true
+                    }
+                },
+                "type": "object"
+            },
+            "LegalService": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "application": {
+                        "type": "string",
+                        "example": "socal",
+                        "enum": [
+                            "socal",
+                            "legal"
+                        ]
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Business, Payment & Contract Disputes"
+                    },
+                    "slug": {
+                        "type": "string",
+                        "example": "business-payment-contract-disputes"
+                    }
+                },
+                "type": "object"
+            },
+            "ParticipantPayload": {
+                "required": [
+                    "first_name"
+                ],
+                "properties": {
+                    "first_name": {
+                        "type": "string",
+                        "example": "Jonathan"
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "example": "Miller",
+                        "nullable": true
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "example": "jonathan@example.com",
+                        "nullable": true
+                    },
+                    "phone_country": {
+                        "type": "string",
+                        "example": "+1",
+                        "nullable": true
+                    },
+                    "phone": {
+                        "type": "string",
+                        "example": "(495) 060-0000",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "Consultation": {
+                "properties": {
+                    "uuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "booking_number": {
+                        "type": "string",
+                        "example": "LX-49201"
+                    },
+                    "application": {
+                        "type": "string",
+                        "example": "socal",
+                        "enum": [
+                            "socal",
+                            "legal"
+                        ]
+                    },
+                    "status": {
+                        "type": "string",
+                        "example": "pending_payment"
+                    },
+                    "payment_status": {
+                        "type": "string",
+                        "example": "pending"
+                    },
+                    "consultation_mode": {
+                        "type": "string",
+                        "nullable": true,
+                        "enum": [
+                            "online",
+                            "offline",
+                            "phone"
+                        ]
+                    },
+                    "starts_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-08-11T09:00:00-07:00",
+                        "nullable": true
+                    },
+                    "ends_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-08-11T17:00:00-07:00",
+                        "nullable": true
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "example": "America/Los_Angeles"
+                    },
+                    "description": {
+                        "type": "string",
+                        "example": "Need help reviewing a dispute before mediation.",
+                        "nullable": true
+                    },
+                    "referral_source": {
+                        "type": "string",
+                        "example": "Google",
+                        "nullable": true
+                    },
+                    "total_amount_cents": {
+                        "type": "integer",
+                        "example": 520000
+                    },
+                    "currency": {
+                        "type": "string",
+                        "example": "USD"
+                    },
+                    "payment_mode": {
+                        "type": "string",
+                        "nullable": true,
+                        "enum": [
+                            "full",
+                            "split"
+                        ]
+                    },
+                    "zoom_join_url": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "type": {
+                        "$ref": "#/components/schemas/ConsultationType"
+                    },
+                    "legal_service": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/LegalService"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "AvailabilityDay": {
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date",
+                        "example": "2026-08-14"
+                    },
+                    "slots": {
+                        "type": "array",
+                        "items": {
+                            "properties": {
+                                "time": {
+                                    "type": "string",
+                                    "example": "09:00"
+                                },
+                                "starts_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                },
+                                "ends_at": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                },
+                                "available": {
+                                    "type": "boolean",
+                                    "example": true
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                },
+                "type": "object"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Consultations"
+        },
+        {
+            "name": "Payments"
+        },
+        {
+            "name": "Consultation Type Catalog",
+            "description": "Consultation Type Catalog"
+        }
+    ]
+}
