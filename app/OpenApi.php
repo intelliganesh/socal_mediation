@@ -65,12 +65,13 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'uuid', type: 'string', format: 'uuid'),
         new OA\Property(property: 'booking_number', type: 'string', example: 'LX-49201'),
         new OA\Property(property: 'application', type: 'string', enum: ['socal', 'legal'], example: 'socal'),
-        new OA\Property(property: 'status', type: 'string', example: 'pending_payment'),
+        new OA\Property(property: 'status', type: 'string', enum: ['draft', 'payment_pending', 'paid', 'scheduled', 'cancelled'], example: 'payment_pending'),
         new OA\Property(property: 'payment_status', type: 'string', example: 'pending'),
         new OA\Property(property: 'consultation_mode', type: 'string', nullable: true, enum: ['online', 'offline', 'phone']),
         new OA\Property(property: 'starts_at', type: 'string', format: 'date-time', nullable: true, example: '2026-08-11T09:00:00-07:00'),
         new OA\Property(property: 'ends_at', type: 'string', format: 'date-time', nullable: true, example: '2026-08-11T17:00:00-07:00'),
         new OA\Property(property: 'timezone', type: 'string', example: 'America/Los_Angeles'),
+        new OA\Property(property: 'legal_service_name', type: 'string', nullable: true, example: 'Business, Payment & Contract Disputes'),
         new OA\Property(property: 'description', type: 'string', nullable: true, example: 'Need help reviewing a dispute before mediation.'),
         new OA\Property(property: 'referral_source', type: 'string', nullable: true, example: 'Google'),
         new OA\Property(property: 'total_amount_cents', type: 'integer', example: 520000),
@@ -78,7 +79,6 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'payment_mode', type: 'string', nullable: true, enum: ['full', 'split']),
         new OA\Property(property: 'zoom_join_url', type: 'string', nullable: true),
         new OA\Property(property: 'type', ref: '#/components/schemas/ConsultationType'),
-        new OA\Property(property: 'legal_service', ref: '#/components/schemas/LegalService', nullable: true),
     ]
 )]
 #[OA\Schema(

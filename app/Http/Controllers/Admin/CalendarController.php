@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Consultation;
+use App\Models\ConsultationType;
 use App\Services\Integrations\OutlookCalendarClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class CalendarController extends Controller
         $consultations = Consultation::with('type')
             ->whereBetween('starts_at', [$start, $start->endOfMonth()])
             ->when($request->query('application'), fn ($query, $application) => $query->where('application', $application))
+            ->when($request->query('consultation_type_id'), fn ($query, $typeId) => $query->where('consultation_type_id', $typeId))
             ->orderBy('starts_at')
             ->get();
 
@@ -28,6 +30,12 @@ class CalendarController extends Controller
             'consultations' => $consultations,
             'selectedMonth' => $start,
             'selectedApplication' => $request->query('application'),
+            'selectedConsultationTypeId' => $request->query('consultation_type_id'),
+            'consultationTypes' => ConsultationType::query()
+                ->when($request->query('application'), fn ($query, $application) => $query->where('application', $application))
+                ->orderBy('application')
+                ->orderBy('name')
+                ->get(),
             'months' => collect(range(0, 3))->map(fn ($offset) => now()->startOfMonth()->addMonths($offset)),
         ]);
     }

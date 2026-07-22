@@ -21,7 +21,7 @@ class ZoomClient
                 'type' => 2,
                 'start_time' => $consultation->starts_at?->toIso8601String(),
                 'duration' => $consultation->type->duration_minutes,
-                'timezone' => $consultation->timezone ?: config('app.booking_timezone', 'America/Los_Angeles'),
+                'timezone' => $consultation->timezone ?: config('app.booking_timezone'),
                 'agenda' => $consultation->description,
                 'settings' => [
                     'join_before_host' => false,

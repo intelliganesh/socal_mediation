@@ -23,6 +23,7 @@ class ConsultationResource extends JsonResource
             'starts_at' => $this->starts_at?->toIso8601String(),
             'ends_at' => $this->ends_at?->toIso8601String(),
             'timezone' => $this->timezone,
+            'legal_service_name' => $this->legal_service_name,
             'description' => $this->description,
             'referral_source' => $this->referral_source,
             'primary_client' => [
@@ -37,7 +38,6 @@ class ConsultationResource extends JsonResource
             'payment_mode' => $this->payment_mode,
             'zoom_join_url' => $this->zoom_join_url,
             'type' => new ConsultationTypeResource($this->whenLoaded('type')),
-            'legal_service' => $this->whenLoaded('legalService', fn () => $this->legalService),
             'professional' => $this->whenLoaded('professional', fn () => $this->professional),
             'participants' => $this->whenLoaded('participants', fn () => $this->participants),
             'payment_requests' => $paymentRequests,

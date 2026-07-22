@@ -11,6 +11,7 @@ use App\Services\ApiResponse;
 use App\Services\AvailabilityService;
 use App\Services\ConsultationCompletionService;
 use App\Services\ConsultationDraftService;
+use App\Services\Integrations\OutlookCalendarClient;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -68,7 +69,7 @@ class ConsultationController extends Controller
     public function show(Consultation $consultation)
     {
         return ApiResponse::success(new ConsultationResource(
-            $consultation->load(['type', 'legalService', 'professional', 'participants', 'paymentRequests'])
+            $consultation->load(['type', 'professional', 'participants', 'paymentRequests'])
         ));
     }
 
@@ -128,34 +129,56 @@ class ConsultationController extends Controller
         path: '/v1/availability',
         tags: ['Consultations'],
         summary: 'Return duration-based available slots for a consultation type and month',
-        description: 'The day window comes from BOOKING_DAY_START and BOOKING_DAY_END. Slot spacing comes from the selected consultation type duration, and each slot is marked unavailable when it overlaps an application booking or Outlook busy event.',
+        description: 'The day window comes from BOOKING_DAY_START and BOOKING_DAY_END in BOOKING_TIMEZONE. Slot spacing comes from the selected consultation type duration, and each slot is marked unavailable when it overlaps any application booking or Outlook busy event.',
         parameters: [
             new OA\Parameter(name: 'consultation_type_id', in: 'query', required: true, schema: new OA\Schema(type: 'integer', example: 3)),
-            new OA\Parameter(name: 'month', in: 'query', required: true, schema: new OA\Schema(type: 'string', example: '2026-08')),
+            new OA\Parameter(name: 'date', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date', example: '2026-08-14')),
+            new OA\Parameter(name: 'month', in: 'query', required: false, description: 'Legacy fallback. Prefer date for selected-day availability.', schema: new OA\Schema(type: 'string', example: '2026-08')),
             new OA\Parameter(name: 'professional_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer', example: 1)),
         ],
         responses: [
-            new OA\Response(response: 200, description: 'Monthly availability', content: new OA\JsonContent(properties: [
+            new OA\Response(response: 200, description: 'Selected-date availability', content: new OA\JsonContent(properties: [
                         new OA\Property(property: 'success', type: 'boolean', example: true),
                         new OA\Property(property: 'message', type: 'string', example: 'OK'),
-                        new OA\Property(property: 'data', type: 'array', items: new OA\Items(ref: '#/components/schemas/AvailabilityDay')),
+                        new OA\Property(property: 'data', ref: '#/components/schemas/AvailabilityDay'),
                     ])),
             new OA\Response(response: 422, description: 'Validation failed'),
         ]
     )]
-    public function availability(Request $request, AvailabilityService $availability)
+    public function availability(Request $request, AvailabilityService $availability, OutlookCalendarClient $outlook)
     {
         $request->validate([
             'consultation_type_id' => ['required', 'integer', 'exists:consultation_types,id'],
-            'month'                => ['required', 'date_format:Y-m'],
+            'date'                 => ['required_without:month', 'date_format:Y-m-d'],
+            'month'                => ['required_without:date', 'date_format:Y-m'],
             'professional_id'      => ['nullable', 'integer', 'exists:professionals,id'],
         ]);
 
         $type = ConsultationType::findOrFail($request->integer('consultation_type_id'));
+        $selectedDate = $request->query('date');
+        $month = $selectedDate !== null
+            ? substr($selectedDate, 0, 7)
+            : $request->query('month');
+
+        if (config('services.outlook.enabled')) {
+            try {
+                $outlook->syncMonth($month);
+            } catch (\DomainException|\RuntimeException $exception) {
+                return ApiResponse::error('Outlook availability sync failed: '.$exception->getMessage(), 422);
+            }
+        }
+
+        if ($selectedDate !== null) {
+            return ApiResponse::success($availability->dateAvailability(
+                $type,
+                $selectedDate,
+                $request->integer('professional_id') ?: null
+            ));
+        }
 
         return ApiResponse::success($availability->monthAvailability(
             $type,
-            $request->query('month'),
+            $month,
             $request->integer('professional_id') ?: null
         ));
     }

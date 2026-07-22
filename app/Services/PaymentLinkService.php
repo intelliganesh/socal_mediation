@@ -21,7 +21,7 @@ class PaymentLinkService
             $consultation->participants()->update(['should_pay' => false, 'share_amount_cents' => 0]);
 
             if ($consultation->total_amount_cents === 0) {
-                $consultation->update(['payment_status' => 'not_required', 'status' => 'paid']);
+                $consultation->update(['payment_status' => 'paid', 'status' => 'scheduled']);
                 return $consultation->refresh();
             }
 
@@ -54,7 +54,6 @@ class PaymentLinkService
                     'payment_method' => $method,
                     'provider_reference' => $provider['reference'],
                     'payment_url' => $provider['url'],
-                    'sent_at' => now(),
                     'metadata' => $provider,
                 ]);
             }
@@ -62,7 +61,7 @@ class PaymentLinkService
             $consultation->update([
                 'payment_mode' => $mode,
                 'payment_status' => 'pending',
-                'status' => 'pending_payment',
+                'status' => 'payment_pending',
             ]);
 
             return $consultation->refresh()->load(['participants', 'paymentRequests']);

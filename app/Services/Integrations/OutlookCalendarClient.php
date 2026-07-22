@@ -15,11 +15,27 @@ class OutlookCalendarClient
 
         $start = CarbonImmutable::now(config('app.booking_timezone'))->startOfMonth();
         $end = $start->addMonths(3)->endOfMonth();
+
+        return $this->syncWindow($start, $end);
+    }
+
+    public function syncMonth(string $month): int
+    {
+        $this->assertEnabled();
+
+        $start = CarbonImmutable::parse($month.'-01', config('app.booking_timezone'))->startOfMonth();
+        $end = $start->endOfMonth();
+
+        return $this->syncWindow($start, $end);
+    }
+
+    private function syncWindow(CarbonImmutable $start, CarbonImmutable $end): int
+    {
         $count = 0;
 
         foreach (['socal', 'legal'] as $application) {
             foreach ($this->calendarView($application, $start, $end) as $event) {
-                if (! ($event['showAs'] ?? null) || ($event['showAs'] ?? 'busy') === 'free') {
+                if (($event['isCancelled'] ?? false) || ! ($event['showAs'] ?? null) || ($event['showAs'] ?? 'busy') === 'free') {
                     continue;
                 }
 
@@ -46,7 +62,7 @@ class OutlookCalendarClient
         return $count;
     }
 
-    public function syncConsultation(Consultation $consultation): ExternalCalendarEvent
+    public function syncConsultation(Consultation $consultation, string $source = 'admin_manual_sync'): ExternalCalendarEvent
     {
         $this->assertEnabled();
 
@@ -88,7 +104,7 @@ class OutlookCalendarClient
                 'outlook_event_id' => $event['id'] ?? null,
                 'outlook_web_link' => $event['webLink'] ?? null,
                 'outlook_response' => $this->eventResponsePayload($event),
-                'source' => 'admin_manual_sync',
+                'source' => $source,
                 'synced_at' => now()->toIso8601String(),
             ],
         ]);
@@ -177,7 +193,7 @@ class OutlookCalendarClient
 
     public function consultationEventPayload(Consultation $consultation): array
     {
-        $timezone = $consultation->timezone ?: config('app.booking_timezone', 'America/Los_Angeles');
+        $timezone = $consultation->timezone ?: config('app.booking_timezone');
 
         return [
             'subject' => $consultation->booking_number.' - '.$consultation->type->name,
@@ -234,7 +250,8 @@ class OutlookCalendarClient
     private function graphDateTime(?string $dateTime, ?string $timezone): CarbonImmutable
     {
         try {
-            return CarbonImmutable::parse($dateTime, $timezone ?: config('app.booking_timezone'));
+            return CarbonImmutable::parse($dateTime, $timezone ?: config('app.booking_timezone'))
+                ->timezone(config('app.booking_timezone'));
         } catch (\Throwable) {
             return CarbonImmutable::parse($dateTime, config('app.booking_timezone'));
         }

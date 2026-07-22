@@ -52,11 +52,11 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->string('booking_number')->unique();
             $table->foreignId('consultation_type_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('legal_service_id')->nullable()->constrained()->nullOnDelete();
+            $table->string('legal_service_name')->nullable();
             $table->foreignId('professional_id')->nullable()->constrained()->nullOnDelete();
             $table->string('application', 40)->index();
             $table->string('status', 40)->default('draft')->index();
-            $table->string('payment_status', 40)->default('not_started')->index();
+            $table->string('payment_status', 40)->default('pending')->index();
             $table->string('consultation_mode', 30)->nullable();
             $table->string('timezone', 80)->default('America/Los_Angeles');
             $table->dateTime('starts_at')->nullable()->index();

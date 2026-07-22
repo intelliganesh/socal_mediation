@@ -47,7 +47,7 @@ class PaymentWebhookController extends Controller
         $consultation = $finalizer->syncPaymentStatus($payment->consultation);
 
         return ApiResponse::success(
-            new ConsultationResource($consultation->load(['type', 'legalService', 'professional', 'participants', 'paymentRequests'])),
+            new ConsultationResource($consultation->load(['type', 'professional', 'participants', 'paymentRequests'])),
             'Webhook accepted.'
         );
     }

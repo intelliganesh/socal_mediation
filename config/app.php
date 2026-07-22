@@ -65,9 +65,9 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => env('APP_TIMEZONE', 'UTC'),
 
-    'booking_timezone' => env('BOOKING_TIMEZONE', 'America/Los_Angeles'),
+    'booking_timezone' => env('BOOKING_TIMEZONE', env('APP_TIMEZONE', 'America/Los_Angeles')),
 
     'booking_day_start' => env('BOOKING_DAY_START', '09:00'),
 

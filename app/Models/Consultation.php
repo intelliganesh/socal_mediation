@@ -13,7 +13,7 @@ class Consultation extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'uuid', 'booking_number', 'consultation_type_id', 'legal_service_id', 'professional_id',
+        'uuid', 'booking_number', 'consultation_type_id', 'legal_service_name', 'professional_id',
         'application', 'status', 'payment_status', 'consultation_mode', 'timezone', 'starts_at',
         'ends_at', 'description', 'referral_source', 'primary_first_name', 'primary_last_name',
         'primary_email', 'primary_phone_country', 'primary_phone', 'total_amount_cents', 'currency',
@@ -38,11 +38,6 @@ class Consultation extends Model
     public function type(): BelongsTo
     {
         return $this->belongsTo(ConsultationType::class, 'consultation_type_id');
-    }
-
-    public function legalService(): BelongsTo
-    {
-        return $this->belongsTo(LegalService::class);
     }
 
     public function professional(): BelongsTo

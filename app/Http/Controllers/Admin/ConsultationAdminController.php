@@ -15,11 +15,47 @@ class ConsultationAdminController extends Controller
 {
     public function index(Request $request)
     {
-        $consultations = Consultation::query()
+        $query = Consultation::query()
             ->with(['type', 'participants', 'paymentRequests'])
             ->when($request->query('application'), fn($query, $application) => $query->where('application', $application))
             ->when($request->query('status'), fn($query, $status) => $query->where('status', $status))
-            ->latest()
+            ->when($request->query('q'), function ($query, $search) {
+                $query->where(function ($query) use ($search) {
+                    $query->where('booking_number', 'like', "%{$search}%")
+                        ->orWhere('primary_first_name', 'like', "%{$search}%")
+                        ->orWhere('primary_last_name', 'like', "%{$search}%")
+                        ->orWhere('primary_email', 'like', "%{$search}%");
+                });
+            })
+            ->when($request->query('date_from'), fn($query, $date) => $query->whereDate('starts_at', '>=', $date))
+            ->when($request->query('date_to'), fn($query, $date) => $query->whereDate('starts_at', '<=', $date));
+
+        if ($request->boolean('export')) {
+            return response()->streamDownload(function () use ($query) {
+                $handle = fopen('php://output', 'w');
+                fputcsv($handle, ['Consultation #', 'Client', 'Email', 'Application', 'Type', 'Date & Time', 'Status', 'Payment Status', 'Total Amount']);
+
+                $query->latest()->chunk(100, function ($consultations) use ($handle) {
+                    foreach ($consultations as $consultation) {
+                        fputcsv($handle, [
+                            $consultation->booking_number,
+                            trim($consultation->primary_first_name.' '.$consultation->primary_last_name),
+                            $consultation->primary_email,
+                            $consultation->application,
+                            $consultation->type?->name,
+                            $consultation->starts_at?->format('M d, Y g:i A'),
+                            $consultation->status,
+                            $consultation->payment_status,
+                            number_format($consultation->total_amount_cents / 100, 2, '.', ''),
+                        ]);
+                    }
+                });
+
+                fclose($handle);
+            }, 'consultations.csv', ['Content-Type' => 'text/csv']);
+        }
+
+        $consultations = $query->latest()
             ->paginate(10)
             ->withQueryString();
 
@@ -31,7 +67,6 @@ class ConsultationAdminController extends Controller
         return view('admin.consultations.show', [
             'consultation' => $consultation->load([
                 'type',
-                'legalService',
                 'professional',
                 'participants',
                 'paymentRequests.participant',
@@ -85,6 +120,7 @@ class ConsultationAdminController extends Controller
         $consultation->update([
             'zoom_meeting_id' => $meeting['id'],
             'zoom_join_url'   => $meeting['join_url'],
+            'status' => 'scheduled',
         ]);
 
         $consultation->integrationLogs()->create([
@@ -101,8 +137,7 @@ class ConsultationAdminController extends Controller
     public function cancel(Consultation $consultation)
     {
         $consultation->update([
-            'status'         => 'cancelled',
-            'payment_status' => 'cancelled',
+            'status' => 'cancelled',
         ]);
 
         $consultation->integrationLogs()->create([
@@ -115,13 +150,20 @@ class ConsultationAdminController extends Controller
         return back()->with('status', 'Consultation cancelled.');
     }
 
-    public function reschedule(Request $request, Consultation $consultation, AvailabilityService $availability, OutlookCalendarClient $outlook)
+    public function reschedule(
+        Request $request,
+        Consultation $consultation,
+        AvailabilityService $availability,
+        OutlookCalendarClient $outlook,
+        ZoomClient $zoom,
+        AdminZoomNotificationService $zoomNotifications
+    )
     {
         $data = $request->validate([
             'starts_at' => ['required', 'date_format:Y-m-d\TH:i'],
         ]);
 
-        $timezone = $consultation->timezone ?: config('app.booking_timezone', 'America/Los_Angeles');
+        $timezone = $consultation->timezone ?: config('app.booking_timezone');
         $startsAt = CarbonImmutable::createFromFormat('Y-m-d\TH:i', $data['starts_at'], $timezone);
         $type     = $consultation->type;
 
@@ -134,7 +176,7 @@ class ConsultationAdminController extends Controller
         $consultation->update([
             'starts_at' => $startsAt,
             'ends_at'   => $startsAt->addMinutes($type->duration_minutes),
-            'status'    => $consultation->payment_status === 'paid' ? 'paid' : 'scheduled',
+            'status'    => $this->statusAfterReschedule($consultation),
         ]);
 
         $consultation->integrationLogs()->create([
@@ -144,6 +186,34 @@ class ConsultationAdminController extends Controller
             'request_payload' => ['starts_at' => $startsAt->toIso8601String()],
             'message'         => 'Consultation rescheduled from admin panel.',
         ]);
+
+        if ($consultation->consultation_mode === 'online') {
+            try {
+                $meeting = $zoom->createMeeting($consultation->refresh()->load(['type']));
+
+                $consultation->update([
+                    'zoom_meeting_id' => $meeting['id'],
+                    'zoom_join_url' => $meeting['join_url'],
+                    'status' => 'scheduled',
+                ]);
+
+                $consultation->integrationLogs()->create([
+                    'provider' => 'zoom',
+                    'action' => 'manual_reschedule_meeting',
+                    'status' => 'generated',
+                    'response_payload' => $meeting,
+                    'message' => 'Zoom meeting link regenerated after reschedule.',
+                ]);
+
+                $sent = $zoomNotifications->sendZoomLink($consultation->refresh(), 'manual_reschedule_zoom_link');
+
+                if ($sent === 0) {
+                    $zoomMailWarning = ' Zoom link was regenerated, but no Zoom emails were sent.';
+                }
+            } catch (\RuntimeException $exception) {
+                return back()->with('error', 'Consultation rescheduled, but Zoom link update failed: '.$exception->getMessage());
+            }
+        }
 
         if (config('services.outlook.enabled')) {
             try {
@@ -163,7 +233,7 @@ class ConsultationAdminController extends Controller
             }
         }
 
-        return back()->with('status', 'Consultation rescheduled.');
+        return back()->with('status', 'Consultation rescheduled.'.($zoomMailWarning ?? ''));
     }
 
     public function syncOutlook(Consultation $consultation, OutlookCalendarClient $outlook)
@@ -189,5 +259,18 @@ class ConsultationAdminController extends Controller
         ]);
 
         return back()->with('status', 'This booking was synced to Outlook.');
+    }
+
+    private function statusAfterReschedule(Consultation $consultation): string
+    {
+        if ($consultation->status === 'scheduled' || filled($consultation->zoom_join_url)) {
+            return 'scheduled';
+        }
+
+        if ($consultation->payment_status === 'paid') {
+            return 'paid';
+        }
+
+        return 'payment_pending';
     }
 }

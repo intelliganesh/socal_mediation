@@ -1,384 +1,282 @@
-<x-admin.layout heading="Consultation {{ $consultation->booking_number }}" subheading="{{ $consultation->type->name }}">
+<x-admin.layout heading="" subheading="">
     @php
-        $app = $consultation->application === 'legal'
-            ? ['label' => 'Legal Consultation', 'bg' => '#E8DDE1', 'text' => '#75172E', 'bar' => '#75172E']
-            : ['label' => 'SoCal Mediation Center', 'bg' => '#F1F6FE', 'text' => '#082BC3', 'bar' => '#082BC3'];
-
-        $statusTheme = function (?string $status) {
-            return match ($status) {
-                'paid', 'not_required', 'scheduled' => ['bg' => '#BBF7D0', 'text' => '#166534', 'bar' => '#22C55E', 'label' => str_replace('_', ' ', ucfirst((string) $status))],
-                'cancelled', 'failed' => ['bg' => '#F8EEF1', 'text' => '#B91C1C', 'bar' => '#B91C1C', 'label' => 'Cancelled'],
-                'error' => ['bg' => '#FEE2E2', 'text' => '#EF4444', 'bar' => '#EF4444', 'label' => 'Error'],
-                'partially_paid' => ['bg' => '#FEF3C7', 'text' => '#92400E', 'bar' => '#F59E0B', 'label' => 'Partially Paid'],
-                'pending' => ['bg' => '#F1F6FE', 'text' => '#082BC3', 'bar' => '#082BC3', 'label' => 'Pending'],
-                'pending_payment' => ['bg' => '#F1F6FE', 'text' => '#082BC3', 'bar' => '#082BC3', 'label' => 'Payment Pending'],
-                default => ['bg' => '#F3F4F6', 'text' => '#4B5563', 'bar' => '#9CA3AF', 'label' => str_replace('_', ' ', ucfirst((string) $status))],
-            };
-        };
-
-        $paymentStatus = $statusTheme($consultation->payment_status);
-        $paidPaymentCount = $consultation->paymentRequests->where('status', 'paid')->count();
-        $totalPaymentCount = $consultation->paymentRequests->count();
-        $pendingPaymentCount = max(0, $totalPaymentCount - $paidPaymentCount);
-        $collectedAmountCents = $consultation->paymentRequests->where('status', 'paid')->sum('amount_cents');
-        $progressPercent = $totalPaymentCount ? ($paidPaymentCount / $totalPaymentCount) * 100 : 0;
-        $unpaidPaymentCount = $consultation->paymentRequests
-            ->filter(fn ($payment) => $payment->status !== 'paid' && filled($payment->payment_url))
-            ->count();
-        $emailActivities = $consultation->integrationLogs
-            ->where('provider', 'mail')
-            ->sortByDesc('created_at')
-            ->values();
-        $zoomStatus = filled($consultation->zoom_join_url) ? 'Generated' : ($consultation->consultation_mode === 'online' ? 'Pending' : 'Not Required');
-        $outlookSync = $consultation->integrationLogs
-            ->where('provider', 'outlook')
-            ->sortByDesc('created_at')
-            ->first();
-        $outlookStatus = $outlookSync
-            ? str_replace('_', ' ', ucfirst($outlookSync->status))
-            : ($consultation->starts_at ? 'Sync Pending' : 'Not Scheduled');
+    $app = $consultation->application === 'legal'
+    ? ['label' => 'Legal Consultation', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']
+    : ['label' => 'SoCal Mediation Center', 'icon' => 'landmark', 'theme' => 'app-theme-socal', 'iconClass' => 'app-icon-socal', 'textClass' => 'app-text-socal', 'progress' => 'app-progress-socal'];
+    $statusTheme = function (?string $status) {
+    return match ($status) {
+    'paid' => ['badge' => 'status-badge-paid', 'progress' => 'progress-fill-paid', 'label' => 'Paid'],
+    'scheduled' => ['badge' => 'status-badge-scheduled', 'progress' => 'progress-fill-scheduled', 'label' => 'Scheduled'],
+    'cancelled' => ['badge' => 'status-badge-cancelled', 'progress' => 'progress-fill-cancelled', 'label' => 'Cancelled'],
+    'completed' => ['badge' => 'status-badge-completed', 'progress' => 'progress-fill-completed', 'label' => 'Completed'],
+    'rescheduled' => ['badge' => 'status-badge-rescheduled', 'progress' => 'progress-fill-scheduled', 'label' => 'Rescheduled'],
+    'in_progress' => ['badge' => 'status-badge-in-progress', 'progress' => 'progress-fill-scheduled', 'label' => 'In Progress'],
+    'overdue' => ['badge' => 'status-badge-overdue', 'progress' => 'progress-fill-overdue', 'label' => 'Overdue'],
+    'partially_paid' => ['badge' => 'status-badge-partially-paid', 'progress' => 'progress-fill-partially-paid', 'label' => 'Partially Paid'],
+    'pending', 'payment_pending' => ['badge' => 'status-badge-pending', 'progress' => 'progress-fill-pending', 'label' => $status === 'payment_pending' ? 'Payment Pending' : 'Pending'],
+    default => ['badge' => 'status-badge-draft', 'progress' => 'progress-fill-draft', 'label' => str_replace('_', ' ', ucfirst((string) $status ?: 'Draft'))],
+    };
+    };
+    $bookingStatus = $statusTheme($consultation->status);
+    $paymentStatus = $statusTheme($consultation->payment_status);
+    $paidPaymentCount = $consultation->paymentRequests->where('status', 'paid')->count();
+    $totalPaymentCount = $consultation->paymentRequests->count();
+    $pendingPaymentCount = max(0, $totalPaymentCount - $paidPaymentCount);
+    $collectedAmountCents = $consultation->paymentRequests->where('status', 'paid')->sum('amount_cents');
+    $progressPercent = $totalPaymentCount ? round(($paidPaymentCount / $totalPaymentCount) * 100) : 0;
+    $unpaidPaymentCount = $consultation->paymentRequests->filter(fn ($payment) => $payment->status !== 'paid')->count();
+    $emailActivities = $consultation->integrationLogs->where('provider', 'mail')->sortByDesc('created_at')->values();
+    $emailActivityMeta = function (string $action) {
+    return match ($action) {
+    'manual_payment_reminder' => ['label' => 'Payment Reminder', 'icon' => 'bell'],
+    'manual_payment_link' => ['label' => 'Payment Link', 'icon' => 'credit-card'],
+    'automatic_payment_link' => ['label' => 'Payment Link', 'icon' => 'credit-card'],
+    'manual_zoom_link' => ['label' => 'Zoom Link', 'icon' => 'video'],
+    'manual_reschedule_zoom_link' => ['label' => 'Reschedule Zoom Link', 'icon' => 'refresh-cw'],
+    default => ['label' => Str::headline($action), 'icon' => 'mail'],
+    };
+    };
+    $outlookSync = $consultation->integrationLogs->where('provider', 'outlook')->sortByDesc('created_at')->first();
+    $outlookStatus = $outlookSync ? str_replace('_', ' ', ucfirst($outlookSync->status)) : ($consultation->starts_at ? 'Sync Pending' : 'Not Scheduled');
+    $zoomStatus = filled($consultation->zoom_join_url) ? 'Generated' : ($consultation->consultation_mode === 'online' ? 'Pending' : 'Not Required');
+    $primaryName = trim($consultation->primary_first_name.' '.$consultation->primary_last_name) ?: 'No name yet';
     @endphp
-
-    <section class="mb-5 overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
-        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-[#E5E7EB] px-6 py-5">
-            <div class="flex items-center gap-4">
-                {{-- <div class="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#F1F6FE] text-lg font-bold text-[#082BC3]">A</div> --}}
-                <div>
-                    <h2 class="text-xl font-bold">Admin Actions</h2>
-                    <p class="mt-1 text-sm font-semibold text-gray-500">Quick actions to manage this consultation.</p>
+    <div class="-mt-1 mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h2 class="text-2xl font-bold text-[#111827]">Consultation {{ $consultation->booking_number }}</h2>
+            <div class="mt-2 flex flex-wrap items-center gap-3 text-sm font-semibold text-gray-500">
+                <span>{{ $consultation->type->name }} - {{ $app['label'] }}</span>
+                <span class="status-badge {{ $bookingStatus['badge'] }}">{{ $bookingStatus['label'] }}</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="calendar-days" class="h-4 w-4"></i>{{ $consultation->starts_at?->format('M d, Y g:i A') ?? 'Not scheduled' }}</span>
+                <span class="inline-flex items-center gap-1"><i data-lucide="user" class="h-4 w-4"></i>{{ $consultation->professional?->name ?: 'Not assigned' }}</span>
+            </div>
+        </div>
+        <a class="inline-flex h-11 items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.consultations.index') }}">
+            <i data-lucide="arrow-left" class="h-4 w-4"></i>
+            Back to list
+        </a>
+    </div>
+    <section class="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <h3 class="sr-only">Admin Actions</h3>
+        <span class="sr-only">Regenerate Meeting Link</span>
+        @if($unpaidPaymentCount > 0)
+        <span class="sr-only">Send Payment Links</span>
+        <form class="action-card-primary min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.reminder', $consultation) }}">
+            @csrf
+            <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="bell" class="h-7 w-7"></i></div>
+            <h3 class="mt-4 font-bold">Send Reminder</h3>
+            <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Send Payment Reminder for unpaid participants.</p>
+            <button class="action-card-button mt-5 h-10 w-full rounded-lg text-sm font-bold">Send Reminder</button>
+        </form>
+        @endif
+        <form class="action-card-primary min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.zoom-link', $consultation) }}">
+            @csrf
+            <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="video" class="h-7 w-7"></i></div>
+            <h3 class="mt-4 font-bold">Send Zoom Links</h3>
+            <span class="sr-only">Resend Zoom Link</span>
+            <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Send Zoom meeting links to all the participants.</p>
+            <div class="mt-5 grid gap-2">
+                <button class="action-card-button h-10 w-full rounded-lg text-sm font-bold">Send Zoom Link</button>
+                @if(filled($consultation->zoom_join_url))
+                <a class="flex h-10 items-center justify-center gap-2 rounded-lg border border-[#E5E7EB] bg-white text-sm font-bold text-[#082BC3]" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener">
+                    Open Zoom Meeting Link
+                    <i data-lucide="external-link" class="h-4 w-4"></i>
+                </a>
+                @endif
+            </div>
+        </form>
+        @if($consultation->starts_at)
+        <form class="action-card-pending min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.reschedule', $consultation) }}">
+            @csrf
+            <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="refresh-cw" class="h-7 w-7"></i></div>
+            <h3 class="mt-4 font-bold">Reschedule Meeting</h3>
+            <p class="mt-2 text-sm font-semibold text-gray-500">Reschedule meeting and send new meeting link to all participants.</p>
+            <input class="mt-3 h-9 w-full min-w-0 rounded-lg border border-[#E5E7EB] px-3 text-xs font-bold text-[#111827]" type="datetime-local" name="starts_at" value="{{ old('starts_at', $consultation->starts_at->format('Y-m-d\\TH:i')) }}" required>
+            <button class="action-card-button mt-3 h-10 w-full rounded-lg text-sm font-bold">Reschedule</button>
+        </form>
+        @endif
+        <form class="action-card-paid min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.sync-outlook', $consultation) }}">
+            @csrf
+            <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="calendar-plus" class="h-7 w-7"></i></div>
+            <h3 class="mt-4 font-bold">Sync This Booking To Outlook</h3>
+            <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Sync Consultation to outlook.</p>
+            <button class="action-card-button mt-5 h-10 w-full rounded-lg text-sm font-bold">Sync to Outlook</button>
+        </form>
+        @if(! in_array($consultation->status, ['cancelled', 'failed'], true))
+        <form class="action-card-cancelled min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.cancel', $consultation) }}" onsubmit="return confirm('Cancel this consultation?');">
+            @csrf
+            <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="x" class="h-7 w-7"></i></div>
+            <h3 class="mt-4 font-bold">Cancel Consultation</h3>
+            <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Cancel Consultation.</p>
+            <button class="action-card-button mt-5 h-10 w-full rounded-lg text-sm font-bold">Cancel Consultation</button>
+        </form>
+        @endif
+    </section>
+    <section class="mb-5 grid gap-5 xl:grid-cols-3">
+        <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+            <div class="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+                <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="circle-user-round" class="h-5 w-5 text-[#082BC3]"></i>Primary Client Information</h3>
+            </div>
+            <div class="flex items-center gap-5 p-5">
+                <div class="grid h-24 w-24 shrink-0 place-items-center rounded-full text-4xl font-semibold {{ $app['iconClass'] }}">{{ Str::upper(Str::substr($primaryName, 0, 2)) }}</div>
+                <div class="min-w-0 text-sm">
+                    <div class="text-xl font-bold text-[#111827]">{{ $primaryName }}</div>
+                    <div class="mt-2 truncate font-semibold text-[#082BC3]">{{ $consultation->primary_email ?: 'No email yet' }}</div>
+                    <div class="mt-3 text-[#111827]">{{ trim(($consultation->primary_phone_country ?? '').' '.($consultation->primary_phone ?? '')) ?: 'No phone yet' }}</div>
+                    {{-- <span class="mt-4 inline-flex rounded-lg bg-[#F3F4F6] px-3 py-2 text-sm font-semibold text-gray-500">Client</span> --}}
                 </div>
             </div>
-            <a class="inline-flex items-center rounded-lg border border-[#E5E7EB] px-4 py-2.5 text-sm font-bold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.consultations.index') }}">Back to list</a>
-        </div>
-        <div class="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-5">
-            @if($unpaidPaymentCount > 0)
-                <article class="flex min-h-72 min-w-0 flex-col items-center rounded-lg border border-[#E5E7EB] bg-white p-5 text-center shadow-sm">
-                    <div class="grid h-16 w-16 place-items-center rounded-full bg-[#F8EEF1]">
-                        <img class="h-8 w-8" src="{{ asset('admin-icons/link-svgrepo-com.svg') }}" alt="" aria-hidden="true">
+        </article>
+        <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+            <div class="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+                <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="info" class="h-5 w-5 text-[#082BC3]"></i>Consultation Information</h3>
+            </div>
+            <dl class="grid gap-5 p-5 text-sm sm:grid-cols-2">
+                <div class="flex gap-3"><i data-lucide="calendar-days" class="h-5 w-5 text-gray-500"></i>
+                    <div><dt class="text-gray-500">Schedule</dt>
+                        <dd class="mt-1 font-semibold text-[#111827]">{{ $consultation->starts_at?->format('M d, Y g:i A') ?? 'Not scheduled' }}</dd>
                     </div>
-                    <h3 class="mt-5 text-base font-bold text-[#75172E]">Send Payment Links</h3>
-                    <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Send secure payment links to the main client and unpaid participants.</p>
-                    <form class="mt-auto pt-6" method="post" action="{{ route('admin.consultations.payment-links', $consultation) }}">
-                        @csrf
-                        <button class="grid h-11 w-11 place-items-center rounded-lg bg-[#F8EEF1] hover:bg-[#E8DDE1]" aria-label="Send Payment Links">
-                            <img class="h-5 w-5" src="{{ asset('admin-icons/arrow-right-svgrepo-com.svg') }}" alt="" aria-hidden="true">
-                        </button>
-                    </form>
-                </article>
+                </div>
+                <div class="flex gap-3"><i data-lucide="video" class="h-5 w-5 text-gray-500"></i>
+                    <div>
+                        <dt class="text-gray-500">Zoom Meeting</dt>
+                        <dd class="mt-1 flex font-semibold text-[#111827]">{{ $zoomStatus }}  @if(filled($consultation->zoom_join_url)) <a class="font-bold text-[#082BC3] ml-2" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener"><i data-lucide="external-link" class="h-4 w-4"></i></a> @endif</dd>
 
-                <article class="flex min-h-72 flex-col items-center rounded-lg border border-[#E5E7EB] bg-white p-5 text-center shadow-sm">
-                    <div class="grid h-16 w-16 place-items-center rounded-full bg-[#F1F6FE]">
-                        <img class="h-8 w-8" src="{{ asset('admin-icons/reminder-svgrepo-com.svg') }}" alt="" aria-hidden="true">
                     </div>
-                    <h3 class="mt-5 text-base font-bold text-[#082BC3]">Send Reminder</h3>
-                    <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Send a payment reminder to clients who have not paid yet.</p>
-                    <form class="mt-auto pt-6" method="post" action="{{ route('admin.consultations.reminder', $consultation) }}">
-                        @csrf
-                        <button class="grid h-11 w-11 place-items-center rounded-lg bg-[#F1F6FE] hover:bg-[#ECEDF9]" aria-label="Send Reminder">
-                            <img class="h-5 w-5" src="{{ asset('admin-icons/arrow-right-svgrepo-com.svg') }}" alt="" aria-hidden="true">
-                        </button>
-                    </form>
-                </article>
-            @endif
+                </div>
+                <div class="flex gap-3"><i data-lucide="clock" class="h-5 w-5 text-gray-500"></i>
+                    <div><dt class="text-gray-500">Consultation Type</dt>
+                        <dd class="mt-1 font-semibold text-[#111827]">{{ $consultation->type->name }}</dd>
+                    </div>
+                </div>
+                 <div class="flex gap-3"><i data-lucide="calendar-check" class="h-5 w-5 text-gray-500"></i>
+                    <div><dt class="text-gray-500">Outlook Event</dt>
+                        <dd class="mt-1 font-semibold text-[#082BC3]">{{ $outlookStatus }}</dd>
+                    </div>
+                </div>
+                <div class="flex gap-3"><i data-lucide="scale" class="h-5 w-5 text-gray-500"></i>
+                    <div><dt class="text-gray-500">Legal Service</dt>
+                        <dd class="mt-1 font-semibold text-[#111827]">{{ $consultation->legal_service_name ?: 'Not selected' }}</dd>
+                    </div>
+                </div>
 
-            @if(filled($consultation->zoom_join_url))
-                <article class="flex min-h-72 flex-col items-center rounded-lg border border-[#E5E7EB] bg-white p-5 text-center shadow-sm">
-                    <div class="grid h-16 w-16 place-items-center rounded-full bg-[#F1F6FE]">
-                        <img class="h-8 w-8" src="{{ asset('admin-icons/link-svgrepo-com.svg') }}" alt="" aria-hidden="true">
+                <div class="flex gap-3"><i data-lucide="monitor" class="h-5 w-5 text-gray-500"></i>
+                    <div><dt class="text-gray-500">Meeting Mode</dt>
+                        <dd class="mt-1 font-semibold text-[#111827]">{{ ucfirst((string) $consultation->consultation_mode) ?: 'Not selected' }}</dd>
                     </div>
-                    <h3 class="mt-5 text-base font-bold text-[#082BC3]">Resend Zoom Link</h3>
-                    <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Send the existing Zoom meeting link to consultation participants.</p>
-                    <form class="mt-auto pt-6" method="post" action="{{ route('admin.consultations.zoom-link', $consultation) }}">
-                        @csrf
-                        <button class="grid h-11 w-11 place-items-center rounded-lg bg-[#F1F6FE] hover:bg-[#ECEDF9]" aria-label="Resend Zoom Link">
-                            <img class="h-5 w-5" src="{{ asset('admin-icons/arrow-right-svgrepo-com.svg') }}" alt="" aria-hidden="true">
-                        </button>
-                    </form>
-                </article>
-            @endif
+                </div>
+                <div class="flex gap-3"><i data-lucide="network" class="h-5 w-5 text-gray-500"></i>
+                    <div><dt class="text-gray-500">Referral Source</dt>
+                        <dd class="mt-1 font-semibold text-[#111827]">{{ $consultation->referral_source ?: 'Not provided' }}</dd>
+                    </div>
+                </div>
 
-            @if($consultation->consultation_mode === 'online')
-                <article class="flex min-h-72 flex-col items-center rounded-lg border border-[#E5E7EB] bg-white p-5 text-center shadow-sm">
-                    <div class="grid h-16 w-16 place-items-center rounded-full bg-[#ECFDF5]">
-                        <img class="h-8 w-8" src="{{ asset('admin-icons/redo-svgrepo-com.svg') }}" alt="" aria-hidden="true">
+                <div class="flex gap-3"><i data-lucide="calendar" class="h-5 w-5 text-gray-500"></i>
+                    <div><dt class="text-gray-500">Created</dt>
+                        <dd class="mt-1 font-semibold text-[#111827]">{{ $consultation->created_at?->format('M d, Y g:i A') }}</dd>
                     </div>
-                    <h3 class="mt-5 text-base font-bold text-[#059669]">Regenerate Meeting Link</h3>
-                    <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Create a new Zoom meeting link and update this booking.</p>
-                    <form class="mt-auto pt-6" method="post" action="{{ route('admin.consultations.regenerate-zoom', $consultation) }}">
-                        @csrf
-                        <button class="grid h-11 w-11 place-items-center rounded-lg bg-[#ECFDF5] hover:bg-[#D1FAE5]" aria-label="Regenerate Meeting Link">
-                            <img class="h-5 w-5" src="{{ asset('admin-icons/arrow-right-svgrepo-com.svg') }}" alt="" aria-hidden="true">
-                        </button>
-                    </form>
-                </article>
-            @endif
-
-            <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-sm">
-                <form class="flex min-h-72 flex-col items-center p-5 text-center" method="post" action="{{ route('admin.consultations.sync-outlook', $consultation) }}">
-                    @csrf
-                    <div class="grid h-16 w-16 place-items-center rounded-full bg-[#ECFDF5]">
-                        <img class="h-8 w-8" src="{{ asset('admin-icons/microsoftoutlook-svgrepo-com.svg') }}" alt="" aria-hidden="true">
-                    </div>
-                    <h3 class="mt-5 text-base font-bold text-[#10B981]">Sync This Booking To Outlook</h3>
-                    <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Add or update this booking on the Outlook calendar.</p>
-                    <button class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#ECFDF5] px-4 py-2.5 text-sm font-bold text-[#10B981] hover:bg-[#D1FAE5]" aria-label="Sync This Booking To Outlook">
-                        <span>Sync to Outlook</span>
-                        <img class="h-4 w-4" src="{{ asset('admin-icons/arrow-right-svgrepo-com.svg') }}" alt="" aria-hidden="true">
-                    </button>
-                </form>
-            </article>
-
-            @if($consultation->starts_at)
-                <article class="flex min-h-72 flex-col items-center rounded-lg border border-[#E5E7EB] bg-white p-5 text-center shadow-sm">
-                    <div class="grid h-16 w-16 place-items-center rounded-full bg-[#FFF7ED]">
-                        <img class="h-8 w-8" src="{{ asset('admin-icons/redo-svgrepo-com.svg') }}" alt="" aria-hidden="true">
-                    </div>
-                    <h3 class="mt-5 text-base font-bold text-[#D97706]">Reschedule Consultation</h3>
-                    <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Choose a new date and time for this consultation.</p>
-                    <form class="mt-auto grid w-full min-w-0 gap-3 pt-5" method="post" action="{{ route('admin.consultations.reschedule', $consultation) }}">
-                        @csrf
-                        <input class="w-full min-w-0 rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm font-semibold text-[#111827]" type="datetime-local" name="starts_at" value="{{ old('starts_at', $consultation->starts_at->format('Y-m-d\\TH:i')) }}" required>
-                        @error('starts_at')
-                            <p class="text-left text-xs font-bold text-[#B91C1C]">{{ $message }}</p>
-                        @enderror
-                        <button class="w-full rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#D97706]">Reschedule</button>
-                    </form>
-                </article>
-            @endif
-
-            @if(! in_array($consultation->status, ['cancelled', 'failed'], true))
-                <article class="flex min-h-72 flex-col items-center rounded-lg border border-[#E5E7EB] bg-white p-5 text-center shadow-sm">
-                    <div class="grid h-16 w-16 place-items-center rounded-full bg-[#FEE2E2]">
-                        <img class="h-8 w-8" src="{{ asset('admin-icons/cancel-error-svgrepo-com.svg') }}" alt="" aria-hidden="true">
-                    </div>
-                    <h3 class="mt-5 text-base font-bold text-[#B91C1C]">Cancel Consultation</h3>
-                    <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Cancel this consultation and mark the booking as cancelled.</p>
-                    <form class="mt-auto pt-6" method="post" action="{{ route('admin.consultations.cancel', $consultation) }}" onsubmit="return confirm('Cancel this consultation?');">
-                        @csrf
-                        <button class="grid h-11 w-11 place-items-center rounded-lg bg-[#FEE2E2] hover:bg-[#F8EEF1]" aria-label="Cancel Consultation">
-                            <img class="h-5 w-5" src="{{ asset('admin-icons/arrow-right-svgrepo-com.svg') }}" alt="" aria-hidden="true">
-                        </button>
-                    </form>
-                </article>
-            @endif
-        </div>
+                </div>
+                <div class="sr-only">Outlook Calendar</div>
+                <div class="sr-only">Zoom</div>
+                <div class="sr-only">Professional {{ $consultation->professional?->name ?: 'Not assigned' }}</div>
+            </dl>
+        </article>
+        <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+            <div class="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+                <h3 class="text-xl font-bold text-[#111827]">Payment Progress</h3>
+                <span class="status-badge {{ $paymentStatus['badge'] }}">{{ $paymentStatus['label'] }}</span>
+            </div>
+            <div class="p-5">
+                <div class="mb-3 flex items-center justify-between gap-4 text-sm">
+                    <span class="text-gray-500">{{ $totalPaymentCount }} {{ Str::plural('participant', $totalPaymentCount) }}</span>
+                    <span class="font-bold text-gray-500">{{ $paidPaymentCount }} Paid · {{ $pendingPaymentCount }} Pending</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill {{ $paymentStatus['progress'] }}" style="width: {{ $progressPercent }}%"></div>
+                </div>
+                <div class="mt-5 flex items-center justify-between gap-4 text-sm">
+                    <span class="text-gray-500">${{ number_format($collectedAmountCents / 100, 2) }} collected</span>
+                    <span class="text-gray-500">${{ number_format($consultation->total_amount_cents / 100, 2) }} total</span>
+                </div>
+                <div class="sr-only">{{ $totalPaymentCount }} participants - {{ $paidPaymentCount }} Paid - {{ $pendingPaymentCount }} Pending</div>
+            </div>
+        </article>
     </section>
-
-    <div class="grid gap-5 lg:grid-cols-3">
-        <div class="space-y-5 lg:col-span-2">
-            <section class="rounded-xl border border-[#E5E7EB] bg-white p-6">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                    <h2 class="text-lg font-bold">Client & Booking</h2>
-                    <div class="flex flex-wrap gap-2">
-                        <span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $app['bg'] }}; color: {{ $app['text'] }}">{{ $app['label'] }}</span>
-                        <span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $paymentStatus['bg'] }}; color: {{ $paymentStatus['text'] }}">{{ $paymentStatus['label'] }}</span>
-                    </div>
-                </div>
-                <dl class="mt-5 grid gap-4 text-sm md:grid-cols-3">
-                    <div class="rounded-lg bg-[#F7F8FC] p-4"><dt class="font-bold text-gray-500">Primary client</dt><dd class="mt-1 font-bold">{{ trim($consultation->primary_first_name.' '.$consultation->primary_last_name) ?: 'No name yet' }}</dd><dd class="mt-1 text-sm">{{ $consultation->primary_email ?: 'No email yet' }}</dd></div>
-
-                    <div class="rounded-lg bg-[#F7F8FC] p-4"><dt class="font-bold text-gray-500">Professional</dt><dd class="mt-1 font-bold">{{ $consultation->professional?->name ?: 'Not assigned' }}</dd><dd class="mt-1 text-gray-500">{{ $consultation->professional?->title ?: 'No title recorded' }}</dd><dd class="mt-1 text-sm">{{ $consultation->professional?->email ?: 'Not provided' }}</dd></div>
-                    <div class="rounded-lg bg-[#F7F8FC] p-4"><dt class="font-bold text-gray-500">Schedule</dt><dd class="mt-1 font-bold">{{ $consultation->starts_at?->format('M d, Y g:i A') ?? 'Not selected' }}</dd></div>
-                    <div class="rounded-lg bg-[#F7F8FC] p-4"><dt class="font-bold text-gray-500">Meeting Mode</dt><dd class="mt-1 font-bold">{{ ucfirst((string) $consultation->consultation_mode) ?: 'Not selected' }}</dd></div>
-                    <div class="rounded-lg bg-[#F7F8FC] p-4"><dt class="font-bold text-gray-500">Zoom</dt><dd class="mt-3">
-                            <span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ filled($consultation->zoom_join_url) ? '#BBF7D0' : '#F8EEF1' }}; color: {{ filled($consultation->zoom_join_url) ? '#166534' : '#B91C1C' }}">{{ $zoomStatus }}</span>
-                        </dd>
-                        @if(filled($consultation->zoom_join_url))
-                            <dd class="mt-3"><a class="inline-flex rounded-lg border border-[#E5E7EB] px-3 py-2 text-xs font-bold hover:bg-[#F7F8FC]" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener">Open Zoom Link</a></dd>
-                        @endif</div>
-                    <div class="rounded-lg bg-[#F7F8FC] p-4"><dt class="font-bold text-gray-500">Outlook Calendar</dt><dd class="mt-3">
-                            <span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $outlookSync ? '#BBF7D0' : '#F8EEF1' }}; color: {{ $outlookSync ? '#166534' : '#B91C1C' }}">{{ $outlookStatus }}</span>
-                        </dd>
-                        @if($outlookSync?->created_at)
-                            <dd class="mt-3 text-xs text-gray-500">Last sync {{ $outlookSync->created_at->format('M d, h:i A') }}</dd>
-                        @endif</div>
-                </dl>
-
-                @if($consultation->description)
-                    <p class="mt-4 rounded-lg p-4 text-sm font-semibold" style="background: {{ $app['bg'] }}; color: {{ $app['text'] }}">{{ $consultation->description }}</p>
-                @endif
-            </section>
-
-            <section class="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
-                <div class="border-b border-[#E5E7EB] px-6 py-5">
-                    <h2 class="text-lg font-bold">Participants</h2>
-                </div>
-                <div class="hidden md:block">
-                    <table class="w-full text-left text-sm">
-                        <thead class="bg-[#F7F8FC] text-xs uppercase tracking-wide text-gray-500">
-                            <tr>
-                                <th class="px-4 py-3">Name</th>
-                                <th class="px-4 py-3">Role</th>
-                                <th class="px-4 py-3">Email</th>
-                                <th class="px-4 py-3">Phone</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-[#E5E7EB]">
-                            @foreach($consultation->participants as $participant)
-                                <tr>
-                                    <td class="px-4 py-4 font-bold">{{ $participant->first_name }} {{ $participant->last_name }}</td>
-                                    <td class="px-4 py-4">
-                                        <span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $app['bg'] }}; color: {{ $app['text'] }}">{{ $participant->is_primary ? 'Main Client' : 'Participant' }}</span>
-                                    </td>
-                                    <td class="break-all px-4 py-4">{{ $participant->email ?: 'Not provided' }}</td>
-                                    <td class="px-4 py-4">{{ trim(($participant->phone_country ?? '').' '.($participant->phone ?? '')) ?: 'Not provided' }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-                <div class="divide-y divide-[#E5E7EB] md:hidden">
+    <div class="grid gap-5 xl:grid-cols-3">
+        <div class="space-y-5 xl:col-span-2">
+            <section class="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+                <h3 class="mb-4 font-bold text-[#111827]">Participants</h3>
+                <div class="grid gap-3 md:grid-cols-3">
                     @foreach($consultation->participants as $participant)
-                        <article class="p-4 text-sm">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="font-bold">{{ $participant->first_name }} {{ $participant->last_name }}</div>
-                                <span class="shrink-0 rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $app['bg'] }}; color: {{ $app['text'] }}">{{ $participant->is_primary ? 'Main Client' : 'Participant' }}</span>
+                    @php($participantName = trim($participant->first_name.' '.$participant->last_name))
+                    @php($participantPayment = $consultation->paymentRequests->firstWhere('participant_id', $participant->id))
+                    @php($participantStatus = $statusTheme($participantPayment?->status))
+                    <article class="rounded-lg border border-[#E5E7EB] p-3 text-sm">
+                        <div class="flex items-start gap-3">
+                            <div class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#ECEDF9] text-xs font-bold text-[#082BC3]">{{ Str::upper(Str::substr($participantName, 0, 2)) }}</div>
+                            <div class="min-w-0">
+                                <div class="truncate font-bold text-[#111827]">{{ $participantName }}</div>
+                                <div class="truncate text-xs text-gray-500">{{ $participant->email ?: 'Not provided' }}</div>
+                                <div class="mt-2"><span class="status-badge {{ $participantStatus['badge'] }}">{{ $participantStatus['label'] }}</span></div>
                             </div>
-                            <div class="mt-2 break-all text-gray-500">{{ $participant->email ?: 'Not provided' }}</div>
-                            <div class="mt-1 text-gray-500">{{ trim(($participant->phone_country ?? '').' '.($participant->phone ?? '')) ?: 'Not provided' }}</div>
-                        </article>
+                        </div>
+                    </article>
                     @endforeach
                 </div>
             </section>
-
-            <section class="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
-                <div class="border-b border-[#E5E7EB] px-6 py-5">
-                    <h2 class="text-lg font-bold">Email Activity</h2>
-                </div>
-                <div class="hidden md:block">
-                    <table class="w-full text-left text-sm">
-                        <thead class="bg-[#F7F8FC] text-xs uppercase tracking-wide text-gray-500">
-                            <tr>
-                                <th class="px-4 py-3">Template</th>
-                                <th class="px-4 py-3">Recipient</th>
-                                <th class="px-4 py-3">Status</th>
-                                <th class="px-4 py-3">Queued</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-[#E5E7EB]">
-                            @forelse($emailActivities as $activity)
-                                @php($activityStatus = $statusTheme($activity->status))
-                                <tr>
-                                    <td class="px-4 py-4">
-                                        <div class="font-bold">{{ $activity->action === 'manual_payment_reminder' ? 'Manual Reminder' : 'Payment Link' }}</div>
-                                        <div class="mt-1 text-gray-500">{{ $activity->message ?: 'Email activity recorded for '.$consultation->booking_number }}</div>
-                                    </td>
-                                    <td class="break-all px-4 py-4">{{ data_get($activity->request_payload, 'recipient', 'Not recorded') }}</td>
-                                    <td class="px-4 py-4"><span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $activityStatus['bg'] }}; color: {{ $activityStatus['text'] }}">{{ ucfirst($activity->status) }}</span></td>
-                                    <td class="px-4 py-4">{{ $activity->created_at?->format('M d, h:i A') }}</td>
-                                </tr>
-                            @empty
-                                @foreach($consultation->paymentRequests->whereNotNull('sent_at') as $payment)
-                                    @php($recipient = $payment->participant?->email ?: $consultation->primary_email)
-                                    @php($activityStatus = $statusTheme($payment->status === 'paid' ? 'paid' : 'pending'))
-                                    <tr>
-                                        <td class="px-4 py-4">
-                                            <div class="font-bold">Payment Link</div>
-                                            <div class="mt-1 text-gray-500">Payment link prepared for {{ $consultation->booking_number }}</div>
-                                        </td>
-                                        <td class="break-all px-4 py-4">{{ $recipient ?: 'Not recorded' }}</td>
-                                        <td class="px-4 py-4"><span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $activityStatus['bg'] }}; color: {{ $activityStatus['text'] }}">{{ $payment->status === 'paid' ? 'Paid' : 'Queued' }}</span></td>
-                                        <td class="px-4 py-4">{{ $payment->sent_at?->format('M d, h:i A') }}</td>
-                                    </tr>
-                                @endforeach
-                                @if($consultation->paymentRequests->whereNotNull('sent_at')->isEmpty())
-                                    <tr><td class="px-4 py-8 text-center text-gray-500" colspan="4">No email activity recorded yet.</td></tr>
-                                @endif
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-                <div class="divide-y divide-[#E5E7EB] md:hidden">
+            <section class="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+                <h3 class="mb-4 font-bold text-[#111827]">Email Activity</h3>
+                <div class="space-y-3">
                     @forelse($emailActivities as $activity)
-                        @php($activityStatus = $statusTheme($activity->status))
-                        <article class="p-4 text-sm">
-                            <div class="font-bold">{{ $activity->action === 'manual_payment_reminder' ? 'Manual Reminder' : 'Payment Link' }}</div>
-                            <div class="mt-1 text-gray-500">{{ $activity->message ?: 'Email activity recorded for '.$consultation->booking_number }}</div>
-                            <div class="mt-3 break-all">{{ data_get($activity->request_payload, 'recipient', 'Not recorded') }}</div>
-                            <div class="mt-3 flex items-center justify-between gap-3">
-                                <span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $activityStatus['bg'] }}; color: {{ $activityStatus['text'] }}">{{ ucfirst($activity->status) }}</span>
-                                <span class="text-gray-500">{{ $activity->created_at?->format('M d, h:i A') }}</span>
-                            </div>
-                        </article>
+                    @php($activityStatus = $statusTheme($activity->status))
+                    @php($activityMeta = $emailActivityMeta($activity->action))
+                    <article class="flex items-center gap-3 text-sm">
+                        <div class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#082BC3] text-white"><i data-lucide="{{ $activityMeta['icon'] }}" class="h-5 w-5"></i></div>
+                        <div class="min-w-0 flex-1">
+                            <div class="font-bold text-[#111827]">{{ $activityMeta['label'] }}</div>
+                            <div class="truncate text-xs text-gray-500">To: {{ data_get($activity->request_payload, 'recipient', 'Not recorded') }}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xs text-gray-500">{{ $activity->created_at?->format('M d, Y g:i A') }}</div>
+                            <span class="status-badge {{ $activityStatus['badge'] }} mt-1">{{ ucfirst($activity->status) }}</span>
+                        </div>
+                    </article>
                     @empty
-                        @foreach($consultation->paymentRequests->whereNotNull('sent_at') as $payment)
-                            @php($recipient = $payment->participant?->email ?: $consultation->primary_email)
-                            @php($activityStatus = $statusTheme($payment->status === 'paid' ? 'paid' : 'pending'))
-                            <article class="p-4 text-sm">
-                                <div class="font-bold">Payment Link</div>
-                                <div class="mt-1 text-gray-500">Payment link prepared for {{ $consultation->booking_number }}</div>
-                                <div class="mt-3 break-all">{{ $recipient ?: 'Not recorded' }}</div>
-                                <div class="mt-3 flex items-center justify-between gap-3">
-                                    <span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $activityStatus['bg'] }}; color: {{ $activityStatus['text'] }}">{{ $payment->status === 'paid' ? 'Paid' : 'Queued' }}</span>
-                                    <span class="text-gray-500">{{ $payment->sent_at?->format('M d, h:i A') }}</span>
-                                </div>
-                            </article>
-                        @endforeach
-                        @if($consultation->paymentRequests->whereNotNull('sent_at')->isEmpty())
-                            <div class="px-4 py-8 text-center text-sm text-gray-500">No email activity recorded yet.</div>
-                        @endif
+                    <div class="py-5 text-center text-sm text-gray-500">No email activity recorded yet.</div>
                     @endforelse
                 </div>
             </section>
         </div>
-
-        <aside class="space-y-5">
-            <section class="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
-                <div class="border-b border-[#E5E7EB] px-6 py-5">
-                    <div class="flex flex-wrap items-center justify-between gap-3">
-                        <h2 class="text-lg font-bold">Payment Progress</h2>
-                        <span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $paymentStatus['bg'] }}; color: {{ $paymentStatus['text'] }}">{{ $paymentStatus['label'] }}</span>
+        <section class="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+            <div class="border-b border-[#E5E7EB] px-5 py-4">
+                <h3 class="font-bold text-[#111827]">Payment Shares</h3>
+            </div>
+            <div class="grid grid-cols-[1fr_auto_auto] gap-3 bg-[#F7F8FC] px-5 py-3 text-xs font-bold text-gray-500">
+                <div>Participant</div>
+                <div>Amount</div>
+                <div>Status</div>
+            </div>
+            <div class="divide-y divide-[#E5E7EB]">
+                @forelse($consultation->paymentRequests as $payment)
+                @php($status = $statusTheme($payment->status))
+                @php($payer = trim(($payment->participant?->first_name ?? 'Client').' '.($payment->participant?->last_name ?? '')))
+                <div class="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-5 py-4 text-sm">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <div class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#ECEDF9] text-xs font-bold text-[#082BC3]">{{ Str::upper(Str::substr($payer, 0, 2)) }}</div>
+                        <div class="truncate font-semibold text-[#111827]">{{ $payer }}</div>
+                    </div>
+                    <div class="font-bold">${{ number_format($payment->amount_cents / 100, 2) }}</div>
+                    <div class="flex items-center gap-2">
+                        <span class="status-badge {{ $status['badge'] }}">{{ $status['label'] }}</span>
+                        @if(filled($payment->payment_url) && $payment->status !== 'paid')
+                        <a href="{{ $payment->payment_url }}" target="_blank" rel="noopener" aria-label="View Payment Link"><i data-lucide="link" class="h-4 w-4 text-[#082BC3]"></i><span class="sr-only">View Payment Link</span></a>
+                        @endif
                     </div>
                 </div>
-                <div class="px-6 py-5 text-sm text-gray-500">
-                    <div class="flex items-center justify-between gap-4">
-                        <span>{{ $totalPaymentCount }} {{ Str::plural('participant', $totalPaymentCount) }}</span>
-                        <span class="font-bold">{{ $paidPaymentCount }} Paid · {{ $pendingPaymentCount }} Pending</span>
-                    </div>
-                    <div class="mt-3 h-2 rounded-full bg-[#E5E7EB]">
-                        <div class="h-2 rounded-full bg-[#082BC3]" style="width: {{ $progressPercent }}%"></div>
-                    </div>
-                    <div class="mt-4 flex items-center justify-between gap-4">
-                        <span>${{ number_format($collectedAmountCents / 100, 2) }} collected</span>
-                        <span>${{ number_format($consultation->total_amount_cents / 100, 2) }} total</span>
-                    </div>
-                </div>
-            </section>
-
-            <section class="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
-                <div class="border-b border-[#E5E7EB] px-6 py-5">
-                    <h2 class="text-lg font-bold">Payment Shares</h2>
-                </div>
-                <div class="hidden grid-cols-3 bg-[#F7F8FC] px-4 py-3 text-xs font-bold uppercase tracking-wide text-gray-500 md:grid">
-                    <div>Payer</div>
-                    <div>Amount</div>
-                    <div>Status</div>
-                </div>
-                <div class="divide-y divide-[#E5E7EB]">
-                    @foreach($consultation->paymentRequests as $payment)
-                        @php($status = $statusTheme($payment->status))
-                        <div class="grid gap-3 px-4 py-4 text-sm md:grid-cols-3 md:items-center">
-                            <div class="min-w-0">
-                                <div class="font-bold">{{ trim(($payment->participant?->first_name ?? 'Client').' '.($payment->participant?->last_name ?? '')) }}</div>
-
-                            </div>
-                            <div class="font-bold" style="color: {{ $app['bar'] }}">${{ number_format($payment->amount_cents / 100, 2) }}</div>
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $status['bg'] }}; color: {{ $status['text'] }}">{{ $status['label'] }}</span>
-                                @if(filled($payment->payment_url) && $payment->status !== 'paid')
-                                    <a class="grid h-4 w-4 place-items-center  hover:bg-[#F7F8FC]" href="{{ $payment->payment_url }}" target="_blank" rel="noopener" aria-label="View Payment Link" title="View Payment Link">
-                                        <img class="h-4 w-4" src="{{ asset('admin-icons/link-svgrepo-com.svg') }}" alt="" aria-hidden="true">
-                                        <span class="sr-only">View Payment Link</span>
-                                    </a>
-                                @endif
-                            </div>
-                        </div>
-                    @endforeach
-                    @if($consultation->paymentRequests->isEmpty())
-                        <div class="px-4 py-8 text-center text-sm text-gray-500">No payment shares created yet.</div>
-                    @endif
-                </div>
-            </section>
-        </aside>
+                @empty
+                <div class="px-5 py-8 text-center text-sm text-gray-500">No payment shares created yet.</div>
+                @endforelse
+            </div>
+        </section>
     </div>
 </x-admin.layout>

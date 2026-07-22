@@ -401,7 +401,7 @@
                     "Consultations"
                 ],
                 "summary": "Return duration-based available slots for a consultation type and month",
-                "description": "The day window comes from BOOKING_DAY_START and BOOKING_DAY_END. Slot spacing comes from the selected consultation type duration, and each slot is marked unavailable when it overlaps an application booking or Outlook busy event.",
+                "description": "The day window comes from BOOKING_DAY_START and BOOKING_DAY_END in BOOKING_TIMEZONE. Slot spacing comes from the selected consultation type duration, and each slot is marked unavailable when it overlaps any application booking or Outlook busy event.",
                 "operationId": "dc46d90a1ee3cef5f47d540a7c896d01",
                 "parameters": [
                     {
@@ -414,9 +414,20 @@
                         }
                     },
                     {
-                        "name": "month",
+                        "name": "date",
                         "in": "query",
                         "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-08-14"
+                        }
+                    },
+                    {
+                        "name": "month",
+                        "in": "query",
+                        "description": "Legacy fallback. Prefer date for selected-day availability.",
+                        "required": false,
                         "schema": {
                             "type": "string",
                             "example": "2026-08"
@@ -434,7 +445,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Monthly availability",
+                        "description": "Selected-date availability",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -448,10 +459,7 @@
                                             "example": "OK"
                                         },
                                         "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/components/schemas/AvailabilityDay"
-                                            }
+                                            "$ref": "#/components/schemas/AvailabilityDay"
                                         }
                                     },
                                     "type": "object"
@@ -693,7 +701,14 @@
                     },
                     "status": {
                         "type": "string",
-                        "example": "pending_payment"
+                        "example": "payment_pending",
+                        "enum": [
+                            "draft",
+                            "payment_pending",
+                            "paid",
+                            "scheduled",
+                            "cancelled"
+                        ]
                     },
                     "payment_status": {
                         "type": "string",
@@ -723,6 +738,11 @@
                     "timezone": {
                         "type": "string",
                         "example": "America/Los_Angeles"
+                    },
+                    "legal_service_name": {
+                        "type": "string",
+                        "example": "Business, Payment & Contract Disputes",
+                        "nullable": true
                     },
                     "description": {
                         "type": "string",
@@ -756,14 +776,6 @@
                     },
                     "type": {
                         "$ref": "#/components/schemas/ConsultationType"
-                    },
-                    "legal_service": {
-                        "oneOf": [
-                            {
-                                "$ref": "#/components/schemas/LegalService"
-                            }
-                        ],
-                        "nullable": true
                     }
                 },
                 "type": "object"

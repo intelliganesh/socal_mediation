@@ -12,13 +12,14 @@ class ConsultationCompletionService
         private readonly ConsultationDraftService $drafts,
         private readonly AvailabilityService $availability,
         private readonly PaymentLinkService $payments,
+        private readonly AdminPaymentNotificationService $notifications,
     ) {
     }
 
     public function complete(Consultation $consultation, array $data): Consultation
     {
-        return DB::transaction(function () use ($consultation, $data) {
-            $data = $this->mergeDraftDetails($consultation->load(['legalService', 'participants']), $data);
+        $consultation = DB::transaction(function () use ($consultation, $data) {
+            $data = $this->mergeDraftDetails($consultation->load(['participants']), $data);
             $this->assertRequiredDetailsPresent($data);
 
             $consultation = $this->drafts->updateDetails($consultation, $data);
@@ -34,7 +35,7 @@ class ConsultationCompletionService
                 'timezone' => $timezone,
                 'starts_at' => $startsAt,
                 'ends_at' => $startsAt->addMinutes($type->duration_minutes),
-                'status' => 'scheduled',
+                'status' => 'payment_pending',
             ]);
 
             $participantIds = $this->participantIdsForPayment(
@@ -48,8 +49,12 @@ class ConsultationCompletionService
                 $data['payment_mode'],
                 $participantIds,
                 $data['payment_method'] ?? null
-            )->load(['type', 'legalService', 'professional', 'participants', 'paymentRequests']);
+            )->load(['type', 'professional', 'participants', 'paymentRequests']);
         });
+
+        $this->notifications->sendPaymentLinks($consultation, 'automatic_payment_link');
+
+        return $consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests']);
     }
 
     private function mergeDraftDetails(Consultation $consultation, array $data): array
@@ -57,7 +62,7 @@ class ConsultationCompletionService
         $primary = $consultation->participants->firstWhere('is_primary', true);
 
         return array_replace_recursive([
-            'legal_service_name' => $consultation->legalService?->name,
+            'legal_service_name' => $consultation->legal_service_name,
             'consultation_mode' => $consultation->consultation_mode,
             'description' => $consultation->description,
             'referral_source' => $consultation->referral_source,

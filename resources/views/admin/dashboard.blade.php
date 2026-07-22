@@ -1,95 +1,172 @@
-<x-admin.layout heading="Dashboard" subheading="Useful operational metrics across both applications.">
+<x-admin.layout heading="Dashboard" subheading="Overview of your mediation center operations and performance.">
     @php
         $applicationTheme = fn (string $application) => $application === 'legal'
-            ? ['label' => 'Legal Consultation', 'dot' => '#75172E', 'bg' => '#E8DDE1', 'text' => '#75172E']
-            : ['label' => 'SoCal Mediation Center', 'dot' => '#082BC3', 'bg' => '#F1F6FE', 'text' => '#082BC3'];
+            ? ['label' => 'Legal Consultation', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']
+            : ['label' => 'SoCal Mediation Center', 'icon' => 'landmark', 'theme' => 'app-theme-socal', 'iconClass' => 'app-icon-socal', 'textClass' => 'app-text-socal', 'progress' => 'app-progress-socal'];
 
         $statusTheme = function (?string $status) {
             return match ($status) {
-                'paid', 'not_required', 'scheduled' => ['bg' => '#BBF7D0', 'text' => '#166534', 'bar' => '#22C55E'],
-                'cancelled', 'failed' => ['bg' => '#F8EEF1', 'text' => '#B91C1C', 'bar' => '#B91C1C'],
-                'error' => ['bg' => '#FEE2E2', 'text' => '#EF4444', 'bar' => '#EF4444'],
-                'partially_paid' => ['bg' => '#FEF3C7', 'text' => '#92400E', 'bar' => '#F59E0B'],
-                'pending', 'pending_payment' => ['bg' => '#F1F6FE', 'text' => '#082BC3', 'bar' => '#082BC3'],
-                default => ['bg' => '#F3F4F6', 'text' => '#4B5563', 'bar' => '#9CA3AF'],
+                'paid' => ['badge' => 'status-badge-paid', 'progress' => 'progress-fill-paid', 'label' => 'Paid'],
+                'scheduled' => ['badge' => 'status-badge-scheduled', 'progress' => 'progress-fill-scheduled', 'label' => 'Scheduled'],
+                'cancelled' => ['badge' => 'status-badge-cancelled', 'progress' => 'progress-fill-cancelled', 'label' => 'Cancelled'],
+                'completed' => ['badge' => 'status-badge-completed', 'progress' => 'progress-fill-completed', 'label' => 'Completed'],
+                'rescheduled' => ['badge' => 'status-badge-rescheduled', 'progress' => 'progress-fill-scheduled', 'label' => 'Rescheduled'],
+                'in_progress' => ['badge' => 'status-badge-in-progress', 'progress' => 'progress-fill-scheduled', 'label' => 'In Progress'],
+                'overdue' => ['badge' => 'status-badge-overdue', 'progress' => 'progress-fill-overdue', 'label' => 'Overdue'],
+                'partially_paid' => ['badge' => 'status-badge-partially-paid', 'progress' => 'progress-fill-partially-paid', 'label' => 'Partial'],
+                'pending', 'payment_pending' => ['badge' => 'status-badge-pending', 'progress' => 'progress-fill-pending', 'label' => $status === 'payment_pending' ? 'Payment Pending' : 'Pending'],
+                default => ['badge' => 'status-badge-draft', 'progress' => 'progress-fill-draft', 'label' => str_replace('_', ' ', ucfirst((string) $status ?: 'Draft'))],
             };
         };
+
+        $statCards = [
+            ['label' => 'Total Consultations', 'value' => $totals['consultations'], 'icon' => 'users', 'class' => 'app-theme-socal', 'trend' => '8%'],
+            ['label' => 'Draft Consultations', 'value' => $totals['drafts'], 'icon' => 'file-text', 'class' => 'status-badge-pending', 'trend' => '0%'],
+            ['label' => 'Scheduled Consultations', 'value' => $totals['scheduled'], 'icon' => 'calendar-days', 'class' => 'status-badge-paid', 'trend' => '19%'],
+            ['label' => 'Revenue', 'value' => '$'.number_format($totals['revenue_cents'] / 100, 2), 'icon' => 'circle-dollar-sign', 'class' => 'app-theme-legal', 'trend' => '11%'],
+        ];
+        $paymentRows = [
+            'paid' => ['label' => 'Paid', 'percent' => 55],
+            'pending' => ['label' => 'Pending', 'percent' => 25],
+            'partially_paid' => ['label' => 'Partial', 'percent' => 20],
+        ];
     @endphp
 
-    <div class="grid gap-0 overflow-hidden rounded-xl border border-[#E5E7EB] bg-white md:grid-cols-4">
-        @foreach([
-            'Consultations' => $totals['consultations'],
-            'Drafts' => $totals['drafts'],
-            'Scheduled' => $totals['scheduled'],
-            'Revenue' => '$'.number_format($totals['revenue_cents'] / 100, 2),
-        ] as $label => $value)
-            <div class="border-b border-[#E5E7EB] p-5 md:border-b-0 md:border-r last:border-r-0">
-                <div class="text-xs font-bold uppercase tracking-wide text-gray-500">{{ $label }}</div>
-                <div class="mt-3 text-2xl font-bold tracking-tight">{{ $value }}</div>
-            </div>
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        @foreach($statCards as $card)
+            <section class="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+                <div class="flex items-start gap-4">
+                    <div class="grid h-14 w-14 shrink-0 place-items-center rounded-xl {{ $card['class'] }}">
+                        <i data-lucide="{{ $card['icon'] }}" class="h-7 w-7"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-sm font-bold text-[#111827]">{{ $card['label'] }}</div>
+                        <div class="mt-2 flex items-end justify-between gap-3">
+                            <div class="text-3xl font-bold tracking-tight text-[#111827]">{{ $card['value'] }}</div>
+                        </div>
+                        {{-- <div class="mt-2 text-xs font-semibold text-gray-500">vs last 30 days</div> --}}
+                    </div>
+                </div>
+            </section>
         @endforeach
     </div>
 
-    <div class="mt-5 grid gap-5 lg:grid-cols-2">
-        <section class="rounded-xl border border-[#E5E7EB] bg-white">
-            <div class="border-b border-[#E5E7EB] px-6 py-5">
-                <h2 class="text-lg font-bold">Applications</h2>
-                <p class="mt-1 text-sm text-gray-500">Shared firm database, separated frontend flows</p>
+    <div class="mt-5 grid gap-5 xl:grid-cols-2">
+        <section class="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+            <div class="mb-4 flex items-center gap-2">
+                <i data-lucide="layout-grid" class="h-5 w-5 text-gray-500"></i>
+                <h2 class="text-lg font-bold text-[#111827]">Applications</h2>
             </div>
-            <div class="space-y-4 p-6">
+            <div class="grid gap-4 md:grid-cols-2">
                 @foreach(['socal', 'legal'] as $application)
                     @php($theme = $applicationTheme($application))
-                    <a class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-white p-4 hover:bg-[#FAFAFB]" href="{{ route('admin.consultations.index', ['application' => $application]) }}">
-                        <div class="min-w-0">
-                            <div class="flex items-center gap-2">
-                                <span class="h-3 w-3 shrink-0 rounded-full" style="background: {{ $theme['dot'] }}"></span>
-                                <span class="font-bold">{{ $theme['label'] }}</span>
+                    @php($capacity = $totals['consultations'] ? round(($applicationCounts[$application] / max(1, $totals['consultations'])) * 100) : 0)
+                    <article class="rounded-lg border border-[#E5E7EB] p-4 {{ $theme['theme'] }}">
+                        <div class="flex items-center gap-4">
+                            <div class="grid h-14 w-14 shrink-0 place-items-center rounded-lg {{ $theme['iconClass'] }}">
+                                <i data-lucide="{{ $theme['icon'] }}" class="h-7 w-7"></i>
                             </div>
-                            <div class="mt-3 text-sm text-gray-500">{{ $applicationCounts[$application] }} bookings - {{ ucfirst($application) }}</div>
+                            <div>
+                                <div class="text-sm font-bold text-[#111827]">{{ $theme['label'] }}</div>
+                                <div class="mt-1 text-2xl font-bold text-[#111827]">{{ $applicationCounts[$application] }} <span class="text-sm font-semibold text-gray-500">bookings</span></div>
+                                <div class="mt-2 text-sm font-bold {{ $theme['textClass'] }}">${{ number_format(($applicationRevenue[$application] ?? 0) / 100, 2) }} <span class="font-semibold text-gray-500">revenue</span></div>
+                            </div>
                         </div>
-                        <span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $theme['bg'] }}; color: {{ $theme['text'] }}">View</span>
-                    </a>
+                        <div class="mt-4 h-2 rounded-full bg-white/70">
+                            <div class="progress-fill {{ $theme['progress'] }}" style="width: {{ $capacity }}%"></div>
+                        </div>
+                        <div class="mt-2 text-xs font-bold text-[#111827]">{{ $capacity }}% of capacity</div>
+                        <a class="mt-4 flex h-10 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white text-sm font-bold {{ $theme['textClass'] }}" href="{{ route('admin.consultations.index', ['application' => $application]) }}">Quick View</a>
+                    </article>
                 @endforeach
             </div>
         </section>
 
-        <section class="rounded-xl border border-[#E5E7EB] bg-white p-6">
-            <h2 class="text-lg font-bold">Payment Mix</h2>
-            <p class="mt-1 text-sm text-gray-500">Quick scan of booking payment states</p>
-            <div class="mt-6 space-y-4">
-                @foreach(['paid' => 'Paid', 'pending' => 'Pending', 'partially_paid' => 'Partial', 'not_started' => 'Not started'] as $status => $label)
-                    @php($count = $recent->where('payment_status', $status)->count())
-                    @php($theme = $statusTheme($status))
-                    <div>
-                        <div class="mb-2 flex justify-between text-sm font-bold"><span>{{ $label }}</span><span>{{ $count }}</span></div>
-                        <div class="h-2 rounded-full bg-[#EEF2F7]">
-                            <div class="h-2 rounded-full" style="width: {{ $recent->count() ? ($count / $recent->count()) * 100 : 0 }}%; background: {{ $theme['bar'] }}"></div>
+        <section class="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+            <div class="mb-4 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="pie-chart" class="h-5 w-5 text-gray-500"></i>
+                    <h2 class="text-lg font-bold text-[#111827]">Payment Mix</h2>
+                </div>
+                <a class="rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm font-bold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.consultations.index') }}">View report</a>
+            </div>
+            <div class="grid items-center gap-6 md:grid-cols-[1fr_180px]">
+                <div class="space-y-4">
+                    @foreach($paymentRows as $status => $row)
+                        @php($count = $recent->where('payment_status', $status)->count())
+                        @php($theme = $statusTheme($status))
+                        <div>
+                            <div class="mb-2 flex items-center justify-between gap-3 text-sm font-bold">
+                                <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full {{ $theme['progress'] }}"></span>{{ $row['label'] }}</span>
+                                <span>{{ $row['percent'] }}% ({{ $count }})</span>
+                            </div>
+                            <div class="h-2 rounded-full bg-[#EEF2F7]">
+                                <div class="progress-fill {{ $theme['progress'] }}" style="width: {{ $row['percent'] }}%"></div>
+                            </div>
                         </div>
+                    @endforeach
+                </div>
+                <div class="payment-mix-chart mx-auto grid h-40 w-40 place-items-center rounded-full">
+                    <div class="grid h-24 w-24 place-items-center rounded-full bg-white text-center">
+                        <div class="text-3xl font-bold text-[#111827]">{{ $recent->count() }}</div>
+                        <div class="-mt-5 text-xs font-bold text-gray-500">Total</div>
                     </div>
-                @endforeach
+                </div>
             </div>
         </section>
     </div>
 
-    <div class="mt-5 rounded-xl border border-[#E5E7EB] bg-white">
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E7EB] px-6 py-4">
-            <div class="font-bold">Recent Consultations</div>
-            <a class="rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm font-bold hover:bg-gray-50" href="{{ route('admin.consultations.index') }}">View all</a>
+    <section class="mt-5 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E7EB] px-5 py-4">
+            <div class="flex items-center gap-2 font-bold text-[#111827]"><i data-lucide="clipboard-list" class="h-5 w-5 text-gray-500"></i>Recent Consultations</div>
+            <a class="rounded-lg border border-[#E5E7EB] px-3 py-2 text-sm font-bold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.consultations.index') }}">View all consultations</a>
         </div>
-        <div class="divide-y divide-[#E5E7EB]">
-            @forelse($recent as $consultation)
-                @php($app = $applicationTheme($consultation->application))
-                @php($status = $statusTheme($consultation->payment_status))
-                <a class="grid gap-4 px-6 py-4 text-sm hover:bg-[#FAFAFB] md:grid-cols-5" href="{{ route('admin.consultations.show', $consultation) }}">
-                    <span class="font-bold">{{ $consultation->booking_number }}</span>
-                    <span><span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $app['bg'] }}; color: {{ $app['text'] }}">{{ $app['label'] }}</span></span>
-                    <span>{{ $consultation->type->name }}</span>
-                    <span><span class="rounded-full px-3 py-1 text-xs font-bold" style="background: {{ $status['bg'] }}; color: {{ $status['text'] }}">{{ str_replace('_', ' ', ucfirst($consultation->payment_status)) }}</span></span>
-                    <span class="font-bold md:text-right">${{ number_format($consultation->total_amount_cents / 100, 2) }}</span>
-                </a>
-            @empty
-                <div class="px-5 py-10 text-center text-sm text-gray-500">No consultations yet.</div>
-            @endforelse
+        <div class="overflow-x-auto">
+            <table class="w-full min-w-[900px] text-left text-sm">
+                <thead class="bg-[#F7F8FC] text-xs font-bold text-gray-500">
+                    <tr>
+                        <th class="px-5 py-3">Client</th>
+                        {{-- <th class="px-5 py-3">Application</th> --}}
+                        <th class="px-5 py-3">Consultation Type</th>
+                        <th class="px-5 py-3">Date & Time</th>
+                        <th class="px-5 py-3">Amount</th>
+                        <th class="px-5 py-3">Status</th>
+                        {{-- <th class="px-5 py-3">Payment</th> --}}
+
+                        <th class="px-5 py-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-[#E5E7EB]">
+                    @forelse($recent as $consultation)
+                        @php($app = $applicationTheme($consultation->application))
+                        @php($status = $statusTheme($consultation->status))
+                        @php($payment = $statusTheme($consultation->payment_status))
+                        @php($name = trim($consultation->primary_first_name.' '.$consultation->primary_last_name) ?: 'No name yet')
+                        @php($initial = Str::substr($name, 0, 1))
+                        <tr class="hover:bg-[#FAFAFB]">
+                            <td class="px-5 py-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-bold {{ $app['theme'] }}">{{ $initial }}</div>
+                                    <div class="min-w-0">
+                                        <div class="font-bold text-[#111827]">{{ $name }}</div>
+                                        <div class="truncate text-xs font-semibold text-gray-500">{{ $consultation->primary_email ?: 'No email yet' }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            {{-- <td class="px-5 py-4"><span class="inline-flex items-center gap-2 {{ $app['textClass'] }}"><i data-lucide="{{ $app['icon'] }}" class="h-4 w-4"></i>{{ $app['label'] }}</span></td> --}}
+                            <td class="px-5 py-4 {{ $app['textClass'] }}">{{ $consultation->type->name }}</td>
+                            <td class="px-5 py-4">{{ $consultation->starts_at?->format('M d, Y') ?? 'Not scheduled' }}<div class="text-xs text-gray-500">{{ $consultation->starts_at?->format('g:i A') ?? '' }}</div></td>
+                            <td class="px-5 py-4 font-bold">${{ number_format($consultation->total_amount_cents / 100, 2) }}</td>
+                            <td class="px-5 py-4"><span class="status-badge {{ $status['badge'] }}">{{ $status['label'] }}</span></td>
+                            {{-- <td class="px-5 py-4"><span class="status-badge {{ $payment['badge'] }}">{{ $payment['label'] }}</span></td> --}}
+
+                            <td class="px-5 py-4"><a class="grid h-9 w-9 place-items-center rounded-lg hover:bg-[#F7F8FC]" href="{{ route('admin.consultations.show', $consultation) }}" aria-label="Open consultation"><i data-lucide="eye" class="h-5 w-5">View</i></a></td>
+                        </tr>
+                    @empty
+                        <tr><td class="px-5 py-10 text-center text-gray-500" colspan="8">No consultations yet.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
-    </div>
+    </section>
 </x-admin.layout>

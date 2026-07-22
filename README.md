@@ -139,6 +139,7 @@ Draft flow:
 
 - Use `POST /api/v1/consultations/draft` to create or update a consultation draft.
 - Use `POST /api/v1/consultations/{consultation}/complete` to schedule the booking, create payment requests, and send payment links.
+- Use `GET /api/v1/availability?consultation_type_id=1&date=2026-08-14` to fetch slots for one selected date. The legacy `month=YYYY-MM` query still works for older clients.
 
 ## Third-Party Configuration
 
@@ -209,12 +210,13 @@ Email content will be written to Laravel logs instead of being sent externally.
 Booking behavior is controlled with these `.env` values:
 
 ```env
+APP_TIMEZONE=America/Los_Angeles
 BOOKING_TIMEZONE=America/Los_Angeles
 BOOKING_DAY_START=09:00
 BOOKING_DAY_END=17:00
 ```
 
-Slot spacing is based on consultation type duration. Existing consultations and busy Outlook events are checked to prevent overlap.
+`APP_TIMEZONE` controls Laravel's default timezone. `BOOKING_TIMEZONE` controls the timezone used for slot generation, Outlook calendar windows, Zoom meeting payloads, and booking emails. Slot spacing is based on consultation type duration. Existing consultations and busy Outlook events are checked to prevent overlap.
 
 ## Useful Commands
 

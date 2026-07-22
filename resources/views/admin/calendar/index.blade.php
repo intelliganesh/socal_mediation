@@ -1,22 +1,30 @@
 <x-admin.layout heading="Booking Calendar" subheading="Current month plus next 3 months, with manual Outlook sync.">
     @php
         $applicationTheme = fn (string $application) => $application === 'legal'
-            ? ['bg' => '#E8DDE1', 'text' => '#75172E', 'bar' => '#75172E']
-            : ['bg' => '#F1F6FE', 'text' => '#082BC3', 'bar' => '#082BC3'];
+            ? 'app-theme-legal'
+            : 'app-theme-socal';
     @endphp
 
     <div class="mb-5 grid gap-3 rounded-xl border border-[#E5E7EB] bg-white p-4 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
         <form class="grid gap-3 sm:flex sm:flex-wrap" method="get">
-            <select class="w-full rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold sm:w-auto" name="application" onchange="this.form.submit()">
+            <select class="w-full rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold sm:w-auto" name="application">
                 <option value="">All Applications</option>
                 <option value="socal" @selected($selectedApplication === 'socal')>SoCal Mediation Center</option>
                 <option value="legal" @selected($selectedApplication === 'legal')>Legal Consultation</option>
             </select>
-            <select class="w-full rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold sm:w-auto" name="month" onchange="this.form.submit()">
+            <select class="w-full rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold sm:w-auto" name="consultation_type_id">
+                <option value="">All Consultation Types</option>
+                @foreach($consultationTypes as $type)
+                    <option value="{{ $type->id }}" @selected((string) $selectedConsultationTypeId === (string) $type->id)>{{ $type->name }}</option>
+                @endforeach
+            </select>
+            <select class="w-full rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold sm:w-auto" name="month">
                 @foreach($months as $month)
                     <option value="{{ $month->format('Y-m') }}" @selected($selectedMonth->format('Y-m') === $month->format('Y-m'))>{{ $month->format('F Y') }}</option>
                 @endforeach
             </select>
+            <a class="flex h-10 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.calendar.index') }}">Reset</a>
+            <button class="h-10 rounded-lg bg-[#082BC3] px-5 text-sm font-bold text-white hover:bg-[#111827]" type="submit">Apply</button>
         </form>
         <form method="post" action="{{ route('admin.calendar.sync') }}">
             @csrf
@@ -29,10 +37,10 @@
         @forelse($groupedConsultations as $date => $items)
             <section class="rounded-xl border border-[#E5E7EB] bg-white p-4">
                 <div class="font-bold">{{ \Carbon\CarbonImmutable::parse($date)->format('M d, Y') }}</div>
-                <div class="mt-3 grid gap-2">
+                <div class="mt-3 grid max-h-44 gap-2 overflow-y-auto pr-1">
                     @foreach($items as $consultation)
                         @php($theme = $applicationTheme($consultation->application))
-                        <a class="rounded-lg border-l-4 p-3 text-sm font-bold" style="background: {{ $theme['bg'] }}; color: {{ $theme['text'] }}; border-color: {{ $theme['bar'] }}" href="{{ route('admin.consultations.show', $consultation) }}">
+                        <a class="rounded-lg border-l-4 p-3 text-sm font-bold {{ $theme }}" href="{{ route('admin.consultations.show', $consultation) }}">
                             <span class="block">{{ $consultation->starts_at->format('g:i A') }}</span>
                             <span class="mt-1 block">{{ $consultation->type->name }}</span>
                         </a>
@@ -55,13 +63,16 @@
             @php($date = $selectedMonth->setDay($day))
             <div class="min-h-32 border-b border-r border-[#E5E7EB] p-3">
                 <div class="mb-2 font-bold">{{ $day }}</div>
-                @foreach($consultations->filter(fn($item) => $item->starts_at?->toDateString() === $date->toDateString()) as $consultation)
-                    @php($theme = $applicationTheme($consultation->application))
-                    <a class="mb-2 block rounded-lg border-l-4 p-2 text-xs font-bold" style="background: {{ $theme['bg'] }}; color: {{ $theme['text'] }}; border-color: {{ $theme['bar'] }}" href="{{ route('admin.consultations.show', $consultation) }}">
-                        <span class="block">{{ $consultation->starts_at->format('g:i A') }}</span>
-                        <span class="block truncate">{{ $consultation->type->name }}</span>
-                    </a>
-                @endforeach
+                @php($dayConsultations = $consultations->filter(fn($item) => $item->starts_at?->toDateString() === $date->toDateString()))
+                <div class="max-h-40 overflow-y-auto pr-1">
+                    @foreach($dayConsultations as $consultation)
+                        @php($theme = $applicationTheme($consultation->application))
+                        <a class="mb-2 block rounded-lg border-l-4 p-2 text-xs font-bold {{ $theme }}" href="{{ route('admin.consultations.show', $consultation) }}">
+                            <span class="block">{{ $consultation->starts_at->format('g:i A') }}</span>
+                            <span class="block truncate">{{ $consultation->type->name }}</span>
+                        </a>
+                    @endforeach
+                </div>
             </div>
         @endfor
     </div>

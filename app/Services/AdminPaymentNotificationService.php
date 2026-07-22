@@ -10,12 +10,12 @@ use Illuminate\Support\Facades\Mail;
 
 class AdminPaymentNotificationService
 {
-    public function sendPaymentLinks(Consultation $consultation): int
+    public function sendPaymentLinks(Consultation $consultation, string $action = 'manual_payment_link'): int
     {
         return $this->sendToUnpaidRequests(
             $consultation,
             ConsultationPaymentLinkMail::class,
-            'manual_payment_link'
+            $action
         );
     }
 

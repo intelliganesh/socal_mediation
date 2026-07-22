@@ -107,6 +107,40 @@ class AdminPanelTest extends TestCase
         ]);
     }
 
+    public function test_email_activity_uses_distinct_labels_for_each_mail_action(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+
+        foreach ([
+            'manual_payment_link' => 'client@example.com',
+            'manual_payment_reminder' => 'participant@example.com',
+            'manual_zoom_link' => 'zoom@example.com',
+            'manual_reschedule_zoom_link' => 'reschedule@example.com',
+        ] as $action => $recipient) {
+            $consultation->integrationLogs()->create([
+                'provider' => 'mail',
+                'action' => $action,
+                'status' => 'sent',
+                'request_payload' => ['recipient' => $recipient],
+            ]);
+        }
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $consultation))
+            ->assertOk()
+            ->assertSee('Payment Link')
+            ->assertSee('Payment Reminder')
+            ->assertSee('Zoom Link')
+            ->assertSee('Reschedule Zoom Link')
+            ->assertSee('client@example.com')
+            ->assertSee('participant@example.com')
+            ->assertSee('zoom@example.com')
+            ->assertSee('reschedule@example.com');
+    }
+
     public function test_admin_can_cancel_reschedule_and_regenerate_meeting_link(): void
     {
         $this->seed();
@@ -176,7 +210,39 @@ class AdminPanelTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame('cancelled', $scheduledConsultation->refresh()->status);
-        $this->assertSame('cancelled', $scheduledConsultation->payment_status);
+        $this->assertSame('pending', $scheduledConsultation->payment_status);
+    }
+
+    public function test_reschedule_keeps_zoom_update_when_zoom_email_delivery_fails(): void
+    {
+        $this->seed();
+
+        Mail::shouldReceive('to')
+            ->andThrow(new \RuntimeException('SMTP failed'));
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+        $oldZoomUrl = $consultation->zoom_join_url;
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.reschedule', $consultation), [
+                'starts_at' => '2026-10-05T09:00',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Consultation rescheduled. Zoom link was regenerated, but no Zoom emails were sent.');
+
+        $consultation->refresh();
+
+        $this->assertSame('2026-10-05 09:00:00', $consultation->starts_at->format('Y-m-d H:i:s'));
+        $this->assertSame('scheduled', $consultation->status);
+        $this->assertNotSame($oldZoomUrl, $consultation->zoom_join_url);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'mail',
+            'action' => 'manual_reschedule_zoom_link',
+            'status' => 'failed',
+        ]);
     }
 
     public function test_admin_can_sync_consultation_to_outlook(): void

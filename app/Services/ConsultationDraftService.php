@@ -19,8 +19,8 @@ class ConsultationDraftService
                 'consultation_type_id' => $type->id,
                 'application' => $type->application,
                 'status' => 'draft',
-                'payment_status' => $type->price_cents === 0 ? 'not_required' : 'not_started',
-                'timezone' => config('app.booking_timezone', 'America/Los_Angeles'),
+                'payment_status' => 'pending',
+                'timezone' => config('app.booking_timezone'),
                 'total_amount_cents' => $type->price_cents,
                 'currency' => $type->currency,
             ]);
@@ -29,7 +29,7 @@ class ConsultationDraftService
                 $this->applyDraftFormFields($consultation, $data);
             }
 
-            return $consultation->refresh()->load(['type', 'legalService', 'participants']);
+            return $consultation->refresh()->load(['type', 'participants']);
         });
     }
 
@@ -37,10 +37,10 @@ class ConsultationDraftService
     {
         return DB::transaction(function () use ($consultation, $data) {
             $primary = $data['primary_client'];
-            $legalService = $this->resolveLegalService($consultation, $data['legal_service_name'] ?? null);
+            $legalServiceName = $this->resolveLegalServiceName($consultation, $data['legal_service_name'] ?? null);
 
             $consultation->update([
-                'legal_service_id' => $legalService?->id,
+                'legal_service_name' => $legalServiceName,
                 'consultation_mode' => $data['consultation_mode'],
                 'description' => $data['description'] ?? null,
                 'referral_source' => $data['referral_source'] ?? null,
@@ -49,7 +49,7 @@ class ConsultationDraftService
                 'primary_email' => $primary['email'],
                 'primary_phone_country' => $primary['phone_country'] ?? null,
                 'primary_phone' => $primary['phone'] ?? null,
-                'status' => 'details_complete',
+                'status' => 'draft',
             ]);
 
             $consultation->participants()->delete();
@@ -67,17 +67,18 @@ class ConsultationDraftService
                 ]);
             }
 
-            return $consultation->refresh()->load(['type', 'legalService', 'participants']);
+            return $consultation->refresh()->load(['type', 'participants']);
         });
     }
 
-    private function resolveLegalService(Consultation $consultation, ?string $name): ?LegalService
+    private function resolveLegalServiceName(Consultation $consultation, ?string $name): ?string
     {
         if ($name === null || trim($name) === '') {
             return null;
         }
 
-        $normalized = Str::of($name)->squish()->lower()->toString();
+        $candidate = Str::of($name)->squish()->toString();
+        $normalized = Str::of($candidate)->lower()->toString();
         $service = LegalService::query()
             ->where('application', $consultation->application)
             ->whereRaw('LOWER(name) = ?', [$normalized])
@@ -87,7 +88,7 @@ class ConsultationDraftService
             throw new \DomainException('Selected legal service name is not available for this application.');
         }
 
-        return $service;
+        return $service->name;
     }
 
     private function hasDraftFormFields(array $data): bool
@@ -105,10 +106,10 @@ class ConsultationDraftService
     private function applyDraftFormFields(Consultation $consultation, array $data): void
     {
         $primary = $data['primary_client'] ?? [];
-        $legalService = $this->resolveLegalService($consultation, $data['legal_service_name'] ?? null);
+        $legalServiceName = $this->resolveLegalServiceName($consultation, $data['legal_service_name'] ?? null);
 
         $consultation->update([
-            'legal_service_id' => $legalService?->id,
+            'legal_service_name' => $legalServiceName,
             'consultation_mode' => $data['consultation_mode'] ?? null,
             'description' => $data['description'] ?? null,
             'referral_source' => $data['referral_source'] ?? null,

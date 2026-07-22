@@ -1,0 +1,240 @@
+@layer components {
+    :root {
+        --admin-bg: #f3f4f7;
+        --admin-surface: #ffffff;
+        --admin-sidebar: #F7F8FC;
+        --admin-sidebar-active: #ECEDF9;
+        --admin-border: #E5E7EB;
+        --admin-muted-bg: #EEF2F7;
+        --admin-muted-text: #4B5563;
+        --admin-heading: #111827;
+        --admin-body: #1F2937;
+        --admin-primary: #082BC3;
+        --admin-primary-soft: #F1F6FE;
+        --admin-legal: #75172E;
+        --admin-legal-soft: #E8DDE1;
+        --status-draft-bg: #F3F4F6;
+        --status-draft-text: #4B5563;
+        --status-draft-border: #D1D5DB;
+        --status-pending-bg: #FEF3C7;
+        --status-pending-text: #B45309;
+        --status-pending-border: #FCD34D;
+        --status-paid-bg: #DCFCE7;
+        --status-paid-text: #15803D;
+        --status-paid-border: #86EFAC;
+        --status-scheduled-bg: #DBEAFF;
+        --status-scheduled-text: #1D4ED8;
+        --status-scheduled-border: #93C5FD;
+        --status-cancelled-bg: #FEE2E2;
+        --status-cancelled-text: #DC2626;
+        --status-cancelled-border: #FCA5A5;
+        --status-completed-bg: #D1FAE5;
+        --status-completed-text: #047857;
+        --status-completed-border: #6EE7B7;
+        --status-rescheduled-bg: #EDE9FE;
+        --status-rescheduled-text: #7C3AED;
+        --status-rescheduled-border: #C4B5FD;
+        --status-in-progress-bg: #E0F2FE;
+        --status-in-progress-text: #0369A1;
+        --status-in-progress-border: #7DD3FC;
+        --status-overdue-bg: #FEEACA;
+        --status-overdue-text: #B91C1C;
+        --status-overdue-border: #F87171;
+    }
+
+    .status-badge {
+        border: 1px solid currentColor;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        line-height: 1rem;
+        white-space: nowrap;
+    }
+
+    .status-badge-draft {
+        background: var(--status-draft-bg);
+        border-color: var(--status-draft-border);
+        color: var(--status-draft-text);
+    }
+
+    .status-badge-pending,
+    .status-badge-payment-pending,
+    .status-badge-partially-paid {
+        background: var(--status-pending-bg);
+        border-color: var(--status-pending-border);
+        color: var(--status-pending-text);
+    }
+
+    .status-badge-paid {
+        background: var(--status-paid-bg);
+        border-color: var(--status-paid-border);
+        color: var(--status-paid-text);
+    }
+
+    .status-badge-scheduled {
+        background: var(--status-scheduled-bg);
+        border-color: var(--status-scheduled-border);
+        color: var(--status-scheduled-text);
+    }
+
+    .status-badge-cancelled {
+        background: var(--status-cancelled-bg);
+        border-color: var(--status-cancelled-border);
+        color: var(--status-cancelled-text);
+    }
+
+    .status-badge-completed {
+        background: var(--status-completed-bg);
+        border-color: var(--status-completed-border);
+        color: var(--status-completed-text);
+    }
+
+    .status-badge-rescheduled {
+        background: var(--status-rescheduled-bg);
+        border-color: var(--status-rescheduled-border);
+        color: var(--status-rescheduled-text);
+    }
+
+    .status-badge-in-progress {
+        background: var(--status-in-progress-bg);
+        border-color: var(--status-in-progress-border);
+        color: var(--status-in-progress-text);
+    }
+
+    .status-badge-overdue {
+        background: var(--status-overdue-bg);
+        border-color: var(--status-overdue-border);
+        color: var(--status-overdue-text);
+    }
+
+    .progress-track {
+        background: var(--admin-muted-bg);
+        border-radius: 9999px;
+        height: 0.5rem;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        border-radius: inherit;
+        height: 100%;
+    }
+
+    .progress-fill-draft {
+        background: var(--status-draft-text);
+    }
+
+    .progress-fill-pending,
+    .progress-fill-payment-pending,
+    .progress-fill-partially-paid {
+        background: var(--status-pending-border);
+    }
+
+    .progress-fill-paid,
+    .progress-fill-completed {
+        background: var(--status-paid-text);
+    }
+
+    .progress-fill-scheduled {
+        background: var(--status-scheduled-text);
+    }
+
+    .progress-fill-cancelled,
+    .progress-fill-overdue {
+        background: var(--status-cancelled-text);
+    }
+
+    .app-theme-socal {
+        background: var(--admin-primary-soft);
+        color: var(--admin-primary);
+    }
+
+    .app-theme-legal {
+        background: var(--admin-legal-soft);
+        color: var(--admin-legal);
+    }
+
+    .app-icon-socal,
+    .app-progress-socal {
+        background: var(--admin-primary);
+        color: var(--admin-surface);
+    }
+
+    .app-icon-legal,
+    .app-progress-legal {
+        background: var(--admin-legal);
+        color: var(--admin-surface);
+    }
+
+    .app-text-socal {
+        color: var(--admin-primary);
+    }
+
+    .app-text-legal {
+        color: var(--admin-legal);
+    }
+
+    .payment-mix-chart {
+        background: conic-gradient(
+            var(--status-paid-text) 0 55%,
+            var(--status-pending-border) 55% 75%,
+            var(--admin-primary) 75% 90%,
+            var(--status-draft-text) 90% 100%
+        );
+    }
+
+    .action-card-primary {
+        color: var(--admin-primary);
+    }
+
+    .action-card-primary .action-card-icon {
+        background: var(--admin-primary-soft);
+    }
+
+    .action-card-primary .action-card-button {
+        background: var(--admin-primary);
+        color: var(--admin-surface);
+    }
+
+    .action-card-pending {
+        color: var(--status-pending-text);
+    }
+
+    .action-card-pending .action-card-icon {
+        background: var(--status-pending-bg);
+    }
+
+    .action-card-pending .action-card-button {
+        background: var(--status-pending-border);
+        color: var(--admin-surface);
+    }
+
+    .action-card-paid {
+        color: var(--status-paid-text);
+    }
+
+    .action-card-paid .action-card-icon {
+        background: var(--status-paid-bg);
+    }
+
+    .action-card-paid .action-card-button {
+        background: var(--status-paid-text);
+        color: var(--admin-surface);
+    }
+
+    .action-card-cancelled {
+        color: var(--status-cancelled-text);
+    }
+
+    .action-card-cancelled .action-card-icon {
+        background: var(--status-cancelled-bg);
+    }
+
+    .action-card-cancelled .action-card-button {
+        background: var(--status-cancelled-text);
+        color: var(--admin-surface);
+    }
+}
