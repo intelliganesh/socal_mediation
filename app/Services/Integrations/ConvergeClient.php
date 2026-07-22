@@ -17,6 +17,7 @@ class ConvergeClient
             'reference' => $reference,
             'url' => $baseUrl.'/pay/'.$reference,
             'mode' => config('services.converge.mode'),
+            'gateway_enabled' => (bool) config('services.converge.enabled'),
             'amount_cents' => $amountCents,
             'method' => $method,
             'participant_email' => $participant->email,

@@ -36,6 +36,7 @@ return [
     ],
 
     'converge' => [
+        'enabled' => env('CONVERGE_ENABLED', false),
         'mode' => env('CONVERGE_MODE', 'sandbox'),
         'sandbox_base_url' => env('CONVERGE_SANDBOX_BASE_URL', 'https://api.demo.convergepay.com'),
         'production_base_url' => env('CONVERGE_PRODUCTION_BASE_URL', 'https://api.convergepay.com'),
@@ -47,18 +48,24 @@ return [
     ],
 
     'zoom' => [
+        'enabled' => env('ZOOM_MEETINGS_ENABLED', false),
         'account_id' => env('ZOOM_ACCOUNT_ID'),
         'client_id' => env('ZOOM_CLIENT_ID'),
         'client_secret' => env('ZOOM_CLIENT_SECRET'),
+        'oauth_base_url' => env('ZOOM_OAUTH_BASE_URL', 'https://zoom.us'),
         'base_url' => env('ZOOM_BASE_URL', 'https://api.zoom.us/v2'),
         'join_base_url' => env('ZOOM_JOIN_BASE_URL', 'https://zoom.us'),
     ],
 
     'outlook' => [
+        'enabled' => env('OUTLOOK_SYNC_ENABLED', false),
         'tenant_id' => env('OUTLOOK_TENANT_ID'),
         'client_id' => env('OUTLOOK_CLIENT_ID'),
         'client_secret' => env('OUTLOOK_CLIENT_SECRET'),
+        'login_base_url' => env('OUTLOOK_LOGIN_BASE_URL', 'https://login.microsoftonline.com'),
+        'socal_user_id' => env('OUTLOOK_SOCAL_USER_ID'),
         'socal_calendar_id' => env('OUTLOOK_SOCAL_CALENDAR_ID'),
+        'legal_user_id' => env('OUTLOOK_LEGAL_USER_ID'),
         'legal_calendar_id' => env('OUTLOOK_LEGAL_CALENDAR_ID'),
         'base_url' => env('OUTLOOK_BASE_URL', 'https://graph.microsoft.com/v1.0'),
     ],

@@ -113,16 +113,17 @@
                 </article>
             @endif
 
-            <article class="flex min-h-72 flex-col items-center rounded-lg border border-[#E5E7EB] bg-white p-5 text-center shadow-sm">
-                <div class="grid h-16 w-16 place-items-center rounded-full bg-[#ECFDF5]">
-                    <img class="h-8 w-8" src="{{ asset('admin-icons/microsoftoutlook-svgrepo-com.svg') }}" alt="" aria-hidden="true">
-                </div>
-                <h3 class="mt-5 text-base font-bold text-[#10B981]">Sync This Booking To Outlook</h3>
-                <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Add or update this booking on the Outlook calendar.</p>
-                <form class="mt-auto pt-6" method="post" action="{{ route('admin.consultations.sync-outlook', $consultation) }}">
+            <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-sm">
+                <form class="flex min-h-72 flex-col items-center p-5 text-center" method="post" action="{{ route('admin.consultations.sync-outlook', $consultation) }}">
                     @csrf
-                    <button class="grid h-11 w-11 place-items-center rounded-lg bg-[#ECFDF5] hover:bg-[#D1FAE5]" aria-label="Sync This Booking To Outlook">
-                        <img class="h-5 w-5" src="{{ asset('admin-icons/arrow-right-svgrepo-com.svg') }}" alt="" aria-hidden="true">
+                    <div class="grid h-16 w-16 place-items-center rounded-full bg-[#ECFDF5]">
+                        <img class="h-8 w-8" src="{{ asset('admin-icons/microsoftoutlook-svgrepo-com.svg') }}" alt="" aria-hidden="true">
+                    </div>
+                    <h3 class="mt-5 text-base font-bold text-[#10B981]">Sync This Booking To Outlook</h3>
+                    <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Add or update this booking on the Outlook calendar.</p>
+                    <button class="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#ECFDF5] px-4 py-2.5 text-sm font-bold text-[#10B981] hover:bg-[#D1FAE5]" aria-label="Sync This Booking To Outlook">
+                        <span>Sync to Outlook</span>
+                        <img class="h-4 w-4" src="{{ asset('admin-icons/arrow-right-svgrepo-com.svg') }}" alt="" aria-hidden="true">
                     </button>
                 </form>
             </article>

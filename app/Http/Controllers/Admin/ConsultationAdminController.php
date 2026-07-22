@@ -76,7 +76,12 @@ class ConsultationAdminController extends Controller
             return back()->with('status', 'Zoom meeting links are only available for online consultations.');
         }
 
-        $meeting = $zoom->createMeeting($consultation);
+        try {
+            $meeting = $zoom->createMeeting($consultation);
+        } catch (\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
         $consultation->update([
             'zoom_meeting_id' => $meeting['id'],
             'zoom_join_url'   => $meeting['join_url'],
@@ -110,7 +115,7 @@ class ConsultationAdminController extends Controller
         return back()->with('status', 'Consultation cancelled.');
     }
 
-    public function reschedule(Request $request, Consultation $consultation, AvailabilityService $availability)
+    public function reschedule(Request $request, Consultation $consultation, AvailabilityService $availability, OutlookCalendarClient $outlook)
     {
         $data = $request->validate([
             'starts_at' => ['required', 'date_format:Y-m-d\TH:i'],
@@ -140,6 +145,24 @@ class ConsultationAdminController extends Controller
             'message'         => 'Consultation rescheduled from admin panel.',
         ]);
 
+        if (config('services.outlook.enabled')) {
+            try {
+                $syncedConsultation = $consultation->refresh()->load(['type', 'professional']);
+                $outlookEvent = $outlook->syncConsultation($syncedConsultation);
+
+                $consultation->integrationLogs()->create([
+                    'provider' => 'outlook',
+                    'action' => 'automatic_reschedule_sync',
+                    'status' => 'synced',
+                    'request_payload' => $outlook->consultationEventPayload($syncedConsultation),
+                    'response_payload' => $outlookEvent->metadata['outlook_response'] ?? $outlookEvent->metadata,
+                    'message' => 'Booking synced to Outlook after reschedule.',
+                ]);
+            } catch (\DomainException|\RuntimeException $exception) {
+                return back()->with('error', 'Consultation rescheduled, but Outlook sync failed: '.$exception->getMessage());
+            }
+        }
+
         return back()->with('status', 'Consultation rescheduled.');
     }
 
@@ -149,12 +172,20 @@ class ConsultationAdminController extends Controller
             return back()->with('status', 'Schedule this booking before syncing it to Outlook.');
         }
 
-        $outlook->syncConsultation($consultation);
+        try {
+            $syncedConsultation = $consultation->load(['type', 'professional']);
+            $outlookEvent = $outlook->syncConsultation($syncedConsultation);
+        } catch (\DomainException|\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
         $consultation->integrationLogs()->create([
             'provider' => 'outlook',
-            'action'   => 'manual_booking_sync',
-            'status'   => 'synced',
-            'message'  => 'Booking synced to Outlook from admin panel.',
+            'action' => 'manual_booking_sync',
+            'status' => 'synced',
+            'request_payload' => $outlook->consultationEventPayload($syncedConsultation),
+            'response_payload' => $outlookEvent->metadata['outlook_response'] ?? $outlookEvent->metadata,
+            'message' => 'Booking synced to Outlook from admin panel.',
         ]);
 
         return back()->with('status', 'This booking was synced to Outlook.');

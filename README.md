@@ -147,6 +147,7 @@ The application is ready for sandbox and production configuration through `.env`
 Payment gateway:
 
 ```env
+CONVERGE_ENABLED=false
 CONVERGE_MODE=sandbox
 CONVERGE_SANDBOX_BASE_URL=https://api.demo.convergepay.com
 CONVERGE_PRODUCTION_BASE_URL=https://api.convergepay.com
@@ -160,9 +161,11 @@ CONVERGE_WEBHOOK_SECRET=
 Zoom:
 
 ```env
+ZOOM_MEETINGS_ENABLED=false
 ZOOM_ACCOUNT_ID=
 ZOOM_CLIENT_ID=
 ZOOM_CLIENT_SECRET=
+ZOOM_OAUTH_BASE_URL=https://zoom.us
 ZOOM_BASE_URL=https://api.zoom.us/v2
 ZOOM_JOIN_BASE_URL=https://zoom.us
 ```
@@ -170,13 +173,28 @@ ZOOM_JOIN_BASE_URL=https://zoom.us
 Outlook:
 
 ```env
+OUTLOOK_SYNC_ENABLED=false
 OUTLOOK_TENANT_ID=
 OUTLOOK_CLIENT_ID=
 OUTLOOK_CLIENT_SECRET=
+OUTLOOK_LOGIN_BASE_URL=https://login.microsoftonline.com
+OUTLOOK_SOCAL_USER_ID=
 OUTLOOK_SOCAL_CALENDAR_ID=
+OUTLOOK_LEGAL_USER_ID=
 OUTLOOK_LEGAL_CALENDAR_ID=
 OUTLOOK_BASE_URL=https://graph.microsoft.com/v1.0
 ```
+
+The integration toggles default to `false` so local and development environments do not accidentally call production services. Enable them only in the environment that should perform live integration calls.
+
+Required Zoom OAuth app scopes for live meeting generation:
+
+```text
+meeting:write:meeting
+meeting:write:meeting:admin
+```
+
+For Outlook app-only sync, set `OUTLOOK_SOCAL_USER_ID` and `OUTLOOK_LEGAL_USER_ID` to the mailbox user principal name or Microsoft Graph user id that owns each calendar. The calendar id values identify the specific calendars under those users.
 
 Local email defaults to the log mailer:
 

@@ -7,6 +7,7 @@ use App\Mail\ConsultationZoomLinkMail;
 use App\Models\Consultation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -176,5 +177,115 @@ class AdminPanelTest extends TestCase
 
         $this->assertSame('cancelled', $scheduledConsultation->refresh()->status);
         $this->assertSame('cancelled', $scheduledConsultation->payment_status);
+    }
+
+    public function test_admin_can_sync_consultation_to_outlook(): void
+    {
+        $this->seed();
+        config([
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.socal_user_id' => 'socal@example.com',
+            'services.outlook.socal_calendar_id' => 'socal-calendar',
+        ]);
+
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
+            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events' => Http::response([
+                'id' => 'outlook-event-id',
+                'webLink' => 'https://outlook.office.com/event',
+            ], 201),
+        ]);
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.sync-outlook', $consultation))
+            ->assertRedirect()
+            ->assertSessionHas('status', 'This booking was synced to Outlook.');
+
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'outlook',
+            'action' => 'manual_booking_sync',
+            'status' => 'synced',
+        ]);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'outlook',
+            'action' => 'manual_booking_sync',
+            'request_payload->subject' => $consultation->booking_number.' - '.$consultation->type->name,
+            'response_payload->id' => 'outlook-event-id',
+        ]);
+
+        $this->assertDatabaseHas('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultation->uuid,
+            'application' => 'socal',
+            'is_busy' => true,
+        ]);
+    }
+
+    public function test_reschedule_automatically_syncs_consultation_to_outlook_when_enabled(): void
+    {
+        $this->seed();
+        config([
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.legal_user_id' => 'legal@example.com',
+            'services.outlook.legal_calendar_id' => 'legal-calendar',
+        ]);
+
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
+            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events' => Http::response([
+                'id' => 'rescheduled-outlook-event-id',
+                'webLink' => 'https://outlook.office.com/rescheduled-event',
+            ], 201),
+        ]);
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.reschedule', $consultation), [
+                'starts_at' => '2026-10-01T13:00',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Consultation rescheduled.');
+
+        $this->assertSame('2026-10-01 13:00:00', $consultation->refresh()->starts_at->format('Y-m-d H:i:s'));
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'outlook',
+            'action' => 'automatic_reschedule_sync',
+            'status' => 'synced',
+        ]);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'outlook',
+            'action' => 'automatic_reschedule_sync',
+            'request_payload->subject' => $consultation->booking_number.' - '.$consultation->type->name,
+            'response_payload->id' => 'rescheduled-outlook-event-id',
+        ]);
+        $this->assertDatabaseHas('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultation->uuid,
+            'application' => 'legal',
+            'is_busy' => true,
+        ]);
     }
 }
