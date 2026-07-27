@@ -55,7 +55,7 @@ class AdminPaymentNotificationService
                 'request_payload' => [
                     'recipient' => $recipient,
                     'template' => $mailable,
-                    'payment_request_uuid' => $paymentRequest->uuid,
+                    'payment_request_uuid' => $paymentRequest->id,
                 ],
                 'message' => $action === 'manual_payment_reminder'
                     ? 'Manual reminder email sent to unpaid payer.'

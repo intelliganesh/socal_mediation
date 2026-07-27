@@ -46,7 +46,7 @@ class PaymentLinkService
                 $provider = $this->converge->createPaymentLink($consultation, $participant, $amount, $method);
 
                 PaymentRequest::create([
-                    'uuid' => (string) Str::uuid(),
+                    'id' => (string) Str::uuid(),
                     'consultation_id' => $consultation->id,
                     'participant_id' => $participant->id,
                     'amount_cents' => $amount,

@@ -2,13 +2,16 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PaymentRequest extends Model
 {
+    use HasUuids;
+
     protected $fillable = [
-        'consultation_id', 'participant_id', 'uuid', 'provider', 'status', 'amount_cents',
+        'id', 'consultation_id', 'participant_id', 'provider', 'status', 'amount_cents',
         'currency', 'payment_method', 'provider_reference', 'payment_url', 'sent_at',
         'paid_at', 'metadata',
     ];
@@ -16,6 +19,11 @@ class PaymentRequest extends Model
     protected function casts(): array
     {
         return ['sent_at' => 'datetime', 'paid_at' => 'datetime', 'metadata' => 'array'];
+    }
+
+    public function getUuidAttribute(): string
+    {
+        return $this->id;
     }
 
     public function consultation(): BelongsTo

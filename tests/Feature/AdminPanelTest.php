@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Mail\ConsultationPaymentLinkMail;
 use App\Mail\ConsultationZoomLinkMail;
 use App\Models\Consultation;
+use App\Models\ExternalCalendarEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -78,6 +79,71 @@ class AdminPanelTest extends TestCase
             ->assertOk()
             ->assertSee('All Applications')
             ->assertSee('Legal Consultation');
+    }
+
+    public function test_calendar_sync_pushes_future_consultations_and_deletes_stale_outlook_events(): void
+    {
+        $this->seed();
+        config([
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.socal_user_id' => 'socal@example.com',
+            'services.outlook.socal_calendar_id' => 'socal-calendar',
+            'services.outlook.legal_user_id' => 'legal@example.com',
+            'services.outlook.legal_calendar_id' => 'legal-calendar',
+        ]);
+
+        Consultation::query()->update(['starts_at' => null, 'ends_at' => null]);
+        $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+        $consultation->update([
+            'status' => 'scheduled',
+            'starts_at' => now(config('app.booking_timezone'))->addDays(5)->setTime(10, 0),
+            'ends_at' => now(config('app.booking_timezone'))->addDays(5)->setTime(11, 0),
+        ]);
+
+        ExternalCalendarEvent::create([
+            'provider' => 'outlook',
+            'external_id' => 'consultation-stale-future',
+            'application' => 'legal',
+            'title' => 'Stale future consultation',
+            'starts_at' => now(config('app.booking_timezone'))->addDays(6)->setTime(10, 0),
+            'ends_at' => now(config('app.booking_timezone'))->addDays(6)->setTime(11, 0),
+            'is_busy' => true,
+            'metadata' => ['outlook_event_id' => 'stale-event-id'],
+        ]);
+
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
+            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events/stale-event-id' => Http::response(null, 204),
+            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/calendarView*' => Http::response(['value' => []], 200),
+            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/calendarView*' => Http::response(['value' => []], 200),
+            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events' => Http::response([
+                'id' => 'future-consultation-outlook-id',
+                'webLink' => 'https://outlook.office.com/future-consultation',
+            ], 201),
+        ]);
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('admin.calendar.sync'))
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Outlook sync completed. 0 busy event(s) refreshed, 1 future consultation(s) synced, 1 stale consultation event(s) deleted.');
+
+        $this->assertDatabaseHas('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultation->id,
+            'application' => 'legal',
+            'is_busy' => true,
+        ]);
+        $this->assertDatabaseMissing('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'consultation-stale-future',
+        ]);
     }
 
     public function test_admin_can_resend_zoom_meeting_link(): void

@@ -134,7 +134,7 @@ class ConsultationAdminController extends Controller
         return back()->with('status', 'Zoom meeting link regenerated.');
     }
 
-    public function cancel(Consultation $consultation)
+    public function cancel(Consultation $consultation, OutlookCalendarClient $outlook)
     {
         $consultation->update([
             'status' => 'cancelled',
@@ -146,6 +146,20 @@ class ConsultationAdminController extends Controller
             'status'   => 'cancelled',
             'message'  => 'Consultation cancelled from admin panel.',
         ]);
+
+        if (config('services.outlook.enabled')) {
+            try {
+                $outlook->deleteConsultationEvent($consultation);
+                $consultation->integrationLogs()->create([
+                    'provider' => 'outlook',
+                    'action' => 'automatic_cancel_delete',
+                    'status' => 'deleted',
+                    'message' => 'Outlook event deleted after consultation cancellation.',
+                ]);
+            } catch (\DomainException|\RuntimeException $exception) {
+                return back()->with('error', 'Consultation cancelled, but Outlook event deletion failed: '.$exception->getMessage());
+            }
+        }
 
         return back()->with('status', 'Consultation cancelled.');
     }

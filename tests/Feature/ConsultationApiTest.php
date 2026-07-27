@@ -10,6 +10,8 @@ use App\Models\ExternalCalendarEvent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class ConsultationApiTest extends TestCase
@@ -31,6 +33,12 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', 'draft')
             ->assertJsonPath('data.type.slug', 'socal-full-day-mediation');
+
+        $this->assertFalse(Schema::hasColumn('consultations', 'uuid'));
+        $this->assertTrue(Str::isUuid($response->json('data.uuid')));
+        $this->assertDatabaseHas('consultations', [
+            'id' => $response->json('data.uuid'),
+        ]);
     }
 
     public function test_it_saves_details_form_fields_on_draft_without_completing_it(): void
@@ -118,7 +126,7 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('data.payment_progress.total', 2);
 
         $this->assertDatabaseHas('consultations', [
-            'uuid' => $consultationUuid,
+            'id' => $consultationUuid,
             'primary_email' => 'taylor.reed@example.com',
             'payment_mode' => 'split',
         ]);
@@ -223,6 +231,8 @@ class ConsultationApiTest extends TestCase
             ->json('data');
 
         $this->assertCount(1, $response['payment_requests']);
+        $this->assertFalse(Schema::hasColumn('payment_requests', 'uuid'));
+        $this->assertTrue(Str::isUuid($response['payment_requests'][0]['id']));
 
         Mail::assertSent(ConsultationPaymentLinkMail::class, 1);
         Mail::assertSent(ConsultationPaymentLinkMail::class, fn (ConsultationPaymentLinkMail $mail) => $mail->paymentRequest->participant->email === 'primary.payer@example.com');
@@ -389,7 +399,7 @@ class ConsultationApiTest extends TestCase
         Mail::assertSent(ConsultationZoomLinkMail::class, fn (ConsultationZoomLinkMail $mail) => $mail->participant->email === 'final.primary@example.com');
         Mail::assertSent(ConsultationZoomLinkMail::class, fn (ConsultationZoomLinkMail $mail) => $mail->participant->email === 'final.participant@example.com');
 
-        $consultation = Consultation::where('uuid', $consultationUuid)->firstOrFail();
+        $consultation = Consultation::findOrFail($consultationUuid);
         $this->assertDatabaseHas('integration_logs', [
             'loggable_type' => Consultation::class,
             'loggable_id' => $consultation->id,

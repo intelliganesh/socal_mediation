@@ -257,7 +257,7 @@ class DatabaseSeeder extends Seeder
             [$firstName, $lastName, $email] = $sample['client'];
 
             $consultation = Consultation::create([
-                'uuid' => (string) Str::uuid(),
+                'id' => (string) Str::uuid(),
                 'booking_number' => $sample['number'],
                 'consultation_type_id' => $type->id,
                 'legal_service_name' => $services[$sample['service']] ?? null,
@@ -309,7 +309,7 @@ class DatabaseSeeder extends Seeder
                 PaymentRequest::create([
                     'consultation_id' => $consultation->id,
                     'participant_id' => $participant->id,
-                    'uuid' => (string) Str::uuid(),
+                    'id' => (string) Str::uuid(),
                     'provider' => 'converge',
                     'status' => $status,
                     'amount_cents' => $participant->share_amount_cents,

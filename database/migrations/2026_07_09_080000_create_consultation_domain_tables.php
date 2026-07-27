@@ -48,8 +48,7 @@ return new class extends Migration
         });
 
         Schema::create('consultations', function (Blueprint $table) {
-            $table->id();
-            $table->uuid('uuid')->unique();
+            $table->uuid('id')->primary();
             $table->string('booking_number')->unique();
             $table->foreignId('consultation_type_id')->constrained()->cascadeOnDelete();
             $table->string('legal_service_name')->nullable();
@@ -81,7 +80,7 @@ return new class extends Migration
 
         Schema::create('consultation_participants', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('consultation_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('consultation_id')->constrained()->cascadeOnDelete();
             $table->string('first_name');
             $table->string('last_name')->nullable();
             $table->string('email')->nullable()->index();
@@ -94,10 +93,9 @@ return new class extends Migration
         });
 
         Schema::create('payment_requests', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('consultation_id')->constrained()->cascadeOnDelete();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('consultation_id')->constrained()->cascadeOnDelete();
             $table->foreignId('participant_id')->nullable()->constrained('consultation_participants')->nullOnDelete();
-            $table->uuid('uuid')->unique();
             $table->string('provider')->default('converge');
             $table->string('status', 40)->default('pending')->index();
             $table->unsignedInteger('amount_cents');
@@ -127,7 +125,7 @@ return new class extends Migration
 
         Schema::create('integration_logs', function (Blueprint $table) {
             $table->id();
-            $table->nullableMorphs('loggable');
+            $table->nullableUuidMorphs('loggable');
             $table->string('provider', 40)->index();
             $table->string('action', 80);
             $table->string('status', 40)->index();

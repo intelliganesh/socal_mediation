@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,10 +11,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Consultation extends Model
 {
+    use HasUuids;
     use SoftDeletes;
 
     protected $fillable = [
-        'uuid', 'booking_number', 'consultation_type_id', 'legal_service_name', 'professional_id',
+        'id', 'booking_number', 'consultation_type_id', 'legal_service_name', 'professional_id',
         'application', 'status', 'payment_status', 'consultation_mode', 'timezone', 'starts_at',
         'ends_at', 'description', 'referral_source', 'primary_first_name', 'primary_last_name',
         'primary_email', 'primary_phone_country', 'primary_phone', 'total_amount_cents', 'currency',
@@ -22,7 +24,12 @@ class Consultation extends Model
 
     public function getRouteKeyName(): string
     {
-        return 'uuid';
+        return 'id';
+    }
+
+    public function getUuidAttribute(): string
+    {
+        return $this->id;
     }
 
     protected function casts(): array

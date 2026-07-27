@@ -14,7 +14,7 @@ class ConsultationDraftService
     {
         return DB::transaction(function () use ($type, $data) {
             $consultation = Consultation::create([
-                'uuid' => (string) Str::uuid(),
+                'id' => (string) Str::uuid(),
                 'booking_number' => $this->bookingNumber($type->application),
                 'consultation_type_id' => $type->id,
                 'application' => $type->application,

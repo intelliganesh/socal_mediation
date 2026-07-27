@@ -19,6 +19,46 @@ class OutlookCalendarClient
         return $this->syncWindow($start, $end);
     }
 
+    public function syncFutureConsultations(?CarbonImmutable $from = null): array
+    {
+        $this->assertEnabled();
+
+        $from ??= CarbonImmutable::now(config('app.booking_timezone'))->startOfDay();
+        $activeStatuses = ['scheduled', 'paid', 'payment_pending', 'pending_payment', 'partially_paid'];
+        $fromDatabase = $from->timezone(config('app.booking_timezone'))->format('Y-m-d H:i:s');
+        $consultations = Consultation::query()
+            ->with(['type', 'professional'])
+            ->whereNotNull('starts_at')
+            ->whereIn('status', $activeStatuses)
+            ->where('starts_at', '>=', $fromDatabase)
+            ->orderBy('starts_at')
+            ->get();
+
+        $synced = 0;
+        foreach ($consultations as $consultation) {
+            $this->syncConsultation($consultation, 'future_consultation_sync');
+            $synced++;
+        }
+
+        $activeExternalIds = $consultations
+            ->map(fn (Consultation $consultation) => 'consultation-'.$consultation->id)
+            ->all();
+
+        $deleted = 0;
+        ExternalCalendarEvent::query()
+            ->where('provider', 'outlook')
+            ->where('external_id', 'like', 'consultation-%')
+            ->where('starts_at', '>=', $fromDatabase)
+            ->when($activeExternalIds !== [], fn ($query) => $query->whereNotIn('external_id', $activeExternalIds))
+            ->get()
+            ->each(function (ExternalCalendarEvent $event) use (&$deleted) {
+                $this->deleteConsultationEvent($event);
+                $deleted++;
+            });
+
+        return ['synced' => $synced, 'deleted' => $deleted];
+    }
+
     public function syncMonth(string $month): int
     {
         $this->assertEnabled();
@@ -72,7 +112,7 @@ class OutlookCalendarClient
 
         $payload = $this->consultationEventPayload($consultation);
         $existing = ExternalCalendarEvent::where('provider', 'outlook')
-            ->where('external_id', 'consultation-'.$consultation->uuid)
+            ->where('external_id', 'consultation-'.$consultation->id)
             ->first();
 
         if ($existing?->metadata['outlook_event_id'] ?? false) {
@@ -91,7 +131,7 @@ class OutlookCalendarClient
 
         return ExternalCalendarEvent::updateOrCreate([
             'provider' => 'outlook',
-            'external_id' => 'consultation-'.$consultation->uuid,
+            'external_id' => 'consultation-'.$consultation->id,
         ], [
             'professional_id' => $consultation->professional_id,
             'application' => $consultation->application,
@@ -100,7 +140,7 @@ class OutlookCalendarClient
             'ends_at' => $consultation->ends_at,
             'is_busy' => true,
             'metadata' => [
-                'consultation_uuid' => $consultation->uuid,
+                'consultation_uuid' => $consultation->id,
                 'outlook_event_id' => $event['id'] ?? null,
                 'outlook_web_link' => $event['webLink'] ?? null,
                 'outlook_response' => $this->eventResponsePayload($event),
@@ -146,6 +186,28 @@ class OutlookCalendarClient
         if ($response->failed() && $response->status() !== 404) {
             throw new \RuntimeException('Outlook event deletion failed: '.$response->body());
         }
+    }
+
+    public function deleteConsultationEvent(Consultation|ExternalCalendarEvent $consultationOrEvent): void
+    {
+        $this->assertEnabled();
+
+        $event = $consultationOrEvent instanceof Consultation
+            ? ExternalCalendarEvent::where('provider', 'outlook')
+                ->where('external_id', 'consultation-'.$consultationOrEvent->id)
+                ->first()
+            : $consultationOrEvent;
+
+        if (! $event) {
+            return;
+        }
+
+        $outlookEventId = $event->metadata['outlook_event_id'] ?? null;
+        if ($outlookEventId) {
+            $this->deleteEvent($event->application, $outlookEventId);
+        }
+
+        $event->delete();
     }
 
     private function calendarView(string $application, CarbonImmutable $start, CarbonImmutable $end): array

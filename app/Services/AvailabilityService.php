@@ -28,7 +28,7 @@ class AvailabilityService
         return $this->daySlots($type, $day, $professionalId);
     }
 
-    public function assertAvailable(ConsultationType $type, CarbonImmutable $startsAt, ?int $professionalId = null, ?int $ignoreConsultationId = null): void
+    public function assertAvailable(ConsultationType $type, CarbonImmutable $startsAt, ?int $professionalId = null, ?string $ignoreConsultationId = null): void
     {
         $endsAt = $startsAt->addMinutes($type->duration_minutes);
 
@@ -98,7 +98,7 @@ class AvailabilityService
         && in_array($startsAt->format('H:i'), $this->configuredSlotStarts($type), true);
     }
 
-    private function hasOverlap(CarbonImmutable $startsAt, CarbonImmutable $endsAt, ?int $professionalId, ?int $ignoreConsultationId = null): bool
+    private function hasOverlap(CarbonImmutable $startsAt, CarbonImmutable $endsAt, ?int $professionalId, ?string $ignoreConsultationId = null): bool
     {
         $startsAtDatabase = $this->databaseDateTime($startsAt);
         $endsAtDatabase   = $this->databaseDateTime($endsAt);

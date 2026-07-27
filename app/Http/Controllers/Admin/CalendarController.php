@@ -43,11 +43,15 @@ class CalendarController extends Controller
     public function sync(OutlookCalendarClient $outlook)
     {
         try {
-            $count = $outlook->syncCurrentWindow();
+            $busyCount = $outlook->syncCurrentWindow();
+            $futureSync = $outlook->syncFutureConsultations();
         } catch (\DomainException|\RuntimeException $exception) {
             return back()->with('error', $exception->getMessage());
         }
 
-        return back()->with('status', "Outlook sync completed. {$count} busy event(s) refreshed.");
+        return back()->with(
+            'status',
+            "Outlook sync completed. {$busyCount} busy event(s) refreshed, {$futureSync['synced']} future consultation(s) synced, {$futureSync['deleted']} stale consultation event(s) deleted."
+        );
     }
 }

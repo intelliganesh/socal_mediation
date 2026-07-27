@@ -14,7 +14,7 @@ class ConsultationResource extends JsonResource
         $paymentCount = $this->relationLoaded('paymentRequests') ? $this->paymentRequests->count() : 0;
 
         return [
-            'uuid' => $this->uuid,
+            'uuid' => $this->id,
             'booking_number' => $this->booking_number,
             'application' => $this->application,
             'status' => $this->status,
