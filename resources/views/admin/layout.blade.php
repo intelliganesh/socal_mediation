@@ -24,7 +24,7 @@
     @endphp
 
     <div class="min-h-screen lg:flex">
-        <aside class="hidden w-[268px] shrink-0 border-r border-[#E5E7EB] bg-[#F7F8FC] lg:fixed lg:inset-y-0 lg:flex lg:flex-col">
+        <aside class="admin-nav hidden w-[268px] shrink-0 border-r border-[#E5E7EB] lg:fixed lg:inset-y-0 lg:flex lg:flex-col">
             <div class="flex h-20 items-center gap-3 border-b border-[#E5E7EB] px-6">
                 {{-- <div class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#F1F6FE] text-sm font-bold text-[#082BC3]">SM</div>
                 <div class="min-w-0">
@@ -37,7 +37,7 @@
             <nav class="flex-1 space-y-1 px-3 py-8 text-sm font-bold">
                 @foreach($navItems as $item)
                     <a
-                        class="flex h-12 items-center gap-3 rounded-lg px-4 transition {{ $item['active'] ? 'bg-[#ECEDF9] text-[#082BC3]' : 'text-gray-600 hover:bg-[#F7F8FC] hover:text-[#111827]' }}"
+                        class="admin-nav-item flex h-12 items-center gap-3 rounded-lg px-4 transition {{ $item['active'] ? 'admin-nav-item-active' : '' }}"
                         href="{{ $item['href'] }}"
                         aria-label="{{ $item['aria'] ?? $item['label'] }}"
                         @if($item['external'] ?? false) target="_blank" rel="noopener" @endif
@@ -62,10 +62,10 @@
                             <summary class="grid h-10 w-10 cursor-pointer list-none place-items-center rounded-lg border border-[#E5E7EB] text-[#111827]">
                                 <i data-lucide="menu" class="h-5 w-5"></i>
                             </summary>
-                            <nav class="absolute left-4 right-4 z-30 mt-3 grid gap-1 rounded-xl border border-[#E5E7EB] bg-[#F7F8FC] p-3 text-sm font-bold shadow-lg">
+                            <nav class="admin-nav absolute left-4 right-4 z-30 mt-3 grid gap-1 rounded-xl border border-[#E5E7EB] p-3 text-sm font-bold shadow-lg">
                                 @foreach($navItems as $item)
                                     <a
-                                        class="flex items-center gap-3 rounded-lg px-4 py-3 {{ $item['active'] ? 'bg-[#ECEDF9] text-[#082BC3]' : 'text-gray-600 hover:bg-[#F7F8FC] hover:text-[#111827]' }}"
+                                        class="admin-nav-item flex items-center gap-3 rounded-lg px-4 py-3 {{ $item['active'] ? 'admin-nav-item-active' : '' }}"
                                         href="{{ $item['href'] }}"
                                         aria-label="{{ $item['aria'] ?? $item['label'] }}"
                                         @if($item['external'] ?? false) target="_blank" rel="noopener" @endif

@@ -13,6 +13,8 @@
         --admin-primary-soft: #F1F6FE;
         --admin-legal: #75172E;
         --admin-legal-soft: #E8DDE1;
+        --admin-nav-bg: #26294e;
+        --admin-nav-text: #fff;
         --status-draft-bg: #F3F4F6;
         --status-draft-text: #4B5563;
         --status-draft-border: #D1D5DB;
@@ -53,6 +55,21 @@
         font-weight: 700;
         line-height: 1rem;
         white-space: nowrap;
+    }
+
+    .admin-nav {
+        background: var(--admin-nav-bg);
+        color: var(--admin-nav-text);
+    }
+
+    .admin-nav-item {
+        color: var(--admin-nav-text);
+    }
+
+    .admin-nav-item-active,
+    .admin-nav-item:hover {
+        background: rgb(255 255 255 / 0.12);
+        color: var(--admin-nav-text);
     }
 
     .status-badge-draft {
