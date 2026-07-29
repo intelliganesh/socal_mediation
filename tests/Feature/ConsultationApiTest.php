@@ -7,6 +7,7 @@ use App\Mail\ConsultationZoomLinkMail;
 use App\Models\Consultation;
 use App\Models\ConsultationType;
 use App\Models\ExternalCalendarEvent;
+use App\Models\PaymentRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -315,6 +316,149 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('data.payment_status', 'paid')
             ->assertJsonPath('data.consultation_mode', 'online')
             ->assertJson(fn ($json) => $json->where('success', true)->whereType('data.zoom_join_url', 'string')->etc());
+    }
+
+    public function test_converge_confirmation_marks_full_payment_paid_and_finalizes_consultation(): void
+    {
+        $this->seed();
+
+        $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
+        $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'legal_service_name' => 'Business, Payment & Contract Disputes',
+            'consultation_mode' => 'online',
+            'primary_client' => [
+                'first_name' => 'Confirm',
+                'last_name' => 'Payer',
+                'email' => 'confirm.payer@example.com',
+            ],
+        ])->json('data.uuid');
+
+        $complete = $this->postJson("/api/v1/consultations/{$consultationUuid}/complete", [
+            'starts_at' => '2026-08-07T09:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+            'payment_mode' => 'full',
+            'payment_method' => 'card',
+        ])
+            ->assertOk()
+            ->json('data');
+
+        $paymentRequestId = $complete['payment_requests'][0]['id'];
+
+        $this->postJson('/api/v1/payments/converge/confirmation', [
+            'ssl_invoice_number' => $paymentRequestId,
+            'ssl_result' => '0',
+            'ssl_result_message' => 'APPROVAL',
+            'ssl_txn_id' => 'converge-txn-100',
+            'ssl_approval_code' => '916299',
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Payment confirmation accepted.')
+            ->assertJsonPath('data.status', 'scheduled')
+            ->assertJsonPath('data.payment_status', 'paid');
+
+        $this->assertDatabaseHas('payment_requests', [
+            'id' => $paymentRequestId,
+            'status' => 'paid',
+            'provider_reference' => 'converge-txn-100',
+        ]);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => PaymentRequest::class,
+            'loggable_id' => $paymentRequestId,
+            'provider' => 'converge',
+            'action' => 'payment_confirmation',
+            'status' => 'paid',
+        ]);
+    }
+
+    public function test_converge_payment_sync_command_updates_pending_payment_from_xml_api(): void
+    {
+        $this->seed();
+        config([
+            'services.converge.payment_sync_enabled' => true,
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+
+        $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
+        $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'legal_service_name' => 'Business, Payment & Contract Disputes',
+            'consultation_mode' => 'offline',
+            'primary_client' => [
+                'first_name' => 'Poll',
+                'last_name' => 'Payer',
+                'email' => 'poll.payer@example.com',
+            ],
+        ])->json('data.uuid');
+
+        $complete = $this->postJson("/api/v1/consultations/{$consultationUuid}/complete", [
+            'starts_at' => '2026-08-10T09:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+            'payment_mode' => 'full',
+            'payment_method' => 'card',
+        ])->json('data');
+
+        $paymentRequestId = $complete['payment_requests'][0]['id'];
+
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
+                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>poll-txn-200</ssl_txn_id><ssl_approval_code>123456</ssl_approval_code></txn>',
+                200
+            ),
+        ]);
+
+        $this->artisan('payments:sync-converge', ['--payment-request' => $paymentRequestId])
+            ->expectsOutputToContain('checked 1 payment(s): 1 paid, 0 failed, 0 skipped, 0 error(s).')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseHas('payment_requests', [
+            'id' => $paymentRequestId,
+            'status' => 'paid',
+            'provider_reference' => 'poll-txn-200',
+        ]);
+        $this->assertDatabaseHas('consultations', [
+            'id' => $consultationUuid,
+            'payment_status' => 'paid',
+        ]);
+    }
+
+    public function test_converge_payment_sync_command_logs_errors_and_leaves_payment_pending(): void
+    {
+        $this->seed();
+        config([
+            'services.converge.payment_sync_enabled' => true,
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response('temporarily unavailable', 503),
+        ]);
+
+        $this->artisan('payments:sync-converge', ['--payment-request' => $payment->id])
+            ->expectsOutputToContain('checked 1 payment(s): 0 paid, 0 failed, 0 skipped, 1 error(s).')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseHas('payment_requests', [
+            'id' => $payment->id,
+            'status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => PaymentRequest::class,
+            'loggable_id' => $payment->id,
+            'provider' => 'converge',
+            'action' => 'payment_status_sync',
+            'status' => 'failed',
+        ]);
     }
 
     public function test_final_paid_webhook_sends_zoom_links_and_syncs_outlook_once(): void

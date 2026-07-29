@@ -10,8 +10,14 @@ use Illuminate\Support\Str;
 
 class ConsultationDraftService
 {
+    public function __construct(private readonly PaymentReconciliationService $payments)
+    {
+    }
+
     public function createDraft(ConsultationType $type, array $data = []): Consultation
     {
+        $this->payments->syncLightweight();
+
         return DB::transaction(function () use ($type, $data) {
             $consultation = Consultation::create([
                 'id' => (string) Str::uuid(),

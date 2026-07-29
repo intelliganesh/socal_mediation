@@ -8,6 +8,7 @@ use App\Services\AdminZoomNotificationService;
 use App\Services\AvailabilityService;
 use App\Services\Integrations\OutlookCalendarClient;
 use App\Services\Integrations\ZoomClient;
+use App\Services\PaymentReconciliationService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
@@ -62,8 +63,10 @@ class ConsultationAdminController extends Controller
         return view('admin.consultations.index', compact('consultations'));
     }
 
-    public function show(Consultation $consultation)
+    public function show(Consultation $consultation, PaymentReconciliationService $payments)
     {
+        $payments->syncConsultation($consultation);
+
         return view('admin.consultations.show', [
             'consultation' => $consultation->load([
                 'type',
@@ -75,8 +78,9 @@ class ConsultationAdminController extends Controller
         ]);
     }
 
-    public function sendReminder(Consultation $consultation, AdminPaymentNotificationService $notifications)
+    public function sendReminder(Consultation $consultation, AdminPaymentNotificationService $notifications, PaymentReconciliationService $payments)
     {
+        $payments->syncConsultation($consultation);
         $sent = $notifications->sendPaymentReminders($consultation);
 
         return back()->with('status', $sent > 0
@@ -85,8 +89,9 @@ class ConsultationAdminController extends Controller
         );
     }
 
-    public function sendPaymentLinks(Consultation $consultation, AdminPaymentNotificationService $notifications)
+    public function sendPaymentLinks(Consultation $consultation, AdminPaymentNotificationService $notifications, PaymentReconciliationService $payments)
     {
+        $payments->syncConsultation($consultation);
         $sent = $notifications->sendPaymentLinks($consultation);
 
         return back()->with('status', $sent > 0
@@ -250,8 +255,10 @@ class ConsultationAdminController extends Controller
         return back()->with('status', 'Consultation rescheduled.'.($zoomMailWarning ?? ''));
     }
 
-    public function syncOutlook(Consultation $consultation, OutlookCalendarClient $outlook)
+    public function syncOutlook(Consultation $consultation, OutlookCalendarClient $outlook, PaymentReconciliationService $payments)
     {
+        $payments->syncConsultation($consultation);
+
         if ($consultation->starts_at === null || $consultation->ends_at === null) {
             return back()->with('status', 'Schedule this booking before syncing it to Outlook.');
         }

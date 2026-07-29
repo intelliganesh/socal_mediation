@@ -12,6 +12,7 @@ use App\Services\AvailabilityService;
 use App\Services\ConsultationCompletionService;
 use App\Services\ConsultationDraftService;
 use App\Services\Integrations\OutlookCalendarClient;
+use App\Services\PaymentReconciliationService;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -145,7 +146,7 @@ class ConsultationController extends Controller
             new OA\Response(response: 422, description: 'Validation failed'),
         ]
     )]
-    public function availability(Request $request, AvailabilityService $availability, OutlookCalendarClient $outlook)
+    public function availability(Request $request, AvailabilityService $availability, OutlookCalendarClient $outlook, PaymentReconciliationService $payments)
     {
         $request->validate([
             'consultation_type_id' => ['required', 'integer', 'exists:consultation_types,id'],
@@ -162,6 +163,7 @@ class ConsultationController extends Controller
 
         if (config('services.outlook.enabled')) {
             try {
+                $payments->syncLightweight();
                 $outlook->syncMonth($month);
             } catch (\DomainException|\RuntimeException $exception) {
                 return ApiResponse::error('Outlook availability sync failed: '.$exception->getMessage(), 422);

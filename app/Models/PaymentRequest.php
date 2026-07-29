@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class PaymentRequest extends Model
 {
@@ -34,5 +35,10 @@ class PaymentRequest extends Model
     public function participant(): BelongsTo
     {
         return $this->belongsTo(ConsultationParticipant::class, 'participant_id');
+    }
+
+    public function integrationLogs(): MorphMany
+    {
+        return $this->morphMany(IntegrationLog::class, 'loggable');
     }
 }

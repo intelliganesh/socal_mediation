@@ -6,6 +6,7 @@ use App\Mail\ConsultationPaymentLinkMail;
 use App\Mail\ConsultationZoomLinkMail;
 use App\Models\Consultation;
 use App\Models\ExternalCalendarEvent;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -66,6 +67,51 @@ class AdminPanelTest extends TestCase
             ->assertRedirect();
 
         Mail::assertSent(ConsultationPaymentLinkMail::class, 2);
+    }
+
+    public function test_admin_consultation_show_reconciles_pending_converge_payments(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config([
+            'services.converge.payment_sync_enabled' => true,
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
+                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>admin-detail-txn</ssl_txn_id></txn>',
+                200
+            ),
+        ]);
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-03')->firstOrFail();
+        $paymentIds = $consultation->paymentRequests()->where('status', 'pending')->pluck('id');
+
+        $this->assertNotEmpty($paymentIds);
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $consultation))
+            ->assertOk();
+
+        foreach ($paymentIds as $paymentId) {
+            $this->assertDatabaseHas('payment_requests', [
+                'id' => $paymentId,
+                'status' => 'paid',
+            ]);
+            $this->assertDatabaseHas('integration_logs', [
+                'loggable_type' => PaymentRequest::class,
+                'loggable_id' => $paymentId,
+                'provider' => 'converge',
+                'action' => 'payment_status_sync',
+                'status' => 'paid',
+            ]);
+        }
     }
 
     public function test_calendar_can_be_filtered_by_application(): void

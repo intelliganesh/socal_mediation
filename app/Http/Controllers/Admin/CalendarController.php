@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Consultation;
 use App\Models\ConsultationType;
 use App\Services\Integrations\OutlookCalendarClient;
+use App\Services\PaymentReconciliationService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
@@ -40,9 +41,10 @@ class CalendarController extends Controller
         ]);
     }
 
-    public function sync(OutlookCalendarClient $outlook)
+    public function sync(OutlookCalendarClient $outlook, PaymentReconciliationService $payments)
     {
         try {
+            $payments->syncLightweight();
             $busyCount = $outlook->syncCurrentWindow();
             $futureSync = $outlook->syncFutureConsultations();
         } catch (\DomainException|\RuntimeException $exception) {
