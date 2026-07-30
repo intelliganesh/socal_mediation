@@ -4,6 +4,8 @@
     $buttonUrl = $buttonUrl ?? null;
     $buttonLabel = $buttonLabel ?? null;
     $zoomUrl = $zoomUrl ?? null;
+    $heroIcon = str_contains(strtolower((string) $statusLabel), 'pending') ? 'admin-icons/payment_pending.svg' : 'admin-icons/payment_check.svg';
+    $statusIcon = str_contains(strtolower((string) $statusLabel), 'pending') ? 'admin-icons/payment_pending.svg' : 'admin-icons/check_white.svg';
     $timezone = $consultation?->timezone ?: config('app.booking_timezone', 'America/Los_Angeles');
     $scheduledAt = $consultation?->starts_at?->timezone($timezone);
     $professional = $consultation?->professional?->name ?: 'Not assigned yet';
@@ -34,7 +36,9 @@
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;">
                     <tr>
                         <td align="center">
-                            <div style="width:70px;height:70px;border-radius:999px;background:#082bc3;color:#ffffff;line-height:70px;text-align:center;font-size:38px;font-family:Arial,sans-serif;font-weight:700;">✓</div>
+                            <div style="width:70px;height:70px;border-radius:999px;background:#082bc3;text-align:center;line-height:70px;">
+                                <img src="{{ asset($heroIcon) }}" width="34" height="34" alt="" style="display:inline-block;width:34px;height:34px;vertical-align:middle;margin-top:18px;">
+                            </div>
                             <h1 style="margin:22px 0 10px;font-size:34px;line-height:1.15;color:#111827;font-weight:700;">{{ $title }}</h1>
                             <p style="margin:0 auto 28px;max-width:440px;color:#4b5563;font-size:15px;line-height:1.55;">{!! $intro !!}</p>
                         </td>
@@ -48,7 +52,10 @@
                                     </td>
                                     @if($statusLabel)
                                         <td align="right" style="background:#082bc3;padding:12px 26px;">
-                                            <span style="display:inline-block;border-radius:999px;background:#ffffff;color:#082bc3;padding:5px 12px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;">{{ $statusLabel }}</span>
+                                            <span style="display:inline-block;border-radius:999px;background:#ffffff;color:#082bc3;padding:5px 12px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;">
+                                                <img src="{{ asset($statusIcon) }}" width="13" height="13" alt="" style="display:inline-block;width:13px;height:13px;vertical-align:-2px;margin-right:5px;">
+                                                {{ $statusLabel }}
+                                            </span>
                                         </td>
                                     @endif
                                 </tr>
@@ -57,11 +64,17 @@
                                 <tr>
                                     <td width="50%" valign="top" style="padding:0 18px 22px 0;">
                                         <div style="font-size:12px;color:#374151;margin-bottom:7px;">Service Type</div>
-                                        <div style="font-size:15px;line-height:1.4;">{{ $consultation?->legal_service_name ?: 'Not selected' }}</div>
+                                        <div style="font-size:15px;line-height:1.4;">
+                                            <img src="{{ asset('admin-icons/law.svg') }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
+                                            {{ $consultation?->legal_service_name ?: 'Not selected' }}
+                                        </div>
                                     </td>
                                     <td width="50%" valign="top" style="padding:0 0 22px 18px;">
                                         <div style="font-size:12px;color:#374151;margin-bottom:7px;">Time & Date</div>
-                                        <div style="font-size:15px;line-height:1.4;">{{ $scheduledAt ? $scheduledAt->format('M d, Y - g:i A').' '.$timezone : 'Not scheduled' }}</div>
+                                        <div style="font-size:15px;line-height:1.4;">
+                                            <img src="{{ asset('admin-icons/calendar.svg') }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
+                                            {{ $scheduledAt ? $scheduledAt->format('M d, Y - g:i A').' '.$timezone : 'Not scheduled' }}
+                                        </div>
                                     </td>
                                 </tr>
                                 <tr>
@@ -71,7 +84,10 @@
                                     </td>
                                     <td width="50%" valign="top" style="padding:0 0 22px 18px;">
                                         <div style="font-size:12px;color:#374151;margin-bottom:7px;">Consultation mode</div>
-                                        <div style="font-size:15px;line-height:1.4;">{{ $mode }}</div>
+                                        <div style="font-size:15px;line-height:1.4;">
+                                            <img src="{{ asset('admin-icons/video.svg') }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
+                                            {{ $mode }}
+                                        </div>
                                     </td>
                                 </tr>
                                 <tr>
@@ -82,7 +98,10 @@
                                     <td width="50%" valign="top" style="padding:0 0 22px 18px;">
                                         @if($zoomUrl)
                                             <div style="font-size:12px;color:#374151;margin-bottom:7px;">Zoom Meeting</div>
-                                            <a href="{{ $zoomUrl }}" style="color:#082bc3;font-size:15px;font-weight:700;text-decoration:none;">Join Zoom Meeting</a>
+                                            <a href="{{ $zoomUrl }}" style="color:#082bc3;font-size:15px;font-weight:700;text-decoration:none;">
+                                                <img src="{{ asset('admin-icons/video.svg') }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
+                                                Join Zoom Meeting
+                                            </a>
                                         @endif
                                     </td>
                                 </tr>

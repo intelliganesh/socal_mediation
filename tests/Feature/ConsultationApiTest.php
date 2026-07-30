@@ -254,6 +254,9 @@ class ConsultationApiTest extends TestCase
         $this->assertStringContainsString('Pay Consultation Fee', $html);
         $this->assertStringContainsString('background:#082bc3', $html);
         $this->assertStringContainsString($paymentRequest->payment_url, $html);
+        $this->assertStringContainsString('admin-icons/payment_pending.svg', $html);
+        $this->assertStringContainsString('admin-icons/law.svg', $html);
+        $this->assertStringContainsString('admin-icons/calendar.svg', $html);
     }
 
     public function test_final_paid_email_uses_confirmation_template_and_includes_zoom_link_when_available(): void
@@ -269,6 +272,9 @@ class ConsultationApiTest extends TestCase
         $this->assertStringContainsString('BOOKING ID: '.$consultation->booking_number, $html);
         $this->assertStringContainsString('Join Zoom Meeting', $html);
         $this->assertStringContainsString($consultation->zoom_join_url, $html);
+        $this->assertStringContainsString('admin-icons/payment_check.svg', $html);
+        $this->assertStringContainsString('admin-icons/check_white.svg', $html);
+        $this->assertStringContainsString('admin-icons/video.svg', $html);
     }
 
     public function test_it_completes_using_details_already_saved_on_draft(): void
