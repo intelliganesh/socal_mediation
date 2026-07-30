@@ -17,7 +17,7 @@ class ConvergeClient
 
         return [
             'reference' => $reference,
-            'url' => $baseUrl.'/pay/'.$reference,
+            'url' => $this->paymentUrl($baseUrl, $paymentRequestId, $reference),
             'mode' => config('services.converge.mode'),
             'gateway_enabled' => (bool) config('services.converge.enabled'),
             'amount_cents' => $amountCents,
@@ -26,6 +26,15 @@ class ConvergeClient
             'booking_number' => $consultation->booking_number,
             'participant_email' => $participant->email,
         ];
+    }
+
+    private function paymentUrl(string $baseUrl, string $paymentRequestId, string $reference): string
+    {
+        if (config('services.converge.mode') === 'sandbox') {
+            return route('payments.demo.show', ['paymentRequest' => $paymentRequestId]);
+        }
+
+        return $baseUrl.'/pay/'.$reference;
     }
 
     public function lookupPaymentStatus(PaymentRequest $payment): array

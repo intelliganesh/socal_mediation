@@ -371,6 +371,49 @@ class ConsultationApiTest extends TestCase
         ]);
     }
 
+    public function test_sandbox_payment_link_opens_demo_page_and_marks_payment_paid(): void
+    {
+        $this->seed();
+        config(['services.converge.mode' => 'sandbox']);
+
+        $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
+        $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'phone',
+            'primary_client' => [
+                'first_name' => 'Demo',
+                'last_name' => 'Payer',
+                'email' => 'demo.payer@example.com',
+            ],
+        ])->assertCreated()->json('data.uuid');
+
+        $complete = $this->postJson('/api/v1/consultations/'.$consultationUuid.'/complete', [
+            'starts_at' => '2026-08-14T13:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+            'consultation_mode' => 'phone',
+            'payment_mode' => 'full',
+            'payment_method' => 'card',
+        ])->assertOk()->json('data');
+
+        $paymentRequest = PaymentRequest::findOrFail($complete['payment_requests'][0]['id']);
+
+        $this->assertSame(route('payments.demo.show', $paymentRequest), $paymentRequest->payment_url);
+
+        $this->get($paymentRequest->payment_url)
+            ->assertOk()
+            ->assertSee('Sandbox Payment')
+            ->assertSee('Pay Demo Amount');
+
+        $this->post(route('payments.demo.pay', $paymentRequest))
+            ->assertRedirect(route('payments.demo.show', $paymentRequest));
+
+        $this->assertSame('paid', $paymentRequest->refresh()->status);
+        $this->assertDatabaseHas('consultations', [
+            'id' => $consultationUuid,
+            'payment_status' => 'paid',
+        ]);
+    }
+
     public function test_converge_payment_sync_command_updates_pending_payment_from_xml_api(): void
     {
         $this->seed();
