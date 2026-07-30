@@ -414,6 +414,57 @@ class ConsultationApiTest extends TestCase
         ]);
     }
 
+    public function test_enabled_converge_gateway_creates_hosted_payment_page_link_from_session_token(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config([
+            'services.converge.enabled' => true,
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+
+        Http::fake([
+            'api.demo.convergepay.com/hosted-payments/transaction_token' => Http::response('session-token-123', 200),
+        ]);
+
+        $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
+        $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'phone',
+            'primary_client' => [
+                'first_name' => 'Hosted',
+                'last_name' => 'Payer',
+                'email' => 'hosted.payer@example.com',
+            ],
+        ])->assertCreated()->json('data.uuid');
+
+        $complete = $this->postJson('/api/v1/consultations/'.$consultationUuid.'/complete', [
+            'starts_at' => '2026-08-14T13:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+            'consultation_mode' => 'phone',
+            'payment_mode' => 'full',
+            'payment_method' => 'card',
+        ])->assertOk()->json('data');
+
+        $paymentRequest = PaymentRequest::findOrFail($complete['payment_requests'][0]['id']);
+
+        $this->assertSame(
+            'https://api.demo.convergepay.com/hosted-payments?ssl_txn_auth_token=session-token-123',
+            $paymentRequest->payment_url
+        );
+        $this->assertSame('[GENERATED]', $paymentRequest->metadata['session_token']);
+        $this->assertSame('[FILTERED]', $paymentRequest->metadata['token_request']['ssl_pin']);
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.demo.convergepay.com/hosted-payments/transaction_token'
+            && $request['ssl_transaction_type'] === 'ccsale'
+            && $request['ssl_amount'] === '195.00'
+            && $request['ssl_invoice_number'] === $paymentRequest->id);
+    }
+
     public function test_converge_payment_sync_command_updates_pending_payment_from_xml_api(): void
     {
         $this->seed();
