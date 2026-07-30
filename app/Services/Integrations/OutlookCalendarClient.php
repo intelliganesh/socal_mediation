@@ -187,10 +187,11 @@ class OutlookCalendarClient
     public function deleteEvent(string $application, string $eventId): void
     {
         $this->assertEnabled();
+        $calendarUrl = $this->calendarUrl($application);
 
         $response = Http::withToken($this->accessToken())
             ->acceptJson()
-            ->delete($this->calendarUrl($application).'/events/'.$eventId);
+            ->delete($calendarUrl.'/events/'.$eventId);
 
         if ($response->failed() && $response->status() !== 404) {
             throw new \RuntimeException('Outlook event deletion failed: '.$response->body());
@@ -221,9 +222,11 @@ class OutlookCalendarClient
 
     private function calendarView(string $application, CarbonImmutable $start, CarbonImmutable $end): array
     {
+        $calendarUrl = $this->calendarUrl($application);
+
         $response = Http::withToken($this->accessToken())
             ->acceptJson()
-            ->get($this->calendarUrl($application).'/calendarView', [
+            ->get($calendarUrl.'/calendarView', [
                 'startDateTime' => $start->toIso8601String(),
                 'endDateTime' => $end->toIso8601String(),
                 '$top' => 100,
@@ -238,9 +241,11 @@ class OutlookCalendarClient
 
     private function createEvent(string $application, array $payload): array
     {
+        $calendarUrl = $this->calendarUrl($application);
+
         $response = Http::withToken($this->accessToken())
             ->acceptJson()
-            ->post($this->calendarUrl($application).'/events', $payload);
+            ->post($calendarUrl.'/events', $payload);
 
         if ($response->failed()) {
             throw new \RuntimeException('Outlook event creation failed: '.$response->body());
@@ -251,9 +256,11 @@ class OutlookCalendarClient
 
     private function patchEvent(string $application, string $eventId, array $payload): array
     {
+        $calendarUrl = $this->calendarUrl($application);
+
         $response = Http::withToken($this->accessToken())
             ->acceptJson()
-            ->patch($this->calendarUrl($application).'/events/'.$eventId, $payload);
+            ->patch($calendarUrl.'/events/'.$eventId, $payload);
 
         if ($response->failed()) {
             throw new \RuntimeException('Outlook event update failed: '.$response->body());

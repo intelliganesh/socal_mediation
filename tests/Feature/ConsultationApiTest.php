@@ -240,6 +240,37 @@ class ConsultationApiTest extends TestCase
         Mail::assertNotSent(ConsultationPaymentLinkMail::class, fn (ConsultationPaymentLinkMail $mail) => $mail->paymentRequest->participant->email === 'other.participant@example.com');
     }
 
+    public function test_payment_link_email_uses_confirmation_template_with_blue_payment_button(): void
+    {
+        $this->seed();
+
+        $consultation = Consultation::where('booking_number', 'SAMPLE-03')->firstOrFail();
+        $paymentRequest = $consultation->paymentRequests()->where('status', 'pending')->firstOrFail();
+        $html = (new ConsultationPaymentLinkMail($paymentRequest))->render();
+
+        $this->assertStringContainsString('Consultation Payment', $html);
+        $this->assertStringContainsString('BOOKING ID: '.$consultation->booking_number, $html);
+        $this->assertStringContainsString('Payment Pending', $html);
+        $this->assertStringContainsString('Pay Consultation Fee', $html);
+        $this->assertStringContainsString('background:#082bc3', $html);
+        $this->assertStringContainsString($paymentRequest->payment_url, $html);
+    }
+
+    public function test_final_paid_email_uses_confirmation_template_and_includes_zoom_link_when_available(): void
+    {
+        $this->seed();
+
+        $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+        $participant = $consultation->participants()->whereNotNull('email')->firstOrFail();
+        $html = (new ConsultationZoomLinkMail($consultation, $participant))->render();
+
+        $this->assertStringContainsString('Consultation Confirmed', $html);
+        $this->assertStringContainsString('Payment Successful', $html);
+        $this->assertStringContainsString('BOOKING ID: '.$consultation->booking_number, $html);
+        $this->assertStringContainsString('Join Zoom Meeting', $html);
+        $this->assertStringContainsString($consultation->zoom_join_url, $html);
+    }
+
     public function test_it_completes_using_details_already_saved_on_draft(): void
     {
         $this->seed();
@@ -371,10 +402,13 @@ class ConsultationApiTest extends TestCase
         ]);
     }
 
-    public function test_sandbox_payment_link_opens_demo_page_and_marks_payment_paid(): void
+    public function test_disabled_converge_gateway_uses_placeholder_payment_link_without_demo_page(): void
     {
         $this->seed();
-        config(['services.converge.mode' => 'sandbox']);
+        config([
+            'services.converge.enabled' => false,
+            'services.converge.payment_base_url' => 'https://payments.example.test',
+        ]);
 
         $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
         $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
@@ -397,21 +431,9 @@ class ConsultationApiTest extends TestCase
 
         $paymentRequest = PaymentRequest::findOrFail($complete['payment_requests'][0]['id']);
 
-        $this->assertSame(route('payments.demo.show', $paymentRequest), $paymentRequest->payment_url);
-
-        $this->get($paymentRequest->payment_url)
-            ->assertOk()
-            ->assertSee('Sandbox Payment')
-            ->assertSee('Pay Demo Amount');
-
-        $this->post(route('payments.demo.pay', $paymentRequest))
-            ->assertRedirect(route('payments.demo.show', $paymentRequest));
-
-        $this->assertSame('paid', $paymentRequest->refresh()->status);
-        $this->assertDatabaseHas('consultations', [
-            'id' => $consultationUuid,
-            'payment_status' => 'paid',
-        ]);
+        $this->assertStringStartsWith('https://payments.example.test/pay/conv_', $paymentRequest->payment_url);
+        $this->assertSame('pending', $paymentRequest->status);
+        $this->assertFalse(\Illuminate\Support\Facades\Route::has('payments.demo.show'));
     }
 
     public function test_enabled_converge_gateway_creates_hosted_payment_page_link_from_session_token(): void

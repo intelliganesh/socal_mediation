@@ -46,7 +46,7 @@ return [
         'production_base_url' => env('CONVERGE_PRODUCTION_BASE_URL', 'https://api.convergepay.com'),
         'sandbox_hpp_base_url' => env('CONVERGE_SANDBOX_HPP_BASE_URL', env('CONVERGE_SANDBOX_BASE_URL', 'https://api.demo.convergepay.com')),
         'production_hpp_base_url' => env('CONVERGE_PRODUCTION_HPP_BASE_URL', env('CONVERGE_PRODUCTION_BASE_URL', 'https://api.convergepay.com')),
-        'payment_base_url' => env('CONVERGE_PAYMENT_BASE_URL', 'https://pay.demo.convergepay.com'),
+        'payment_base_url' => env('CONVERGE_PAYMENT_BASE_URL', 'https://payments.example.test'),
         'merchant_id' => env('CONVERGE_MERCHANT_ID'),
         'user_id' => env('CONVERGE_USER_ID'),
         'pin' => env('CONVERGE_PIN'),

@@ -35,7 +35,7 @@ class ConvergeClient
             'reference' => $reference,
             'url' => $token
                 ? $this->hostedPaymentUrl($token)
-                : route('payments.demo.show', ['paymentRequest' => $paymentRequestId]),
+                : $this->disabledGatewayPaymentUrl($reference),
             'mode' => config('services.converge.mode'),
             'gateway_enabled' => (bool) config('services.converge.enabled'),
             'amount_cents' => $amountCents,
@@ -75,6 +75,11 @@ class ConvergeClient
     private function hostedPaymentTokenEndpoint(): string
     {
         return rtrim($this->hostedPaymentBaseUrl(), '/').'/hosted-payments/transaction_token';
+    }
+
+    private function disabledGatewayPaymentUrl(string $reference): string
+    {
+        return rtrim(config('services.converge.payment_base_url'), '/').'/pay/'.$reference;
     }
 
     public function lookupPaymentStatus(PaymentRequest $payment): array

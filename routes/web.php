@@ -4,7 +4,6 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\CalendarController;
 use App\Http\Controllers\Admin\ConsultationAdminController;
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\PaymentDemoController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -14,9 +13,6 @@ Route::get('/', function () {
 Route::get('/login', function () {
     return redirect()->route('admin.login');
 })->name('login');
-
-Route::get('/payments/demo/{paymentRequest}', [PaymentDemoController::class, 'show'])->name('payments.demo.show');
-Route::post('/payments/demo/{paymentRequest}', [PaymentDemoController::class, 'pay'])->name('payments.demo.pay');
 
 Route::prefix('admin')->name('admin.')->group(function () {
 

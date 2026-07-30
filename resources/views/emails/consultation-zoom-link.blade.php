@@ -1,19 +1,15 @@
 @php
     $clientName = trim($participant->first_name.' '.($participant->last_name ?? '')) ?: 'Client';
+    $professional = $consultation->professional?->name ?: 'our team';
 @endphp
 
-<p>Hello {{ $clientName }},</p>
-
-<p>Your consultation Zoom meeting link is below.</p>
-
-<p>
-    <strong>Booking:</strong> {{ $consultation->booking_number }}<br>
-    <strong>Consultation:</strong> {{ $consultation->type?->name }}<br>
-    @if($consultation->starts_at)
-        <strong>Schedule:</strong> {{ $consultation->starts_at->timezone($consultation->timezone)->format('M d, Y g:i A') }} {{ $consultation->timezone }}<br>
-    @endif
-</p>
-
-<p><a href="{{ $consultation->zoom_join_url }}">Join Zoom meeting</a></p>
-
-<p>Thank you.</p>
+@include('emails.partials.consultation-card', [
+    'consultation' => $consultation,
+    'title' => 'Consultation Confirmed',
+    'intro' => 'Hello <strong>'.e($clientName).'</strong>, your appointment with <strong>'.e($professional).'</strong> has been successfully scheduled. We have sent a calendar invitation to your email.',
+    'statusLabel' => 'Payment Successful',
+    'amountCents' => $consultation->total_amount_cents,
+    'zoomUrl' => $consultation->zoom_join_url,
+    'buttonUrl' => $consultation->zoom_join_url,
+    'buttonLabel' => 'Join Zoom Meeting',
+])
