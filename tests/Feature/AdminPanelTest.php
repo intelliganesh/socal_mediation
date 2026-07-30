@@ -262,6 +262,23 @@ class AdminPanelTest extends TestCase
         $scheduledConsultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
         $oldZoomUrl = $onlineConsultation->zoom_join_url;
 
+        config([
+            'services.zoom.enabled' => true,
+            'services.zoom.oauth_base_url' => 'https://zoom.test',
+            'services.zoom.base_url' => 'https://api.zoom.test/v2',
+            'services.zoom.account_id' => 'account-id',
+            'services.zoom.client_id' => 'client-id',
+            'services.zoom.client_secret' => 'client-secret',
+        ]);
+        Http::fake([
+            'zoom.test/oauth/token' => Http::response(['access_token' => 'zoom-token'], 200),
+            'api.zoom.test/v2/users/me/meetings' => Http::response([
+                'id' => '987654321',
+                'join_url' => 'https://zoom.test/j/987654321',
+                'start_url' => 'https://zoom.test/s/987654321',
+            ], 201),
+        ]);
+
         $this->actingAs($admin)
             ->get(route('admin.consultations.show', $onlineConsultation))
             ->assertOk()

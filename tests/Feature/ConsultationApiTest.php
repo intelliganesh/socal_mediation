@@ -240,7 +240,7 @@ class ConsultationApiTest extends TestCase
         Mail::assertNotSent(ConsultationPaymentLinkMail::class, fn (ConsultationPaymentLinkMail $mail) => $mail->paymentRequest->participant->email === 'other.participant@example.com');
     }
 
-    public function test_payment_link_email_uses_confirmation_template_with_blue_payment_button(): void
+    public function test_payment_link_email_uses_confirmation_template_with_socal_brand_and_type_icon(): void
     {
         $this->seed();
 
@@ -252,11 +252,13 @@ class ConsultationApiTest extends TestCase
         $this->assertStringContainsString('BOOKING ID: '.$consultation->booking_number, $html);
         $this->assertStringContainsString('Payment Pending', $html);
         $this->assertStringContainsString('Pay Consultation Fee', $html);
-        $this->assertStringContainsString('background:#082bc3', $html);
+        $this->assertStringContainsString('background:#082BC3', $html);
+        $this->assertStringContainsString('background:#F1F6FE', $html);
         $this->assertStringContainsString($paymentRequest->payment_url, $html);
         $this->assertStringContainsString('admin-icons/payment_pending.svg', $html);
         $this->assertStringContainsString('admin-icons/law.svg', $html);
         $this->assertStringContainsString('admin-icons/calendar.svg', $html);
+        $this->assertStringContainsString('admin-icons/consultation_type'.$consultation->consultation_type_id.'.svg', $html);
     }
 
     public function test_final_paid_email_uses_confirmation_template_and_includes_zoom_link_when_available(): void
@@ -275,6 +277,20 @@ class ConsultationApiTest extends TestCase
         $this->assertStringContainsString('admin-icons/payment_check.svg', $html);
         $this->assertStringContainsString('admin-icons/check_white.svg', $html);
         $this->assertStringContainsString('admin-icons/video.svg', $html);
+    }
+
+    public function test_legal_email_uses_law_firm_brand_and_type_icon(): void
+    {
+        $this->seed();
+
+        $consultation = Consultation::where('booking_number', 'SAMPLE-07')->firstOrFail();
+        $participant = $consultation->participants()->whereNotNull('email')->firstOrFail();
+        $html = (new ConsultationZoomLinkMail($consultation, $participant))->render();
+
+        $this->assertStringContainsString('background:#75172E', $html);
+        $this->assertStringContainsString('background:#E8DDE1', $html);
+        $this->assertStringContainsString('color:#75172E', $html);
+        $this->assertStringContainsString('admin-icons/consultation_type'.$consultation->consultation_type_id.'.svg', $html);
     }
 
     public function test_it_completes_using_details_already_saved_on_draft(): void
