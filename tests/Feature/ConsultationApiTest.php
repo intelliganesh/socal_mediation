@@ -574,6 +574,113 @@ class ConsultationApiTest extends TestCase
         $this->assertSame(1, $consultation->integrationLogs()->where('action', 'automatic_payment_sync')->where('status', 'synced')->count());
     }
 
+    public function test_reschedule_booking_api_regenerates_zoom_and_recreates_outlook_event(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config([
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.socal_user_id' => 'socal@example.com',
+            'services.outlook.socal_calendar_id' => 'socal-calendar',
+        ]);
+
+        $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+        $consultation->update([
+            'zoom_meeting_id' => 'local-old-meeting-id',
+            'zoom_join_url' => 'https://zoom.us/j/old-meeting',
+        ]);
+        $oldZoomUrl = $consultation->zoom_join_url;
+
+        ExternalCalendarEvent::create([
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultation->id,
+            'application' => 'socal',
+            'title' => 'Old consultation event',
+            'starts_at' => $consultation->starts_at,
+            'ends_at' => $consultation->ends_at,
+            'is_busy' => true,
+            'metadata' => ['outlook_event_id' => 'old-outlook-event-id'],
+        ]);
+
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
+            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events/old-outlook-event-id' => Http::response(null, 204),
+            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events' => Http::response([
+                'id' => 'new-rescheduled-outlook-event-id',
+                'webLink' => 'https://outlook.office.com/new-rescheduled-event',
+                'subject' => 'Rescheduled booking',
+            ], 201),
+        ]);
+
+        $this->postJson('/api/v1/consultations/'.$consultation->id.'/reschedule', [
+            'starts_at' => '2026-10-06T09:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Consultation rescheduled.')
+            ->assertJsonPath('data.status', 'scheduled')
+            ->assertJsonPath('data.starts_at', '2026-10-06T09:00:00-07:00')
+            ->assertJson(fn ($json) => $json->whereType('data.zoom_join_url', 'string')->etc());
+
+        $consultation->refresh();
+        $this->assertSame('2026-10-06 09:00:00', $consultation->starts_at->format('Y-m-d H:i:s'));
+        $this->assertNotSame($oldZoomUrl, $consultation->zoom_join_url);
+
+        Mail::assertSent(ConsultationZoomLinkMail::class);
+        $this->assertDatabaseHas('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultation->id,
+            'application' => 'socal',
+            'is_busy' => true,
+        ]);
+        $this->assertDatabaseHas('external_calendar_events', [
+            'external_id' => 'consultation-'.$consultation->id,
+            'metadata->outlook_event_id' => 'new-rescheduled-outlook-event-id',
+        ]);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'api',
+            'action' => 'api_reschedule',
+            'status' => 'rescheduled',
+        ]);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'outlook',
+            'action' => 'api_reschedule_outlook_sync',
+            'status' => 'synced',
+        ]);
+    }
+
+    public function test_reschedule_booking_api_rejects_unavailable_slot(): void
+    {
+        $this->seed();
+
+        $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+        ExternalCalendarEvent::create([
+            'provider' => 'outlook',
+            'external_id' => 'blocked-reschedule-slot',
+            'application' => 'socal',
+            'title' => 'Blocked slot',
+            'starts_at' => '2026-10-07 10:00:00',
+            'ends_at' => '2026-10-07 11:00:00',
+            'is_busy' => true,
+        ]);
+
+        $this->postJson('/api/v1/consultations/'.$consultation->id.'/reschedule', [
+            'starts_at' => '2026-10-07T09:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Selected slot overlaps with an existing booking or Outlook event.');
+    }
+
     public function test_availability_slots_are_generated_from_configured_business_hours(): void
     {
         config([

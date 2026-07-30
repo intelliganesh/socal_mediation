@@ -11,6 +11,7 @@ use App\Services\ApiResponse;
 use App\Services\AvailabilityService;
 use App\Services\ConsultationCompletionService;
 use App\Services\ConsultationDraftService;
+use App\Services\ConsultationRescheduleService;
 use App\Services\Integrations\OutlookCalendarClient;
 use App\Services\PaymentReconciliationService;
 use Illuminate\Http\Request;
@@ -123,6 +124,48 @@ class ConsultationController extends Controller
         return ApiResponse::success(
             new ConsultationResource($consultation),
             'Consultation completed and payment links sent.'
+        );
+    }
+
+    #[OA\Post(
+        path: '/v1/consultations/{consultation}/reschedule',
+        tags: ['Consultations'],
+        summary: 'Reschedule a confirmed consultation booking',
+        description: 'Updates the selected date/time after checking availability. Online bookings get a regenerated Zoom meeting link, and Outlook sync recreates the calendar event so the old event is removed.',
+        parameters: [
+            new OA\Parameter(name: 'consultation', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
+        ],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['starts_at'], properties: [
+            new OA\Property(property: 'starts_at', type: 'string', format: 'date-time', example: '2026-08-14T09:00:00-07:00'),
+            new OA\Property(property: 'timezone', type: 'string', nullable: true, example: 'America/Los_Angeles'),
+            new OA\Property(property: 'professional_id', type: 'integer', nullable: true, example: 1),
+        ])),
+        responses: [
+            new OA\Response(response: 200, description: 'Consultation rescheduled', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'Consultation rescheduled.'),
+                new OA\Property(property: 'data', ref: '#/components/schemas/Consultation'),
+            ])),
+            new OA\Response(response: 422, description: 'Unavailable slot, inactive booking, or validation failed'),
+        ]
+    )]
+    public function reschedule(Request $request, Consultation $consultation, ConsultationRescheduleService $rescheduler)
+    {
+        $data = $request->validate([
+            'starts_at' => ['required', 'date'],
+            'timezone' => ['nullable', 'timezone'],
+            'professional_id' => ['nullable', 'integer', 'exists:professionals,id'],
+        ]);
+
+        try {
+            $consultation = $rescheduler->reschedule($consultation->load('type'), $data, 'api_reschedule');
+        } catch (\DomainException $exception) {
+            return ApiResponse::error($exception->getMessage(), 422);
+        }
+
+        return ApiResponse::success(
+            new ConsultationResource($consultation),
+            'Consultation rescheduled.'
         );
     }
 

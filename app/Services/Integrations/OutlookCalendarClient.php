@@ -150,6 +150,15 @@ class OutlookCalendarClient
         ]);
     }
 
+    public function recreateConsultationEvent(Consultation $consultation, string $source = 'reschedule_sync'): ExternalCalendarEvent
+    {
+        $this->assertEnabled();
+
+        $this->deleteConsultationEvent($consultation);
+
+        return $this->syncConsultation($consultation, $source);
+    }
+
     public function createSmokeTestEvent(string $application = 'socal'): string
     {
         $this->assertEnabled();

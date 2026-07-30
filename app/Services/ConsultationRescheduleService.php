@@ -1,0 +1,158 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Consultation;
+use App\Services\Integrations\OutlookCalendarClient;
+use App\Services\Integrations\ZoomClient;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
+
+class ConsultationRescheduleService
+{
+    public function __construct(
+        private readonly AvailabilityService $availability,
+        private readonly ZoomClient $zoom,
+        private readonly AdminZoomNotificationService $zoomNotifications,
+        private readonly OutlookCalendarClient $outlook,
+    ) {
+    }
+
+    public function reschedule(Consultation $consultation, array $data, string $source = 'api_reschedule'): Consultation
+    {
+        if (in_array($consultation->status, ['draft', 'cancelled'], true)) {
+            throw new \DomainException('Only active bookings can be rescheduled.');
+        }
+
+        $timezone = $data['timezone'] ?? $consultation->timezone ?: config('app.booking_timezone');
+        $startsAt = CarbonImmutable::parse($data['starts_at'], $timezone);
+        $type = $consultation->type;
+        $professionalId = $data['professional_id'] ?? $consultation->professional_id;
+
+        $this->availability->assertAvailable($type, $startsAt, $professionalId, $consultation->id);
+
+        return DB::transaction(function () use ($consultation, $startsAt, $timezone, $type, $professionalId, $source) {
+            $oldStartsAt = $consultation->starts_at?->toIso8601String();
+            $oldEndsAt = $consultation->ends_at?->toIso8601String();
+
+            $consultation->update([
+                'professional_id' => $professionalId,
+                'starts_at' => $startsAt,
+                'ends_at' => $startsAt->addMinutes($type->duration_minutes),
+                'timezone' => $timezone,
+                'status' => $this->statusAfterReschedule($consultation),
+            ]);
+
+            $consultation->integrationLogs()->create([
+                'provider' => 'api',
+                'action' => $source,
+                'status' => 'rescheduled',
+                'request_payload' => [
+                    'old_starts_at' => $oldStartsAt,
+                    'old_ends_at' => $oldEndsAt,
+                    'starts_at' => $startsAt->toIso8601String(),
+                    'timezone' => $timezone,
+                    'professional_id' => $professionalId,
+                ],
+                'message' => 'Consultation rescheduled.',
+            ]);
+
+            $this->regenerateZoomLink($consultation->refresh()->load(['type', 'participants']), $source);
+            $this->recreateOutlookEvent($consultation->refresh()->load(['type', 'professional']), $source);
+
+            return $consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests']);
+        });
+    }
+
+    private function regenerateZoomLink(Consultation $consultation, string $source): void
+    {
+        if ($consultation->consultation_mode !== 'online') {
+            $consultation->integrationLogs()->create([
+                'provider' => 'zoom',
+                'action' => $source.'_zoom_link',
+                'status' => 'skipped',
+                'message' => 'Zoom link is only regenerated for online consultations.',
+            ]);
+
+            return;
+        }
+
+        try {
+            if (filled($consultation->zoom_meeting_id)) {
+                $this->zoom->deleteMeeting($consultation->zoom_meeting_id);
+            }
+
+            $meeting = $this->zoom->createMeeting($consultation);
+
+            $consultation->update([
+                'zoom_meeting_id' => $meeting['id'],
+                'zoom_join_url' => $meeting['join_url'],
+                'status' => 'scheduled',
+            ]);
+
+            $consultation->integrationLogs()->create([
+                'provider' => 'zoom',
+                'action' => $source.'_meeting',
+                'status' => 'generated',
+                'response_payload' => $meeting,
+                'message' => 'Zoom meeting link regenerated after reschedule.',
+            ]);
+
+            $this->zoomNotifications->sendZoomLink($consultation->refresh(), $source.'_zoom_link');
+        } catch (\Throwable $exception) {
+            $consultation->integrationLogs()->create([
+                'provider' => 'zoom',
+                'action' => $source.'_zoom_link',
+                'status' => 'failed',
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function recreateOutlookEvent(Consultation $consultation, string $source): void
+    {
+        if (! config('services.outlook.enabled')) {
+            $consultation->integrationLogs()->create([
+                'provider' => 'outlook',
+                'action' => $source.'_outlook_sync',
+                'status' => 'skipped',
+                'message' => 'Outlook sync is disabled.',
+            ]);
+
+            return;
+        }
+
+        try {
+            $outlookEvent = $this->outlook->recreateConsultationEvent($consultation, $source.'_outlook_sync');
+
+            $consultation->integrationLogs()->create([
+                'provider' => 'outlook',
+                'action' => $source.'_outlook_sync',
+                'status' => 'synced',
+                'request_payload' => $this->outlook->consultationEventPayload($consultation),
+                'response_payload' => $outlookEvent->metadata['outlook_response'] ?? $outlookEvent->metadata,
+                'message' => 'Outlook event recreated after reschedule.',
+            ]);
+        } catch (\Throwable $exception) {
+            $consultation->integrationLogs()->create([
+                'provider' => 'outlook',
+                'action' => $source.'_outlook_sync',
+                'status' => 'failed',
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function statusAfterReschedule(Consultation $consultation): string
+    {
+        if ($consultation->status === 'scheduled' || filled($consultation->zoom_join_url)) {
+            return 'scheduled';
+        }
+
+        if ($consultation->payment_status === 'paid') {
+            return 'paid';
+        }
+
+        return 'payment_pending';
+    }
+}

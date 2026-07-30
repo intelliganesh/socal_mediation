@@ -237,7 +237,7 @@ class ConsultationAdminController extends Controller
         if (config('services.outlook.enabled')) {
             try {
                 $syncedConsultation = $consultation->refresh()->load(['type', 'professional']);
-                $outlookEvent = $outlook->syncConsultation($syncedConsultation);
+                $outlookEvent = $outlook->recreateConsultationEvent($syncedConsultation, 'automatic_reschedule_sync');
 
                 $consultation->integrationLogs()->create([
                     'provider' => 'outlook',
