@@ -5,13 +5,28 @@
     $buttonLabel = $buttonLabel ?? null;
     $zoomUrl = $zoomUrl ?? null;
     $isLegalApplication = ($consultation?->application ?? null) === 'legal';
+    $iconPrefix = $isLegalApplication ? 'legal' : 'socal';
     $brandColor = $isLegalApplication ? '#75172E' : '#082BC3';
     $brandSoftColor = $isLegalApplication ? '#E8DDE1' : '#F1F6FE';
-    $heroIcon = str_contains(strtolower((string) $statusLabel), 'pending') ? 'admin-icons/payment_pending.svg' : 'admin-icons/payment_check.svg';
-    $statusIcon = str_contains(strtolower((string) $statusLabel), 'pending') ? 'admin-icons/payment_pending.svg' : 'admin-icons/check_white.svg';
+    $iconPath = function (array $names): string {
+        foreach ($names as $name) {
+            $path = 'admin-icons/'.$name.'.svg';
+            if (file_exists(public_path($path))) {
+                return $path;
+            }
+        }
+
+        return 'admin-icons/link-svgrepo-com.svg';
+    };
+    $isPaymentPending = str_contains(strtolower((string) $statusLabel), 'pending');
+    $paymentIconName = $isPaymentPending ? 'payment_pending' : 'payment_check';
+    $heroIcon = $iconPath([$iconPrefix.'_'.$paymentIconName, $paymentIconName]);
+    $statusIcon = $iconPath([$iconPrefix.'_'.$paymentIconName, $paymentIconName, 'check_white']);
+    $serviceIcon = $iconPath([$iconPrefix.'_law', $iconPrefix, 'law']);
+    $calendarIcon = $iconPath([$iconPrefix.'_calendar', 'calendar', 'socal_calendar']);
     $consultationTypeIcon = 'admin-icons/consultation_type'.($consultation?->consultation_type_id ?: $consultation?->type?->id).'.svg';
     if (! file_exists(public_path($consultationTypeIcon))) {
-        $consultationTypeIcon = 'admin-icons/law.svg';
+        $consultationTypeIcon = $serviceIcon;
     }
     $timezone = $consultation?->timezone ?: config('app.booking_timezone', 'America/Los_Angeles');
     $scheduledAt = $consultation?->starts_at?->timezone($timezone);
@@ -33,15 +48,14 @@
 </head>
 <body style="margin:0;background:#f7f5fb;color:#111827;font-family:Georgia,'Times New Roman',serif;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f5fb;margin:0;padding:0;">
-
+        <tr>
+            <td style="background:#ffffff;padding:14px 32px;border-bottom:1px solid #e5e7eb;">
+                <img src="{{ asset('admin-icons/logo.png') }}" width="190" alt="SoCal Mediation Center" style="display:block;max-width:190px;height:auto;  margin: 0 auto;">
+            </td>
+        </tr>
         <tr>
             <td align="center" style="padding:32px 16px 42px;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;">
-                    <tr>
-                        <td style="background:#ffffff;padding:14px 32px;border-bottom:1px solid #e5e7eb;">
-                            <img src="{{ asset('admin-icons/logo.png') }}" width="190" alt="SoCal Mediation Center" style="display:block;max-width:190px;height:auto;">
-                        </td>
-                    </tr>
                     <tr>
                         <td align="center">
                             <div style="width:70px;height:70px;border-radius:999px;background:{{ $brandColor }};text-align:center;line-height:70px;">
@@ -73,14 +87,14 @@
                                     <td width="50%" valign="top" style="padding:0 18px 22px 0;">
                                         <div style="font-size:12px;color:#374151;margin-bottom:7px;">Service Type</div>
                                         <div style="font-size:14px;line-height:1.4;">
-                                            <img src="{{ asset('admin-icons/law.svg') }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
-                                            {{ $consultation?->legal_service_name ?: 'Not selected' }}
+                                            <img src="{{ asset($serviceIcon) }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
+                                            {{ $consultation?->legal_service_name ?: '-' }}
                                         </div>
                                     </td>
                                     <td width="50%" valign="top" style="padding:0 0 22px 18px;">
                                         <div style="font-size:12px;color:#374151;margin-bottom:7px;">Time & Date</div>
                                         <div style="font-size:14px;line-height:1.4;">
-                                            <img src="{{ asset('admin-icons/calendar.svg') }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
+                                            <img src="{{ asset($calendarIcon) }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
                                             {{ $scheduledAt ? $scheduledAt->format('M d, Y - g:i A').' '.$timezone : 'Not scheduled' }}
                                         </div>
                                     </td>
@@ -123,7 +137,7 @@
                                         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                                             <tr>
                                                 <td style="font-size:14px;color:#374151;">Consultation Fee</td>
-                                                <td align="right" style="font-size:18px;font-weight:700;color:#111827;">{{ $consultation?->currency ?? '$' }} {{ number_format(($amountCents ?? $consultation?->total_amount_cents ?? 0) / 100, 2) }} USD</td>
+                                                <td align="right" style="font-size:18px;font-weight:700;color:#111827;">{{ ($consultation?->currency=='USD') ? '$' : $consultation?->currency ?? '-' }} {{ number_format(($amountCents ?? $consultation?->total_amount_cents ?? 0) / 100, 2) }}</td>
                                             </tr>
                                         </table>
                                     </td>

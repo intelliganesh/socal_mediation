@@ -255,9 +255,9 @@ class ConsultationApiTest extends TestCase
         $this->assertStringContainsString('background:#082BC3', $html);
         $this->assertStringContainsString('background:#F1F6FE', $html);
         $this->assertStringContainsString($paymentRequest->payment_url, $html);
-        $this->assertStringContainsString('admin-icons/payment_pending.svg', $html);
-        $this->assertStringContainsString('admin-icons/law.svg', $html);
-        $this->assertStringContainsString('admin-icons/calendar.svg', $html);
+        $this->assertStringContainsString('admin-icons/socal_payment_pending.svg', $html);
+        $this->assertStringContainsString('admin-icons/socal_law.svg', $html);
+        $this->assertStringContainsString('admin-icons/socal_calendar.svg', $html);
         $this->assertStringContainsString('admin-icons/consultation_type'.$consultation->consultation_type_id.'.svg', $html);
     }
 
@@ -274,8 +274,7 @@ class ConsultationApiTest extends TestCase
         $this->assertStringContainsString('BOOKING ID: '.$consultation->booking_number, $html);
         $this->assertStringContainsString('Join Zoom Meeting', $html);
         $this->assertStringContainsString($consultation->zoom_join_url, $html);
-        $this->assertStringContainsString('admin-icons/payment_check.svg', $html);
-        $this->assertStringContainsString('admin-icons/check_white.svg', $html);
+        $this->assertStringContainsString('admin-icons/socal_payment_check.svg', $html);
         $this->assertStringContainsString('admin-icons/video.svg', $html);
     }
 
@@ -290,6 +289,8 @@ class ConsultationApiTest extends TestCase
         $this->assertStringContainsString('background:#75172E', $html);
         $this->assertStringContainsString('background:#E8DDE1', $html);
         $this->assertStringContainsString('color:#75172E', $html);
+        $this->assertStringContainsString('admin-icons/legal_payment_check.svg', $html);
+        $this->assertStringContainsString('admin-icons/legal.svg', $html);
         $this->assertStringContainsString('admin-icons/consultation_type'.$consultation->consultation_type_id.'.svg', $html);
     }
 
