@@ -45,7 +45,7 @@ return [
         'mode' => env('CONVERGE_MODE', 'sandbox'),
         'sandbox_base_url' => env('CONVERGE_SANDBOX_BASE_URL', 'https://api.demo.convergepay.com'),
         'production_base_url' => env('CONVERGE_PRODUCTION_BASE_URL', 'https://api.convergepay.com'),
-        'merchant_id' => env('CONVERGE_MERCHANT_ID'),
+        'account_id' => env('CONVERGE_ACCOUNT_ID'),
         'user_id' => env('CONVERGE_USER_ID'),
         'pin' => env('CONVERGE_PIN'),
         'return_url' => env('CONVERGE_RETURN_URL'),

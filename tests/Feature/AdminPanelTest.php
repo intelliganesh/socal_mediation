@@ -77,7 +77,7 @@ class AdminPanelTest extends TestCase
             'services.converge.payment_sync_enabled' => true,
             'services.converge.mode' => 'sandbox',
             'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
-            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.account_id' => 'account-id',
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
         ]);

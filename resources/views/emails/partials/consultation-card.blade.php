@@ -20,7 +20,7 @@
     };
     $isPaymentPending = str_contains(strtolower((string) $statusLabel), 'pending');
     $paymentIconName = $isPaymentPending ? 'payment_pending' : 'payment_check';
-    $heroIcon = $iconPath([$iconPrefix.'_'.$paymentIconName, $paymentIconName]);
+    $heroIcon = $iconPath([$paymentIconName, $paymentIconName]);
     $statusIcon = $iconPath([$iconPrefix.'_'.$paymentIconName, $paymentIconName, 'check_white']);
     $serviceIcon = $iconPath([$iconPrefix.'_law', $iconPrefix, 'law']);
     $calendarIcon = $iconPath([$iconPrefix.'_calendar', 'calendar', 'socal_calendar']);

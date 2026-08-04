@@ -342,7 +342,7 @@ class ConsultationApiTest extends TestCase
         config([
             'services.converge.mode' => 'sandbox',
             'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
-            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.account_id' => 'account-id',
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
             'services.converge.return_url' => 'http://localhost/api/v1/payments/converge/return',
@@ -395,7 +395,7 @@ class ConsultationApiTest extends TestCase
         config([
             'services.converge.mode' => 'sandbox',
             'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
-            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.account_id' => 'account-id',
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
             'services.converge.return_url' => 'http://localhost/api/v1/payments/converge/return',
@@ -726,7 +726,7 @@ class ConsultationApiTest extends TestCase
             'services.converge.enabled' => true,
             'services.converge.mode' => 'sandbox',
             'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
-            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.account_id' => 'account-id',
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
             'services.converge.return_url' => 'http://localhost/api/v1/payments/converge/return',
@@ -783,7 +783,7 @@ class ConsultationApiTest extends TestCase
         config([
             'services.converge.mode' => 'sandbox',
             'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
-            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.account_id' => 'account-id',
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
         ]);
@@ -832,7 +832,7 @@ class ConsultationApiTest extends TestCase
             'services.converge.enabled' => true,
             'services.converge.mode' => 'sandbox',
             'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
-            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.account_id' => 'account-id',
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
             'services.converge.return_url' => 'http://localhost/api/v1/payments/converge/return',
@@ -894,7 +894,7 @@ class ConsultationApiTest extends TestCase
             'services.converge.payment_sync_enabled' => true,
             'services.converge.mode' => 'sandbox',
             'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
-            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.account_id' => 'account-id',
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
         ]);
@@ -949,7 +949,7 @@ class ConsultationApiTest extends TestCase
             'services.converge.payment_sync_enabled' => true,
             'services.converge.mode' => 'sandbox',
             'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
-            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.account_id' => 'account-id',
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
         ]);
@@ -984,7 +984,7 @@ class ConsultationApiTest extends TestCase
         config([
             'services.converge.mode' => 'sandbox',
             'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
-            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.account_id' => 'account-id',
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
             'services.outlook.enabled' => true,
@@ -1552,7 +1552,7 @@ class ConsultationApiTest extends TestCase
     {
         config([
             'services.converge.enabled' => true,
-            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.account_id' => 'account-id',
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
             'services.converge.return_url' => 'https://app.example.test/api/v1/payments/converge/return',

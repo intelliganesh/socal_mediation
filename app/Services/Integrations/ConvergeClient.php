@@ -57,6 +57,12 @@ class ConvergeClient
             ->timeout((int) config('services.converge.http_timeout_seconds', 90))
             ->post($this->hostedPaymentTokenEndpoint(), $payload);
 
+        if ($response->forbidden()) {
+            throw new \RuntimeException(
+                'Converge rejected the Hosted Payment Page request (403). Verify that the Account ID is correct, the API user has Hosted Payment API access, and the server IP is allowlisted.'
+            );
+        }
+
         if ($response->failed()) {
             throw new \RuntimeException('Converge hosted payment token request failed: '.$response->body());
         }
@@ -76,7 +82,7 @@ class ConvergeClient
         $participant = $payment->participant;
 
         return [
-            'ssl_merchant_id' => config('services.converge.merchant_id'),
+            'ssl_account_id' => config('services.converge.account_id'),
             'ssl_user_id' => config('services.converge.user_id'),
             'ssl_pin' => config('services.converge.pin'),
             'ssl_transaction_type' => $payment->payment_method === 'ach' ? 'ecspurchase' : 'ccsale',
@@ -125,7 +131,7 @@ class ConvergeClient
     private function transactionQueryXml(PaymentRequest $payment): string
     {
         $fields = [
-            'ssl_merchant_id' => config('services.converge.merchant_id'),
+            'ssl_account_id' => config('services.converge.account_id'),
             'ssl_user_id' => config('services.converge.user_id'),
             'ssl_pin' => config('services.converge.pin'),
             'ssl_transaction_type' => 'txnquery',
@@ -196,7 +202,7 @@ class ConvergeClient
 
     private function assertCredentialsConfigured(): void
     {
-        foreach (['merchant_id', 'user_id', 'pin'] as $key) {
+        foreach (['account_id', 'user_id', 'pin'] as $key) {
             if (blank(config('services.converge.'.$key))) {
                 throw new \RuntimeException('CONVERGE_'.strtoupper($key).' is not configured.');
             }
