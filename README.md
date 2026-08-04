@@ -154,7 +154,6 @@ CONVERGE_SANDBOX_BASE_URL=https://api.demo.convergepay.com
 CONVERGE_PRODUCTION_BASE_URL=https://api.convergepay.com
 CONVERGE_SANDBOX_HPP_BASE_URL=https://api.demo.convergepay.com
 CONVERGE_PRODUCTION_HPP_BASE_URL=https://api.convergepay.com
-CONVERGE_PAYMENT_BASE_URL=
 CONVERGE_MERCHANT_ID=
 CONVERGE_USER_ID=
 CONVERGE_PIN=

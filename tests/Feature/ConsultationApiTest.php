@@ -92,6 +92,7 @@ class ConsultationApiTest extends TestCase
     {
         $this->seed();
         Mail::fake();
+        $this->enableConverge();
 
         $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
         $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
@@ -144,6 +145,7 @@ class ConsultationApiTest extends TestCase
     {
         $this->seed();
         Mail::fake();
+        $this->enableConverge();
 
         $type = ConsultationType::where('slug', 'socal-full-day-mediation')->firstOrFail();
         $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
@@ -201,6 +203,7 @@ class ConsultationApiTest extends TestCase
     {
         $this->seed();
         Mail::fake();
+        $this->enableConverge();
 
         $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
         $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
@@ -453,13 +456,11 @@ class ConsultationApiTest extends TestCase
         ]);
     }
 
-    public function test_disabled_converge_gateway_uses_placeholder_payment_link_without_demo_page(): void
+    public function test_disabled_converge_gateway_does_not_create_a_payment_link(): void
     {
         $this->seed();
-        config([
-            'services.converge.enabled' => false,
-            'services.converge.payment_base_url' => 'https://payments.example.test',
-        ]);
+        Mail::fake();
+        config(['services.converge.enabled' => false]);
 
         $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
         $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
@@ -482,9 +483,9 @@ class ConsultationApiTest extends TestCase
 
         $paymentRequest = PaymentRequest::findOrFail($complete['payment_requests'][0]['id']);
 
-        $this->assertStringStartsWith('https://payments.example.test/pay/conv_', $paymentRequest->payment_url);
+        $this->assertNull($paymentRequest->payment_url);
         $this->assertSame('pending', $paymentRequest->status);
-        $this->assertFalse(\Illuminate\Support\Facades\Route::has('payments.demo.show'));
+        Mail::assertNotSent(ConsultationPaymentLinkMail::class);
     }
 
     public function test_simulated_payment_endpoint_enforces_environment_flags_and_api_key(): void
@@ -1545,5 +1546,16 @@ class ConsultationApiTest extends TestCase
         ])
             ->assertStatus(422)
             ->assertJsonPath('message', 'Selected slot is outside the configured booking hours.');
+    }
+
+    private function enableConverge(): void
+    {
+        config([
+            'services.converge.enabled' => true,
+            'services.converge.merchant_id' => 'merchant-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+            'services.converge.return_url' => 'https://app.example.test/api/v1/payments/converge/return',
+        ]);
     }
 }

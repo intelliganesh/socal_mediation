@@ -12,6 +12,7 @@ use Carbon\CarbonImmutable;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
@@ -306,17 +307,20 @@ class DatabaseSeeder extends Seeder
 
             foreach ($consultation->participants()->where('should_pay', true)->get()->values() as $index => $participant) {
                 $status = $sample['payments'][$index] ?? 'pending';
+                $paymentRequestId = (string) Str::uuid();
                 PaymentRequest::create([
                     'consultation_id' => $consultation->id,
                     'participant_id' => $participant->id,
-                    'id' => (string) Str::uuid(),
+                    'id' => $paymentRequestId,
                     'provider' => 'converge',
                     'status' => $status,
                     'amount_cents' => $participant->share_amount_cents,
                     'currency' => 'USD',
                     'payment_method' => $index % 2 === 0 ? 'card' : 'ach',
                     'provider_reference' => 'sample_'.Str::lower(Str::random(12)),
-                    'payment_url' => 'https://pay.demo.convergepay.com/pay/sample-'.$sample['number'].'-'.$participant->id,
+                    'payment_url' => URL::signedRoute('payments.checkout', [
+                        'paymentRequest' => $paymentRequestId,
+                    ]),
                     'sent_at' => now(),
                     'paid_at' => $status === 'paid' ? now() : null,
                     'metadata' => ['sample_seed' => true],
