@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\CalendarController;
 use App\Http\Controllers\Admin\ConsultationAdminController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Payments\ConvergeCheckoutController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -13,6 +14,10 @@ Route::get('/', function () {
 Route::get('/login', function () {
     return redirect()->route('admin.login');
 })->name('login');
+
+Route::get('payments/{paymentRequest}/checkout', [ConvergeCheckoutController::class, 'checkout'])
+    ->middleware('signed')
+    ->name('payments.checkout');
 
 Route::prefix('admin')->name('admin.')->group(function () {
 

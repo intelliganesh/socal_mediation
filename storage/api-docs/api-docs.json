@@ -395,6 +395,85 @@
                 }
             }
         },
+        "/v1/consultations/{consultation}/reschedule": {
+            "post": {
+                "tags": [
+                    "Consultations"
+                ],
+                "summary": "Reschedule a confirmed consultation booking",
+                "description": "Updates the selected date/time after checking availability. Online bookings get a regenerated Zoom meeting link, and Outlook sync recreates the calendar event so the old event is removed.",
+                "operationId": "e356139d41c05f69320d78cab77ac6c5",
+                "parameters": [
+                    {
+                        "name": "consultation",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "starts_at"
+                                ],
+                                "properties": {
+                                    "starts_at": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2026-08-14T09:00:00-07:00"
+                                    },
+                                    "timezone": {
+                                        "type": "string",
+                                        "example": "America/Los_Angeles",
+                                        "nullable": true
+                                    },
+                                    "professional_id": {
+                                        "type": "integer",
+                                        "example": 1,
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Consultation rescheduled",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Consultation rescheduled."
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/Consultation"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Unavailable slot, inactive booking, or validation failed"
+                    }
+                }
+            }
+        },
         "/v1/availability": {
             "get": {
                 "tags": [
@@ -473,35 +552,44 @@
                 }
             }
         },
-        "/v1/payments/converge/webhook": {
+        "/v1/payments/converge/confirmation": {
             "post": {
                 "tags": [
                     "Payments"
                 ],
-                "summary": "Accept Converge payment status callbacks",
-                "operationId": "0fe2f4a0d69c8624ba796ca8a40242a0",
+                "summary": "Verify a Converge payment after receiving return data",
+                "description": "Accepts the payment reference from a Hosted Payment Page return, then queries Converge server-to-server before changing payment status. Supplied status fields are logged but never trusted as proof of payment.",
+                "operationId": "d28afa4151369083cb6b4269d13a77d3",
                 "requestBody": {
                     "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
-                                "required": [
-                                    "provider_reference",
-                                    "status"
-                                ],
                                 "properties": {
-                                    "provider_reference": {
+                                    "payment_request_id": {
                                         "type": "string",
-                                        "example": "conv_abc123"
+                                        "format": "uuid",
+                                        "example": "4af8ec35-3704-4aec-a936-6a0a99d30199"
                                     },
-                                    "status": {
+                                    "ssl_invoice_number": {
                                         "type": "string",
-                                        "example": "paid",
-                                        "enum": [
-                                            "paid",
-                                            "failed",
-                                            "cancelled"
-                                        ]
+                                        "example": "4af8ec35-3704-4aec-a936-6a0a99d30199"
+                                    },
+                                    "ssl_result": {
+                                        "type": "string",
+                                        "example": "0"
+                                    },
+                                    "ssl_result_message": {
+                                        "type": "string",
+                                        "example": "APPROVAL"
+                                    },
+                                    "ssl_txn_id": {
+                                        "type": "string",
+                                        "example": "020524C4A-D5EC1A3F-84BE-4D4A-A95C-4C36CFE5ECF2"
+                                    },
+                                    "ssl_approval_code": {
+                                        "type": "string",
+                                        "example": "916299"
                                     }
                                 },
                                 "type": "object"
@@ -511,7 +599,7 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Webhook accepted",
+                        "description": "Payment verification completed",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -522,7 +610,7 @@
                                         },
                                         "message": {
                                             "type": "string",
-                                            "example": "Webhook accepted."
+                                            "example": "Payment verification completed."
                                         },
                                         "data": {
                                             "$ref": "#/components/schemas/Consultation"
@@ -537,7 +625,119 @@
                         "description": "Payment request not found"
                     },
                     "422": {
-                        "description": "Validation failed"
+                        "description": "Payment reference is missing or confirmation is invalid"
+                    }
+                }
+            }
+        },
+        "/v1/testing/payments/{payment_request_uuid}/complete": {
+            "post": {
+                "tags": [
+                    "Testing"
+                ],
+                "summary": "Mark one payment share paid in a non-production environment",
+                "description": "Available only when payment simulation is enabled, Converge is disabled, and the application is not running in production. Paying the final share triggers the normal Zoom and Outlook finalization flow.",
+                "operationId": "199adf434fbb412f14f81c037e04de2c",
+                "parameters": [
+                    {
+                        "name": "payment_request_uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "X-Payment-Simulation-Key",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "password"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Simulated payment completed",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Simulated payment completed."
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/Consultation"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Missing or invalid simulation key"
+                    },
+                    "404": {
+                        "description": "Simulation unavailable or payment request not found"
+                    },
+                    "409": {
+                        "description": "Converge enabled or consultation cannot receive payment"
+                    }
+                }
+            }
+        },
+        "/v1/payments/converge/return": {
+            "post": {
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Receive the Hosted Payment Page browser return",
+                "description": "Configure this URL in the Converge Hosted Payment Page profile. The callback reference triggers an independent server-to-server transaction query before payment status changes.",
+                "operationId": "526152755b7981cb7f8ad10c8497e84d",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "required": [
+                                    "ssl_invoice_number"
+                                ],
+                                "properties": {
+                                    "ssl_invoice_number": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "ssl_result": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "ssl_txn_id": {
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "HTML payment result page"
+                    },
+                    "404": {
+                        "description": "Payment request not found"
+                    },
+                    "422": {
+                        "description": "Payment reference missing"
                     }
                 }
             }
@@ -822,6 +1022,10 @@
         },
         {
             "name": "Payments"
+        },
+        {
+            "name": "Testing",
+            "description": "Non-production endpoints enabled only for integration testing."
         },
         {
             "name": "Consultation Type Catalog",

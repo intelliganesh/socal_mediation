@@ -159,7 +159,42 @@ CONVERGE_MERCHANT_ID=
 CONVERGE_USER_ID=
 CONVERGE_PIN=
 CONVERGE_WEBHOOK_SECRET=
+CONVERGE_HTTP_TIMEOUT_SECONDS=90
+CONVERGE_RETURN_URL="${APP_URL}/api/v1/payments/converge/return"
 ```
+
+Payment emails contain a permanent signed application checkout URL. Opening
+that URL requests a fresh one-time Converge session token and immediately posts
+the token to the Hosted Payment Page. Tokens are not stored or sent by email.
+
+In both the Converge demo and production accounts, configure the Hosted Payment
+Page redirect URL to exactly match `CONVERGE_RETURN_URL`. The return endpoint
+does not trust browser-supplied payment status; it queries Converge using the
+payment request UUID before marking a payment paid. Scheduled XML polling is
+the fallback when the return verification is temporarily unavailable.
+
+To test paid, Zoom, and Outlook flows without contacting Converge, enable the
+non-production payment simulation API. It is unavailable in production and
+must not be enabled at the same time as Converge.
+
+```env
+CONVERGE_ENABLED=false
+CONVERGE_PAYMENT_SYNC_ENABLED=false
+PAYMENT_SIMULATION_ENABLED=true
+PAYMENT_SIMULATION_KEY=use-a-long-random-development-secret
+```
+
+Complete one payment share at a time with the payment request UUID returned by
+the consultation API:
+
+```http
+POST /api/v1/testing/payments/{payment_request_uuid}/complete
+X-Payment-Simulation-Key: use-a-long-random-development-secret
+```
+
+The final paid share runs the normal booking finalizer, including Zoom meeting
+creation and Outlook sync when their integration toggles are enabled. Restore
+the real gateway by enabling Converge and disabling payment simulation.
 
 Zoom:
 

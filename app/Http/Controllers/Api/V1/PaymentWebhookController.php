@@ -14,8 +14,8 @@ class PaymentWebhookController extends Controller
     #[OA\Post(
         path: '/v1/payments/converge/confirmation',
         tags: ['Payments'],
-        summary: 'Accept Converge payment confirmation return data',
-        description: 'Converge does not provide webhooks for this flow. Send Hosted Payment Page, Lightbox, Checkout.js, or receipt return fields here so the app can reconcile the payment immediately. Scheduled XML API polling remains the fallback.',
+        summary: 'Verify a Converge payment after receiving return data',
+        description: 'Accepts the payment reference from a Hosted Payment Page return, then queries Converge server-to-server before changing payment status. Supplied status fields are logged but never trusted as proof of payment.',
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [
             new OA\Property(property: 'payment_request_id', type: 'string', format: 'uuid', example: '4af8ec35-3704-4aec-a936-6a0a99d30199'),
             new OA\Property(property: 'ssl_invoice_number', type: 'string', example: '4af8ec35-3704-4aec-a936-6a0a99d30199'),
@@ -25,9 +25,9 @@ class PaymentWebhookController extends Controller
             new OA\Property(property: 'ssl_approval_code', type: 'string', example: '916299'),
         ])),
         responses: [
-            new OA\Response(response: 200, description: 'Payment confirmation accepted', content: new OA\JsonContent(properties: [
+            new OA\Response(response: 200, description: 'Payment verification completed', content: new OA\JsonContent(properties: [
                 new OA\Property(property: 'success', type: 'boolean', example: true),
-                new OA\Property(property: 'message', type: 'string', example: 'Payment confirmation accepted.'),
+                new OA\Property(property: 'message', type: 'string', example: 'Payment verification completed.'),
                 new OA\Property(property: 'data', ref: '#/components/schemas/Consultation'),
             ])),
             new OA\Response(response: 404, description: 'Payment request not found'),
@@ -50,11 +50,15 @@ class PaymentWebhookController extends Controller
             'ssl_approval_code' => ['nullable', 'string'],
         ]);
 
-        $consultation = $payments->confirmFromConvergePayload($data + $request->all());
+        try {
+            $consultation = $payments->confirmFromConvergePayload($data + $request->all());
+        } catch (\DomainException|\RuntimeException $exception) {
+            return ApiResponse::error('Converge payment verification failed: '.$exception->getMessage(), 422);
+        }
 
         return ApiResponse::success(
             new ConsultationResource($consultation->load(['type', 'professional', 'participants', 'paymentRequests'])),
-            'Payment confirmation accepted.'
+            'Payment verification completed.'
         );
     }
 

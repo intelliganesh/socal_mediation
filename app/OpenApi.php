@@ -13,6 +13,7 @@ use OpenApi\Attributes as OA;
 #[OA\Tag(name: 'Catalog')]
 #[OA\Tag(name: 'Consultations')]
 #[OA\Tag(name: 'Payments')]
+#[OA\Tag(name: 'Testing', description: 'Non-production endpoints enabled only for integration testing.')]
 #[OA\Schema(
     schema: 'ApiEnvelope',
     properties: [

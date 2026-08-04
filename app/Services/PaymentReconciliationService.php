@@ -19,27 +19,42 @@ class PaymentReconciliationService
     public function confirmFromConvergePayload(array $payload): Consultation
     {
         $payment = $this->findPaymentFromPayload($payload);
-        $status = $this->statusFromPayload($payload);
+
+        return $this->verifyPayment($payment, 'payment_confirmation', $payload);
+    }
+
+    public function verifyPayment(PaymentRequest $payment, string $source = 'payment_confirmation', array $callbackPayload = []): Consultation
+    {
+        if ($payment->provider !== 'converge') {
+            throw new \DomainException('Only Converge payment requests can be verified through Converge.');
+        }
+
+        if ($payment->status === 'paid') {
+            return $payment->consultation->refresh();
+        }
+
+        $result = $this->converge->lookupPaymentStatus($payment);
+        $status = $result['status'] ?? 'unknown';
 
         if ($status === 'unknown') {
             $payment->integrationLogs()->create([
                 'provider' => 'converge',
-                'action' => 'payment_confirmation',
+                'action' => $source,
                 'status' => 'skipped',
-                'request_payload' => $this->safePayload($payload),
-                'message' => 'Converge confirmation did not include a final payment status.',
+                'request_payload' => $this->safePayload($callbackPayload),
+                'response_payload' => $this->safePayload($result['raw'] ?? $result),
+                'message' => 'Converge verification did not return a final payment status.',
             ]);
 
             return $payment->consultation->refresh();
         }
 
-        return $this->applyStatus($payment, [
-            'status' => $status,
-            'transaction_id' => $payload['ssl_txn_id'] ?? $payload['transaction_id'] ?? null,
-            'approval_code' => $payload['ssl_approval_code'] ?? null,
-            'result_message' => $payload['ssl_result_message'] ?? $payload['message'] ?? null,
-            'raw' => $payload,
-        ], 'payment_confirmation');
+        $result['raw'] = [
+            'callback' => $this->safePayload($callbackPayload),
+            'verification' => $this->safePayload($result['raw'] ?? $result),
+        ];
+
+        return $this->applyStatus($payment, $result, $source);
     }
 
     public function syncPendingPayments(?Consultation $consultation = null, ?PaymentRequest $paymentRequest = null, ?int $limit = null, bool $dryRun = false): array
@@ -207,28 +222,13 @@ class PaymentReconciliationService
         abort(422, 'Payment reference is required.');
     }
 
-    private function statusFromPayload(array $payload): string
-    {
-        if (($payload['status'] ?? null) === 'paid') {
-            return 'paid';
-        }
-
-        if (in_array(($payload['status'] ?? null), ['failed', 'cancelled'], true)) {
-            return 'failed';
-        }
-
-        if (array_key_exists('ssl_result', $payload)) {
-            return (string) $payload['ssl_result'] === '0' ? 'paid' : 'failed';
-        }
-
-        return 'unknown';
-    }
-
     private function safePayload(array $payload): array
     {
-        foreach (['ssl_pin', 'pin', 'CONVERGE_PIN'] as $secretKey) {
-            if (array_key_exists($secretKey, $payload)) {
-                $payload[$secretKey] = '[FILTERED]';
+        foreach ($payload as $key => $value) {
+            if (preg_match('/pin|cvv|cvc|card|account|routing|token|exp_date/i', (string) $key)) {
+                $payload[$key] = '[FILTERED]';
+            } elseif (is_array($value)) {
+                $payload[$key] = $this->safePayload($value);
             }
         }
 

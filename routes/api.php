@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\ConsultationController;
 use App\Http\Controllers\Api\V1\PaymentWebhookController;
+use App\Http\Controllers\Api\V1\SimulatedPaymentController;
+use App\Http\Controllers\Payments\ConvergeCheckoutController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -22,4 +24,7 @@ Route::prefix('v1')->group(function () {
 
     Route::post('payments/converge/confirmation', [PaymentWebhookController::class, 'confirmation']);
     Route::post('payments/converge/webhook', [PaymentWebhookController::class, 'converge']);
+    Route::match(['get', 'post'], 'payments/converge/return', [ConvergeCheckoutController::class, 'return'])
+        ->name('payments.converge.return');
+    Route::post('testing/payments/{payment_request_uuid}/complete', [SimulatedPaymentController::class, 'complete']);
 });

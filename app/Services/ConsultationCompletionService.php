@@ -13,6 +13,7 @@ class ConsultationCompletionService
         private readonly AvailabilityService $availability,
         private readonly PaymentLinkService $payments,
         private readonly AdminPaymentNotificationService $notifications,
+        private readonly PaymentSimulationService $simulation,
     ) {
     }
 
@@ -52,7 +53,16 @@ class ConsultationCompletionService
             )->load(['type', 'professional', 'participants', 'paymentRequests']);
         });
 
-        $this->notifications->sendPaymentLinks($consultation, 'automatic_payment_link');
+        if ($this->simulation->isActive()) {
+            $consultation->integrationLogs()->create([
+                'provider' => 'simulation',
+                'action' => 'automatic_payment_link',
+                'status' => 'skipped',
+                'message' => 'Payment-link email skipped because payment simulation is enabled.',
+            ]);
+        } else {
+            $this->notifications->sendPaymentLinks($consultation, 'automatic_payment_link');
+        }
 
         return $consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests']);
     }

@@ -6,6 +6,7 @@ use App\Models\Consultation;
 use App\Models\ConsultationParticipant;
 use App\Models\PaymentRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
 class ConvergeClient
@@ -13,28 +14,16 @@ class ConvergeClient
     public function createPaymentLink(Consultation $consultation, ConsultationParticipant $participant, int $amountCents, ?string $method, string $paymentRequestId): array
     {
         $reference = 'conv_'.Str::lower(Str::random(16));
-        $token = null;
-
-        $payload = [
-            'ssl_merchant_id' => config('services.converge.merchant_id'),
-            'ssl_user_id' => config('services.converge.user_id'),
-            'ssl_pin' => config('services.converge.pin'),
-            'ssl_transaction_type' => $method === 'ach' ? 'ecspurchase' : 'ccsale',
-            'ssl_amount' => number_format($amountCents / 100, 2, '.', ''),
-            'ssl_invoice_number' => $paymentRequestId,
-            'ssl_description' => $consultation->booking_number.' - '.$consultation->type?->name,
-            'ssl_customer_code' => $participant->email ?: $paymentRequestId,
-        ];
 
         if (config('services.converge.enabled')) {
-            $this->assertConfigured();
-            $token = $this->requestHostedPaymentToken($payload);
+            $this->assertHostedPaymentConfigured();
         }
 
         return [
+            'provider' => 'converge',
             'reference' => $reference,
-            'url' => $token
-                ? $this->hostedPaymentUrl($token)
+            'url' => config('services.converge.enabled')
+                ? URL::signedRoute('payments.checkout', ['paymentRequest' => $paymentRequestId])
                 : $this->disabledGatewayPaymentUrl($reference),
             'mode' => config('services.converge.mode'),
             'gateway_enabled' => (bool) config('services.converge.enabled'),
@@ -43,8 +32,20 @@ class ConvergeClient
             'invoice_number' => $paymentRequestId,
             'booking_number' => $consultation->booking_number,
             'participant_email' => $participant->email,
-            'token_request' => $this->safePayload($payload),
-            'session_token' => $token ? '[GENERATED]' : null,
+            'session_token' => null,
+        ];
+    }
+
+    public function createHostedPaymentSession(PaymentRequest $payment): array
+    {
+        $this->assertHostedPaymentConfigured();
+        $payment->loadMissing(['consultation.type', 'participant']);
+        $payload = $this->hostedPaymentPayload($payment);
+
+        return [
+            'action' => rtrim($this->hostedPaymentBaseUrl(), '/').'/hosted-payments/',
+            'token' => $this->requestHostedPaymentToken($payload),
+            'request' => $this->safePayload($payload),
         ];
     }
 
@@ -52,6 +53,8 @@ class ConvergeClient
     {
         $response = Http::asForm()
             ->accept('*/*')
+            ->connectTimeout(10)
+            ->timeout((int) config('services.converge.http_timeout_seconds', 90))
             ->post($this->hostedPaymentTokenEndpoint(), $payload);
 
         if ($response->failed()) {
@@ -67,9 +70,24 @@ class ConvergeClient
         return $token;
     }
 
-    private function hostedPaymentUrl(string $token): string
+    private function hostedPaymentPayload(PaymentRequest $payment): array
     {
-        return rtrim($this->hostedPaymentBaseUrl(), '/').'/hosted-payments?ssl_txn_auth_token='.urlencode($token);
+        $consultation = $payment->consultation;
+        $participant = $payment->participant;
+
+        return [
+            'ssl_merchant_id' => config('services.converge.merchant_id'),
+            'ssl_user_id' => config('services.converge.user_id'),
+            'ssl_pin' => config('services.converge.pin'),
+            'ssl_transaction_type' => $payment->payment_method === 'ach' ? 'ecspurchase' : 'ccsale',
+            'ssl_amount' => number_format($payment->amount_cents / 100, 2, '.', ''),
+            'ssl_invoice_number' => $payment->id,
+            'ssl_description' => $consultation->booking_number.' - '.$consultation->type?->name,
+            'ssl_customer_code' => $participant?->email ?: $payment->id,
+            'ssl_first_name' => $participant?->first_name ?: $consultation->primary_first_name,
+            'ssl_last_name' => $participant?->last_name ?: $consultation->primary_last_name,
+            'ssl_email' => $participant?->email ?: $consultation->primary_email,
+        ];
     }
 
     private function hostedPaymentTokenEndpoint(): string
@@ -84,10 +102,12 @@ class ConvergeClient
 
     public function lookupPaymentStatus(PaymentRequest $payment): array
     {
-        $this->assertConfigured();
+        $this->assertCredentialsConfigured();
 
         $response = Http::asForm()
             ->accept('*/*')
+            ->connectTimeout(10)
+            ->timeout((int) config('services.converge.http_timeout_seconds', 90))
             ->post($this->xmlEndpoint(), [
                 'xmldata' => $this->transactionQueryXml($payment),
             ]);
@@ -172,11 +192,20 @@ class ConvergeClient
             : config('services.converge.sandbox_hpp_base_url');
     }
 
-    private function assertConfigured(): void
+    private function assertHostedPaymentConfigured(): void
+    {
+        $this->assertCredentialsConfigured();
+
+        if (blank(config('services.converge.return_url'))) {
+            throw new \RuntimeException('CONVERGE_RETURN_URL is not configured for the Hosted Payment Page profile.');
+        }
+    }
+
+    private function assertCredentialsConfigured(): void
     {
         foreach (['merchant_id', 'user_id', 'pin'] as $key) {
             if (blank(config('services.converge.'.$key))) {
-                throw new \RuntimeException('Converge payment sync is enabled but CONVERGE_'.strtoupper($key).' is not configured.');
+                throw new \RuntimeException('CONVERGE_'.strtoupper($key).' is not configured.');
             }
         }
     }

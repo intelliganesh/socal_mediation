@@ -29,6 +29,7 @@
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="OUTLOOK_SYNC_ENABLED" value="false"/>
+        <env name="PAYMENT_SIMULATION_ENABLED" value="false"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

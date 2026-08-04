@@ -13,12 +13,15 @@ class PaymentLinkService
     public function __construct(
         private readonly ConvergeClient $converge,
         private readonly PaymentReconciliationService $payments,
+        private readonly PaymentSimulationService $simulation,
     ) {
     }
 
     public function createRequests(Consultation $consultation, string $mode, array $participantIds = [], ?string $method = null): Consultation
     {
-        $this->payments->syncLightweight();
+        if (! $this->simulation->isActive()) {
+            $this->payments->syncLightweight();
+        }
 
         return DB::transaction(function () use ($consultation, $mode, $participantIds, $method) {
             $consultation->paymentRequests()->delete();
@@ -48,12 +51,15 @@ class PaymentLinkService
                 $amount = $share + ($index === 0 ? $remainder : 0);
                 $participant->update(['should_pay' => true, 'share_amount_cents' => $amount]);
                 $paymentRequestId = (string) Str::uuid();
-                $provider = $this->converge->createPaymentLink($consultation, $participant, $amount, $method, $paymentRequestId);
+                $provider = $this->simulation->isActive()
+                    ? $this->simulation->pendingRequest($consultation, $participant, $amount, $method, $paymentRequestId)
+                    : $this->converge->createPaymentLink($consultation, $participant, $amount, $method, $paymentRequestId);
 
                 PaymentRequest::create([
                     'id' => $paymentRequestId,
                     'consultation_id' => $consultation->id,
                     'participant_id' => $participant->id,
+                    'provider' => $provider['provider'],
                     'amount_cents' => $amount,
                     'currency' => $consultation->currency,
                     'payment_method' => $method,

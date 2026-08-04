@@ -41,6 +41,7 @@ return [
         'payment_sync_interval_minutes' => env('CONVERGE_PAYMENT_SYNC_INTERVAL_MINUTES', 15),
         'payment_sync_lookback_days' => env('CONVERGE_PAYMENT_SYNC_LOOKBACK_DAYS', 30),
         'payment_sync_batch_size' => env('CONVERGE_PAYMENT_SYNC_BATCH_SIZE', 50),
+        'http_timeout_seconds' => env('CONVERGE_HTTP_TIMEOUT_SECONDS', 90),
         'mode' => env('CONVERGE_MODE', 'sandbox'),
         'sandbox_base_url' => env('CONVERGE_SANDBOX_BASE_URL', 'https://api.demo.convergepay.com'),
         'production_base_url' => env('CONVERGE_PRODUCTION_BASE_URL', 'https://api.convergepay.com'),
@@ -51,6 +52,12 @@ return [
         'user_id' => env('CONVERGE_USER_ID'),
         'pin' => env('CONVERGE_PIN'),
         'webhook_secret' => env('CONVERGE_WEBHOOK_SECRET'),
+        'return_url' => env('CONVERGE_RETURN_URL'),
+    ],
+
+    'payment_simulation' => [
+        'enabled' => env('PAYMENT_SIMULATION_ENABLED', false),
+        'key' => env('PAYMENT_SIMULATION_KEY'),
     ],
 
     'zoom' => [
