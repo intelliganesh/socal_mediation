@@ -182,9 +182,7 @@ class ConvergeClient
 
     private function hostedPaymentBaseUrl(): string
     {
-        return config('services.converge.mode') === 'production'
-            ? config('services.converge.production_hpp_base_url')
-            : config('services.converge.sandbox_hpp_base_url');
+        return $this->gatewayBaseUrl();
     }
 
     private function assertHostedPaymentConfigured(): void
