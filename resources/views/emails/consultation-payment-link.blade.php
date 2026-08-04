@@ -12,4 +12,6 @@
     'amountCents' => $paymentRequest->amount_cents,
     'buttonUrl' => $paymentRequest->payment_url,
     'buttonLabel' => 'Pay Consultation Fee',
+    'rescheduleButtonUrl' => env('FRONTEND_URL').'reschedule/'.$consultation->id,
+    'rescheduleButtonLabel' => 'Reschedule Booking',
 ])

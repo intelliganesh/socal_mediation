@@ -12,4 +12,6 @@
     'zoomUrl' => $consultation->zoom_join_url,
     'buttonUrl' => $consultation->zoom_join_url,
     'buttonLabel' => 'Join Zoom Meeting',
+    'rescheduleButtonUrl' => env('FRONTEND_URL').'reschedule/'.$consultation->id,
+    'rescheduleButtonLabel' => 'Reschedule Booking',
 ])

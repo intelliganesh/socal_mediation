@@ -21,6 +21,7 @@
     $isPaymentPending = str_contains(strtolower((string) $statusLabel), 'pending');
     $paymentIconName = $isPaymentPending ? 'payment_pending' : 'payment_check';
     $heroIcon = $iconPath([$paymentIconName, $paymentIconName]);
+    $professionalIcon = $iconPath([$iconPrefix, $iconPrefix]);
     $statusIcon = $iconPath([$iconPrefix.'_'.$paymentIconName, $paymentIconName, 'check_white']);
     $serviceIcon = $iconPath([$iconPrefix.'_law', $iconPrefix, 'law']);
     $calendarIcon = $iconPath([$iconPrefix.'_calendar', 'calendar', 'socal_calendar']);
@@ -103,6 +104,12 @@
                                     <td width="50%" valign="top" style="padding:0 18px 22px 0;">
                                         <div style="font-size:12px;color:#374151;margin-bottom:7px;">Professional</div>
                                         <div style="font-size:14px;line-height:1.4;">{{ $professional }}</div>
+                                        <div style="font-size:14px;line-height:1.4;">
+                                            <span style="display:inline-block;width:20px;height:20px;border-radius:999px;background:{{ $brandSoftColor }};text-align:center;vertical-align:-5px;margin-right:7px;">
+                                                <img src="{{ asset($professionalIcon) }}" width="12" height="12" alt="" style="display:inline-block;width:12px;height:12px;vertical-align:middle;margin-top:4px;">
+                                            </span>
+                                            {{ $professional }}
+                                        </div>
                                     </td>
                                     <td width="50%" valign="top" style="padding:0 0 22px 18px;">
                                         <div style="font-size:12px;color:#374151;margin-bottom:7px;">Consultation mode</div>
@@ -145,11 +152,19 @@
                             </table>
                         </td>
                     </tr>
-                    @if($buttonUrl && $buttonLabel)
+                    @if($buttonUrl || $reccheduleButtonUrl)
                         <tr>
+                            @if($buttonUrl && $buttonLabel)
                             <td align="center" style="padding-top:26px;">
                                 <a href="{{ $buttonUrl }}" style="display:inline-block;background:{{ $brandColor }};color:#ffffff;text-decoration:none;border-radius:8px;padding:14px 30px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;">{{ $buttonLabel }}</a>
                             </td>
+                            @endif
+                            @if($rescheduleButtonUrl && $rescheduleButtonLabel)
+                            <td align="center" style="padding-top:26px;">
+                                <a href="{{ $rescheduleButtonUrl }}" style="display:inline-block;background:none;border: 1px solid {{ $brandColor }}; color:{{ $brandColor }};text-decoration:none;border-radius:8px;padding:14px 30px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;">{{ $rescheduleButtonLabel }}</a>
+                            </td>
+                            @endif
+
                         </tr>
                     @endif
                 </table>
