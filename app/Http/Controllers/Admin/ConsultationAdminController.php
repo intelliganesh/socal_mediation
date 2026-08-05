@@ -186,6 +186,10 @@ class ConsultationAdminController extends Controller
         $startsAt = CarbonImmutable::createFromFormat('Y-m-d\TH:i', $data['starts_at'], $timezone);
         $type     = $consultation->type;
 
+        if ($consultation->status === 'completed') {
+            return back()->withInput()->with('error', 'Completed consultations cannot be rescheduled.');
+        }
+
         try {
             $availability->assertAvailable($type, $startsAt, $consultation->professional_id, $consultation->id);
         } catch (\DomainException $exception) {
@@ -280,6 +284,40 @@ class ConsultationAdminController extends Controller
         ]);
 
         return back()->with('status', 'This booking was synced to Outlook.');
+    }
+
+    public function updateStatuses(Request $request, Consultation $consultation)
+    {
+        $data = $request->validate([
+            'status' => ['required', 'string', 'in:draft,pending,payment_pending,paid,scheduled,rescheduled,in_progress,completed,cancelled,overdue'],
+            'payment_status' => ['required', 'string', 'in:pending,partially_paid,paid,failed,refunded'],
+        ]);
+
+        $oldStatus = $consultation->status;
+        $oldPaymentStatus = $consultation->payment_status;
+
+        $consultation->update([
+            'status' => $data['status'],
+            'payment_status' => $data['payment_status'],
+            'confirmed_at' => $data['payment_status'] === 'paid'
+                ? ($consultation->confirmed_at ?: now())
+                : $consultation->confirmed_at,
+        ]);
+
+        $consultation->integrationLogs()->create([
+            'provider' => 'admin',
+            'action' => 'manual_status_update',
+            'status' => 'updated',
+            'request_payload' => [
+                'old_status' => $oldStatus,
+                'status' => $data['status'],
+                'old_payment_status' => $oldPaymentStatus,
+                'payment_status' => $data['payment_status'],
+            ],
+            'message' => 'Consultation and payment statuses updated from admin panel.',
+        ]);
+
+        return back()->with('status', 'Consultation statuses updated.');
     }
 
     private function statusAfterReschedule(Consultation $consultation): string

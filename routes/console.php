@@ -14,3 +14,10 @@ Schedule::command('payments:sync-converge')
     ->cron('*/'.$interval.' * * * *')
     ->withoutOverlapping()
     ->when(fn () => (bool) config('services.converge.payment_sync_enabled'));
+
+$outlookInterval = max(1, (int) config('services.outlook.sync_interval_minutes', 15));
+
+Schedule::command('outlook:sync-consultations')
+    ->cron('*/'.$outlookInterval.' * * * *')
+    ->withoutOverlapping()
+    ->when(fn () => (bool) config('services.outlook.enabled'));

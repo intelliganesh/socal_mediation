@@ -1205,6 +1205,39 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('message', 'Selected slot overlaps with an existing booking or Outlook event.');
     }
 
+    public function test_reschedule_status_api_returns_only_pending_or_completed(): void
+    {
+        $this->seed();
+
+        $pending = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+        $completed = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+        $completed->update(['status' => 'completed']);
+
+        $this->getJson('/api/v1/consultations/'.$pending->id.'/reschedule-status')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonMissing(['status' => 'scheduled']);
+
+        $this->getJson('/api/v1/consultations/'.$completed->id.'/reschedule-status')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'completed');
+    }
+
+    public function test_reschedule_booking_api_rejects_completed_consultation(): void
+    {
+        $this->seed();
+
+        $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+        $consultation->update(['status' => 'completed']);
+
+        $this->postJson('/api/v1/consultations/'.$consultation->id.'/reschedule', [
+            'starts_at' => '2026-10-08T09:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Only active bookings can be rescheduled.');
+    }
+
     public function test_availability_slots_are_generated_from_configured_business_hours(): void
     {
         config([

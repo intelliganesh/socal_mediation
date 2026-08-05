@@ -40,6 +40,8 @@
     $outlookStatus = $outlookSync ? str_replace('_', ' ', ucfirst($outlookSync->status)) : ($consultation->starts_at ? 'Sync Pending' : 'Not Scheduled');
     $zoomStatus = filled($consultation->zoom_join_url) ? 'Generated' : ($consultation->consultation_mode === 'online' ? 'Pending' : 'Not Required');
     $primaryName = trim($consultation->primary_first_name.' '.$consultation->primary_last_name) ?: 'No name yet';
+    $consultationStatusOptions = ['draft', 'pending', 'payment_pending', 'paid', 'scheduled', 'rescheduled', 'in_progress', 'completed', 'cancelled', 'overdue'];
+    $paymentStatusOptions = ['pending', 'partially_paid', 'paid', 'failed', 'refunded'];
     @endphp
     <div class="-mt-1 mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -112,7 +114,7 @@
         </form>
         @endif
     </section>
-    <section class="mb-5 grid gap-5 xl:grid-cols-3">
+    <section class="mb-5 grid gap-5 xl:grid-cols-4">
         <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
             <div class="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
                 <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="circle-user-round" class="h-5 w-5 text-[#082BC3]"></i>Primary Client Information</h3>
@@ -200,6 +202,31 @@
                 </div>
                 <div class="sr-only">{{ $totalPaymentCount }} participants - {{ $paidPaymentCount }} Paid - {{ $pendingPaymentCount }} Pending</div>
             </div>
+        </article>
+        <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+            <div class="border-b border-[#E5E7EB] px-5 py-4">
+                <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="sliders-horizontal" class="h-5 w-5 text-[#082BC3]"></i>Status Controls</h3>
+            </div>
+            <form class="grid gap-4 p-5 text-sm" method="post" action="{{ route('admin.consultations.statuses', $consultation) }}">
+                @csrf
+                <label class="grid gap-2 font-bold text-[#111827]">
+                    Consultation Status
+                    <select class="h-11 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#111827]" name="status" required>
+                        @foreach($consultationStatusOptions as $status)
+                        <option value="{{ $status }}" @selected(old('status', $consultation->status) === $status)>{{ Str::headline($status) }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label class="grid gap-2 font-bold text-[#111827]">
+                    Payment Status
+                    <select class="h-11 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#111827]" name="payment_status" required>
+                        @foreach($paymentStatusOptions as $status)
+                        <option value="{{ $status }}" @selected(old('payment_status', $consultation->payment_status) === $status)>{{ Str::headline($status) }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <button class="action-card-button h-10 w-full rounded-lg text-sm font-bold">Update Statuses</button>
+            </form>
         </article>
     </section>
     <div class="grid gap-5 xl:grid-cols-3">

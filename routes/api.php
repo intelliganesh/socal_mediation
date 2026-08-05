@@ -18,6 +18,7 @@ Route::prefix('v1')->group(function () {
     Route::get('availability', [ConsultationController::class, 'availability']);
 
     Route::post('consultations/draft', [ConsultationController::class, 'store']);
+    Route::get('consultations/{consultation}/reschedule-status', [ConsultationController::class, 'rescheduleStatus']);
     Route::get('consultations/{consultation}', [ConsultationController::class, 'show']);
     Route::post('consultations/{consultation}/complete', [ConsultationController::class, 'complete']);
     Route::post('consultations/{consultation}/reschedule', [ConsultationController::class, 'reschedule']);

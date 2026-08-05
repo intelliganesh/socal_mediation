@@ -68,6 +68,7 @@ return [
 
     'outlook' => [
         'enabled' => env('OUTLOOK_SYNC_ENABLED', false),
+        'sync_interval_minutes' => env('OUTLOOK_SYNC_INTERVAL_MINUTES', 15),
         'tenant_id' => env('OUTLOOK_TENANT_ID'),
         'client_id' => env('OUTLOOK_CLIENT_ID'),
         'client_secret' => env('OUTLOOK_CLIENT_SECRET'),

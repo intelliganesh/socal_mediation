@@ -20,7 +20,7 @@ class ConsultationRescheduleService
 
     public function reschedule(Consultation $consultation, array $data, string $source = 'api_reschedule'): Consultation
     {
-        if (in_array($consultation->status, ['draft', 'cancelled'], true)) {
+        if (in_array($consultation->status, ['draft', 'cancelled', 'completed'], true)) {
             throw new \DomainException('Only active bookings can be rescheduled.');
         }
 

@@ -162,6 +162,16 @@ class AdminPanelTest extends TestCase
             'metadata' => ['outlook_event_id' => 'stale-event-id'],
         ]);
 
+        ExternalCalendarEvent::create([
+            'provider' => 'outlook',
+            'external_id' => 'socal-stale-busy',
+            'application' => 'socal',
+            'title' => 'Removed Outlook busy event',
+            'starts_at' => now(config('app.booking_timezone'))->addDays(7)->setTime(10, 0),
+            'ends_at' => now(config('app.booking_timezone'))->addDays(7)->setTime(11, 0),
+            'is_busy' => true,
+        ]);
+
         Http::fake([
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
             'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events/stale-event-id' => Http::response(null, 204),
@@ -189,6 +199,45 @@ class AdminPanelTest extends TestCase
         $this->assertDatabaseMissing('external_calendar_events', [
             'provider' => 'outlook',
             'external_id' => 'consultation-stale-future',
+        ]);
+        $this->assertDatabaseMissing('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'socal-stale-busy',
+        ]);
+    }
+
+    public function test_admin_can_update_consultation_and_payment_statuses_from_detail_page(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $consultation))
+            ->assertOk()
+            ->assertSee('Status Controls')
+            ->assertSee('Update Statuses');
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.statuses', $consultation), [
+                'status' => 'completed',
+                'payment_status' => 'paid',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Consultation statuses updated.');
+
+        $this->assertDatabaseHas('consultations', [
+            'id' => $consultation->id,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'admin',
+            'action' => 'manual_status_update',
+            'status' => 'updated',
         ]);
     }
 

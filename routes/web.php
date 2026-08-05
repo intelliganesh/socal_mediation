@@ -35,6 +35,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('consultations/{consultation}/reminder', [ConsultationAdminController::class, 'sendReminder'])->name('consultations.reminder');
         Route::post('consultations/{consultation}/zoom-link', [ConsultationAdminController::class, 'resendZoomLink'])->name('consultations.zoom-link');
         Route::post('consultations/{consultation}/regenerate-zoom', [ConsultationAdminController::class, 'regenerateZoomLink'])->name('consultations.regenerate-zoom');
+        Route::post('consultations/{consultation}/statuses', [ConsultationAdminController::class, 'updateStatuses'])->name('consultations.statuses');
         Route::post('consultations/{consultation}/cancel', [ConsultationAdminController::class, 'cancel'])->name('consultations.cancel');
         Route::post('consultations/{consultation}/reschedule', [ConsultationAdminController::class, 'reschedule'])->name('consultations.reschedule');
         Route::post('consultations/{consultation}/sync-outlook', [ConsultationAdminController::class, 'syncOutlook'])->name('consultations.sync-outlook');

@@ -74,10 +74,14 @@ class OutlookCalendarClient
         $count = 0;
 
         foreach (['socal', 'legal'] as $application) {
+            $activeExternalIds = [];
+
             foreach ($this->calendarView($application, $start, $end) as $event) {
                 if (($event['isCancelled'] ?? false) || ! ($event['showAs'] ?? null) || ($event['showAs'] ?? 'busy') === 'free') {
                     continue;
                 }
+
+                $activeExternalIds[] = $event['id'];
 
                 ExternalCalendarEvent::updateOrCreate([
                     'provider' => 'outlook',
@@ -97,6 +101,15 @@ class OutlookCalendarClient
 
                 $count++;
             }
+
+            ExternalCalendarEvent::query()
+                ->where('provider', 'outlook')
+                ->where('application', $application)
+                ->where('external_id', 'not like', 'consultation-%')
+                ->where('starts_at', '<', $end->format('Y-m-d H:i:s'))
+                ->where('ends_at', '>', $start->format('Y-m-d H:i:s'))
+                ->when($activeExternalIds !== [], fn ($query) => $query->whereNotIn('external_id', $activeExternalIds))
+                ->delete();
         }
 
         return $count;

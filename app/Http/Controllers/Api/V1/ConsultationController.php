@@ -170,6 +170,32 @@ class ConsultationController extends Controller
     }
 
     #[OA\Get(
+        path: '/v1/consultations/{consultation}/reschedule-status',
+        tags: ['Consultations'],
+        summary: 'Check whether a consultation can continue through reschedule flow',
+        description: 'Returns only pending or completed. Completed consultations should not be rescheduled.',
+        parameters: [
+            new OA\Parameter(name: 'consultation', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Reschedule status', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'OK'),
+                new OA\Property(property: 'data', type: 'object', properties: [
+                    new OA\Property(property: 'status', type: 'string', enum: ['pending', 'completed'], example: 'pending'),
+                ]),
+            ])),
+            new OA\Response(response: 404, description: 'Consultation not found'),
+        ]
+    )]
+    public function rescheduleStatus(Consultation $consultation)
+    {
+        return ApiResponse::success([
+            'status' => $consultation->status === 'completed' ? 'completed' : 'pending',
+        ]);
+    }
+
+    #[OA\Get(
         path: '/v1/availability',
         tags: ['Consultations'],
         summary: 'Return duration-based available slots for a consultation type and month',
