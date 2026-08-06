@@ -96,6 +96,11 @@ class ConvergeClient
             // 'ssl_error_url'           => $returnUrl,
         ];
 
+        $invoiceNumber = $payment->metadata['invoice_number'] ?? $payment->provider_reference;
+        if ($this->fitsConvergeLimit($invoiceNumber, 25)) {
+            $payload['ssl_invoice_number'] = $invoiceNumber;
+        }
+
         if ($this->fitsConvergeLimit($consultation->booking_number, 17)) {
             $payload['ssl_customer_code'] = $consultation->booking_number;
         }
@@ -151,9 +156,12 @@ class ConvergeClient
         ];
 
         $transactionId = $callbackPayload['ssl_txn_id'] ?? null;
+        $invoiceNumber = $payment->metadata['invoice_number'] ?? null;
 
         if (filled($transactionId)) {
             $fields['ssl_txn_id'] = $transactionId;
+        } elseif ($this->fitsConvergeLimit($invoiceNumber, 25)) {
+            $fields['ssl_invoice_number'] = $invoiceNumber;
         } elseif (filled($payment->provider_reference) && ! str_starts_with($payment->provider_reference, 'conv_')) {
             $fields['ssl_txn_id'] = $payment->provider_reference;
         } elseif ($this->fitsConvergeLimit($payment->provider_reference, 25)) {

@@ -19,6 +19,9 @@ Route::get('payments/{paymentRequest}/checkout', [ConvergeCheckoutController::cl
     ->middleware('signed')
     ->name('payments.checkout');
 
+Route::get('payments/converge/return', [ConvergeCheckoutController::class, 'return'])
+    ->name('payments.converge.return.web');
+
 Route::match(['get', 'post'], 'payments/{paymentRequest}/converge-return', [ConvergeCheckoutController::class, 'returnForPayment'])
     ->name('payments.converge.return.payment');
 

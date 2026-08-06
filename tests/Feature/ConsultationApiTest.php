@@ -771,7 +771,8 @@ class ConsultationApiTest extends TestCase
         Http::assertSent(fn ($request) => $request->url() === 'https://api.demo.convergepay.com/hosted-payments/transaction_token'
             && $request['ssl_transaction_type'] === 'ccsale'
             && $request['ssl_amount'] === '195.00'
-            && ! array_key_exists('ssl_invoice_number', $request->data())
+            && $request['ssl_invoice_number'] === $paymentRequest->provider_reference
+            && strlen($request['ssl_invoice_number']) <= 25
             && strlen($request['ssl_customer_code']) <= 17
             && $request['ssl_customer_code'] === $paymentRequest->consultation->booking_number);
 
@@ -865,12 +866,14 @@ class ConsultationApiTest extends TestCase
         ])->assertOk()->json('data');
 
         $paymentRequestId = $complete['payment_requests'][0]['id'];
+        $paymentRequest = PaymentRequest::findOrFail($paymentRequestId);
 
-        $this->post('/api/v1/payments/converge/return', [
-            'ssl_invoice_number' => $paymentRequestId,
+        $this->get(route('payments.converge.return.web', [
+            'ssl_customer_code' => $paymentRequest->consultation->booking_number,
+            'ssl_email' => $paymentRequest->participant->email,
+            'ssl_amount' => number_format($paymentRequest->amount_cents / 100, 2, '.', ''),
             'ssl_result' => '0',
-            'ssl_txn_id' => 'untrusted-browser-value',
-        ])
+        ]))
             ->assertOk()
             ->assertSee('Payment Successful')
             ->assertSee('Your payment was completed successfully.');

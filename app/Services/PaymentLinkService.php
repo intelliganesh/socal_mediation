@@ -49,7 +49,7 @@ class PaymentLinkService
             foreach ($participants->values() as $index => $participant) {
                 $amount = $share + ($index === 0 ? $remainder : 0);
                 $participant->update(['should_pay' => true, 'share_amount_cents' => $amount]);
-                $paymentRequestId = 'INV' . Str::lower(Str::random(7));
+                $paymentRequestId = (string) Str::uuid();
                 $provider         = $this->simulation->isActive()
                     ? $this->simulation->pendingRequest($consultation, $participant, $amount, $method, $paymentRequestId)
                     : $this->converge->createPaymentLink($consultation, $participant, $amount, $method, $paymentRequestId);
