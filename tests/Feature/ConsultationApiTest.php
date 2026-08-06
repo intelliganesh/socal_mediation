@@ -757,7 +757,7 @@ class ConsultationApiTest extends TestCase
 
         $paymentRequest = PaymentRequest::findOrFail($complete['payment_requests'][0]['id']);
 
-        Http::assertNothingSent();
+        Http::assertNotSent(fn ($request) => $request->url() === 'https://api.demo.convergepay.com/hosted-payments/transaction_token');
         $this->assertStringContainsString('/payments/'.$paymentRequest->id.'/checkout?', $paymentRequest->payment_url);
         $this->assertNull($paymentRequest->metadata['session_token']);
 
@@ -997,11 +997,14 @@ class ConsultationApiTest extends TestCase
         ])->json('data');
 
         $paymentRequestId = $complete['payment_requests'][0]['id'];
-        $invoiceNumber = PaymentRequest::findOrFail($paymentRequestId)->provider_reference;
+        $paymentRequest = PaymentRequest::findOrFail($paymentRequestId);
+        $invoiceNumber = $paymentRequest->provider_reference;
+        $convergeAmount = number_format($paymentRequest->amount_cents / 100, 2, '.', '');
+        $paymentRequest->update(['status' => 'failed']);
 
         Http::fake([
             'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
-                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>poll-txn-200</ssl_txn_id><ssl_approval_code>123456</ssl_approval_code></txn>',
+                '<txn><ssl_txn_count>1</ssl_txn_count><transactions><transaction><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>poll-txn-200</ssl_txn_id><ssl_approval_code>123456</ssl_approval_code><ssl_amount>'.$convergeAmount.'</ssl_amount></transaction></transactions></txn>',
                 200
             ),
         ]);

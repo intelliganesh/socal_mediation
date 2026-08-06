@@ -79,7 +79,6 @@ class ConvergeClient
     {
         $consultation = $payment->consultation;
         $participant  = $payment->participant;
-        $returnUrl    = $this->returnUrl($payment);
 
         $payload = [
             'ssl_account_id'       => config('services.converge.account_id'),
@@ -115,11 +114,6 @@ class ConvergeClient
         return rtrim($this->hostedPaymentBaseUrl(), '/') . '/hosted-payments/transaction_token';
     }
 
-    private function returnUrl(PaymentRequest $payment): string
-    {
-        return route('payments.converge.return.payment', ['paymentRequest' => $payment]);
-    }
-
     private function fitsConvergeLimit(?string $value, int $maxLength): bool
     {
         return filled($value) && strlen($value) <= $maxLength;
@@ -142,12 +136,13 @@ class ConvergeClient
         }
 
         $payload = $this->parseXmlResponse($response->body());
+        $transaction = $this->transactionFromQueryResponse($payload, $payment);
 
         return [
-            'status'         => $this->statusFromResponse($payload),
-            'transaction_id' => $payload['ssl_txn_id'] ?? null,
-            'approval_code'  => $payload['ssl_approval_code'] ?? null,
-            'result_message' => $payload['ssl_result_message'] ?? $payload['errorMessage'] ?? null,
+            'status'         => $this->statusFromResponse($transaction),
+            'transaction_id' => $transaction['ssl_txn_id'] ?? null,
+            'approval_code'  => $transaction['ssl_approval_code'] ?? null,
+            'result_message' => $transaction['ssl_result_message'] ?? $transaction['errorMessage'] ?? null,
             'raw'            => $payload,
         ];
     }
@@ -194,6 +189,48 @@ class ConvergeClient
         return json_decode(json_encode($xml), true) ?: [];
     }
 
+    private function transactionFromQueryResponse(array $payload, PaymentRequest $payment): array
+    {
+        if (array_key_exists('ssl_result', $payload) || array_key_exists('errorCode', $payload)) {
+            return $payload;
+        }
+
+        $transactions = data_get($payload, 'transactions.transaction')
+            ?? data_get($payload, 'transactions.txn')
+            ?? data_get($payload, 'transaction')
+            ?? data_get($payload, 'txn');
+
+        if (! is_array($transactions) || $transactions === []) {
+            return $payload;
+        }
+
+        $candidates = array_is_list($transactions) ? $transactions : [$transactions];
+        $expectedAmount = number_format($payment->amount_cents / 100, 2, '.', '');
+        $matching = array_values(array_filter($candidates, static function ($transaction) use ($expectedAmount) {
+            if (! is_array($transaction)) {
+                return false;
+            }
+
+            return ! isset($transaction['ssl_amount'])
+                || number_format((float) $transaction['ssl_amount'], 2, '.', '') === $expectedAmount;
+        }));
+
+        if ($matching === []) {
+            return [
+                'errorCode' => 'amount_mismatch',
+                'errorMessage' => 'Converge transaction amount did not match the payment request.',
+            ];
+        }
+
+        foreach ($matching as $transaction) {
+            if ((string) ($transaction['ssl_result'] ?? '') === '0') {
+                return $transaction;
+            }
+        }
+
+        return $matching[array_key_last($matching)];
+    }
+
     private function statusFromResponse(array $payload): string
     {
         if (($payload['ssl_result'] ?? null) !== null) {
@@ -231,10 +268,6 @@ class ConvergeClient
     private function assertHostedPaymentConfigured(): void
     {
         $this->assertCredentialsConfigured();
-
-        if (blank(config('services.converge.return_url'))) {
-            throw new \RuntimeException('CONVERGE_RETURN_URL is not configured for the Hosted Payment Page profile.');
-        }
     }
 
     private function assertCredentialsConfigured(): void

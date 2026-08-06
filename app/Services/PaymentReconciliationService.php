@@ -179,14 +179,14 @@ class PaymentReconciliationService
             return PaymentRequest::query()
                 ->with('consultation')
                 ->where('provider', 'converge')
-                ->where('status', 'pending')
+                ->whereIn('status', ['pending', 'failed'])
                 ->whereKey($paymentRequest->id);
         }
 
         return PaymentRequest::query()
             ->with('consultation')
             ->where('provider', 'converge')
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'failed'])
             ->where(function (Builder $query) {
                 $query->whereNotNull('payment_url')
                     ->orWhereNotNull('provider_reference');
