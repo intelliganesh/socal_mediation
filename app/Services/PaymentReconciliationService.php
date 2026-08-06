@@ -29,6 +29,8 @@ class PaymentReconciliationService
             throw new \DomainException('Only Converge payment requests can be verified through Converge.');
         }
 
+        $this->rememberConvergeTransactionId($payment, $callbackPayload);
+
         if ($payment->status === 'paid') {
             return $payment->consultation->refresh();
         }
@@ -162,6 +164,28 @@ class PaymentReconciliationService
         ]);
 
         return $this->finalizer->syncPaymentStatus($payment->consultation);
+    }
+
+    private function rememberConvergeTransactionId(PaymentRequest $payment, array $payload): void
+    {
+        $transactionId = $payload['ssl_txn_id'] ?? null;
+
+        if (! is_scalar($transactionId) || blank(trim((string) $transactionId))) {
+            return;
+        }
+
+        $transactionId = trim((string) $transactionId);
+        $metadata = $payment->metadata ?? [];
+        $transactionIds = array_values(array_unique(array_filter([
+            ...((array) ($metadata['converge_transaction_ids'] ?? [])),
+            $transactionId,
+        ])));
+
+        $metadata['converge_transaction_id'] = $transactionId;
+        $metadata['converge_transaction_ids'] = $transactionIds;
+        $metadata['converge_transaction_received_at'] = now()->toIso8601String();
+
+        $payment->update(['metadata' => $metadata]);
     }
 
     private function pendingPaymentQuery(?Consultation $consultation, ?PaymentRequest $paymentRequest): Builder

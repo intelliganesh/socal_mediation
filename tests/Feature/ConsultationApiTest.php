@@ -8,6 +8,7 @@ use App\Models\Consultation;
 use App\Models\ConsultationType;
 use App\Models\ExternalCalendarEvent;
 use App\Models\PaymentRequest;
+use App\Services\Integrations\ConvergeClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -1061,6 +1062,68 @@ class ConsultationApiTest extends TestCase
             'action' => 'payment_status_sync',
             'status' => 'failed',
         ]);
+    }
+
+    public function test_converge_return_saves_transaction_id_when_verification_is_unavailable(): void
+    {
+        $this->seed();
+        config([
+            'services.converge.payment_sync_enabled' => true,
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.account_id' => 'account-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response('temporarily unavailable', 503),
+        ]);
+
+        $this->get(route('payments.converge.return.payment', [
+            'paymentRequest' => $payment,
+            'ssl_txn_id' => 'stored-return-txn',
+        ]))
+            ->assertOk()
+            ->assertSee('Payment verification is temporarily unavailable.');
+
+        $payment->refresh();
+        $this->assertSame('stored-return-txn', $payment->metadata['converge_transaction_id']);
+        $this->assertContains('stored-return-txn', $payment->metadata['converge_transaction_ids']);
+    }
+
+    public function test_converge_lookup_uses_transaction_id_saved_from_an_earlier_return(): void
+    {
+        $this->seed();
+        config([
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.account_id' => 'account-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+        $payment->update([
+            'metadata' => array_merge($payment->metadata ?? [], [
+                'converge_transaction_id' => 'stored-return-txn',
+            ]),
+        ]);
+
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
+                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>stored-return-txn</ssl_txn_id><ssl_approval_code>123456</ssl_approval_code></txn>',
+                200
+            ),
+        ]);
+
+        $result = app(ConvergeClient::class)->lookupPaymentStatus($payment);
+
+        $this->assertSame('paid', $result['status']);
+        $this->assertSame('stored-return-txn', $result['transaction_id']);
+        Http::assertSent(fn ($request) => str_contains((string) $request->body(), '%3Cssl_txn_id%3Estored-return-txn%3C%2Fssl_txn_id%3E'));
     }
 
     public function test_final_paid_webhook_sends_zoom_links_and_syncs_outlook_once(): void

@@ -132,6 +132,7 @@ class ConvergeClient
 
         if ($response->failed()) {
             throw new \RuntimeException('Converge payment status lookup failed: ' . $response->body());
+
         }
 
         $payload     = $this->parseXmlResponse($response->body());
@@ -155,7 +156,8 @@ class ConvergeClient
             'ssl_transaction_type' => 'txnquery',
         ];
 
-        $transactionId = $callbackPayload['ssl_txn_id'] ?? null;
+        $transactionId = $callbackPayload['ssl_txn_id']
+            ?? data_get($payment->metadata, 'converge_transaction_id');
         $invoiceNumber = $payment->metadata['invoice_number'] ?? null;
 
         if (filled($transactionId)) {
@@ -193,51 +195,99 @@ class ConvergeClient
 
     private function transactionFromQueryResponse(array $payload, PaymentRequest $payment): array
     {
-        if (array_key_exists('ssl_result', $payload) || array_key_exists('errorCode', $payload)) {
+        // Converge API error
+        if (array_key_exists('errorCode', $payload)) {
             return $payload;
         }
 
-        $transactions = data_get($payload, 'transactions.transaction') ?? data_get($payload, 'transactions.txn') ?? data_get($payload, 'transaction') ?? data_get($payload, 'txn');
+        // txnquery by ssl_txn_id returns the transaction directly
+        if (isset($payload['ssl_txn_id'])) {
+            return $this->validateTransaction($payload, $payment);
+        }
+
+        // Keep support for transaction search responses
+        $transactions =
+        data_get($payload, 'transactions.transaction') ?? data_get($payload, 'transactions.txn') ?? data_get($payload, 'transaction') ?? data_get($payload, 'txn');
 
         if (! is_array($transactions) || $transactions === []) {
-            return $payload;
-        }
-
-        $candidates     = array_is_list($transactions) ? $transactions : [$transactions];
-        $expectedAmount = number_format($payment->amount_cents / 100, 2, '.', '');
-        $matching       = array_values(array_filter($candidates, static function ($transaction) use ($expectedAmount) {
-            if (! is_array($transaction)) {
-                return false;
-            }
-
-            return ! isset($transaction['ssl_amount'])
-            || number_format((float) $transaction['ssl_amount'], 2, '.', '') === $expectedAmount;
-        }));
-
-        if ($matching === []) {
             return [
-                'errorCode'    => 'amount_mismatch',
-                'errorMessage' => 'Converge transaction amount did not match the payment request.',
+                'errorCode'    => 'transaction_not_found',
+                'errorMessage' => 'Converge transaction was not found.',
             ];
         }
 
-        foreach ($matching as $transaction) {
-            if ((string) ($transaction['ssl_result'] ?? '') === '0') {
-                return $transaction;
+        $candidates = array_is_list($transactions)
+            ? $transactions
+            : [$transactions];
+
+        foreach ($candidates as $transaction) {
+            if (! is_array($transaction)) {
+                continue;
+            }
+
+            $validated = $this->validateTransaction(
+                $transaction,
+                $payment
+            );
+
+            if (! isset($validated['errorCode'])) {
+                return $validated;
             }
         }
 
-        return $matching[array_key_last($matching)];
+        return [
+            'errorCode'    => 'transaction_mismatch',
+            'errorMessage' => 'No matching Converge transaction was found.',
+        ];
+    }
+
+    private function validateTransaction(array $transaction, PaymentRequest $payment): array
+    {
+        // Verify amount
+        $expectedAmount = number_format($payment->amount_cents / 100, 2, '.', '');
+
+        if (isset($transaction['ssl_amount']) && number_format((float) $transaction['ssl_amount'], 2, '.', '') !== $expectedAmount) {
+            return [
+                'errorCode'    => 'amount_mismatch',
+                'errorMessage' =>
+                'Converge transaction amount does not match the payment request.',
+            ];
+        }
+
+        // Verify invoice
+        $expectedInvoice =
+        $payment->metadata['invoice_number'] ?? $payment->provider_reference;
+
+        if (filled($expectedInvoice) && isset($transaction['ssl_invoice_number']) && (string) $transaction['ssl_invoice_number'] !== (string) $expectedInvoice) {
+            return [
+                'errorCode'    => 'invoice_mismatch',
+                'errorMessage' => 'Converge transaction invoice does not match the payment request.',
+            ];
+        }
+
+        return $transaction;
     }
 
     private function statusFromResponse(array $payload): string
     {
-        if (($payload['ssl_result'] ?? null) !== null) {
-            return (string) $payload['ssl_result'] === '0' ? 'paid' : 'failed';
+        if (isset($payload['errorCode'])) {
+            return 'unknown';
         }
 
-        if (($payload['errorCode'] ?? null) !== null) {
-            return 'unknown';
+        // HPP/direct transaction response
+        if (isset($payload['ssl_result'])) {
+            return (string) $payload['ssl_result'] === '0'
+                ? 'paid'
+                : 'failed';
+        }
+
+        // txnquery response
+        $transactionType = strtoupper((string) ($payload['ssl_transaction_type'] ?? ''));
+        $resultMessage   = strtoupper((string) ($payload['ssl_result_message'] ?? ''));
+        $approvalCode    = $payload['ssl_approval_code'] ?? null;
+
+        if ($transactionType === 'SALE' && $resultMessage === 'APPROVAL' && filled($approvalCode)) {
+            return 'paid';
         }
 
         return 'unknown';
@@ -282,14 +332,14 @@ class ConvergeClient
     {
         foreach (['account_id', 'user_id', 'pin'] as $key) {
             if (blank($this->xmlCredential($key))) {
-                throw new \RuntimeException('CONVERGE_XML_'.strtoupper($key).' is not configured.');
+                throw new \RuntimeException('CONVERGE_XML_' . strtoupper($key) . ' is not configured.');
             }
         }
     }
 
     private function xmlCredential(string $key): mixed
     {
-        return config('services.converge.xml_'.$key) ?: config('services.converge.'.$key);
+        return config('services.converge.xml_' . $key) ?: config('services.converge.' . $key);
     }
 
     private function safePayload(array $payload): array
