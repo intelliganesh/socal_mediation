@@ -120,7 +120,7 @@ class ConvergeClient
 
     public function lookupPaymentStatus(PaymentRequest $payment, array $callbackPayload = []): array
     {
-        $this->assertCredentialsConfigured();
+        $this->assertXmlCredentialsConfigured();
 
         $response = Http::asForm()
             ->accept('*/*')
@@ -149,9 +149,9 @@ class ConvergeClient
     private function transactionQueryXml(PaymentRequest $payment, array $callbackPayload = []): string
     {
         $fields = [
-            'ssl_account_id'       => config('services.converge.account_id'),
-            'ssl_user_id'          => config('services.converge.user_id'),
-            'ssl_pin'              => config('services.converge.pin'),
+            'ssl_account_id'       => $this->xmlCredential('account_id'),
+            'ssl_user_id'          => $this->xmlCredential('user_id'),
+            'ssl_pin'              => $this->xmlCredential('pin'),
             'ssl_transaction_type' => 'txnquery',
         ];
 
@@ -276,6 +276,20 @@ class ConvergeClient
                 throw new \RuntimeException('CONVERGE_' . strtoupper($key) . ' is not configured.');
             }
         }
+    }
+
+    private function assertXmlCredentialsConfigured(): void
+    {
+        foreach (['account_id', 'user_id', 'pin'] as $key) {
+            if (blank($this->xmlCredential($key))) {
+                throw new \RuntimeException('CONVERGE_XML_'.strtoupper($key).' is not configured.');
+            }
+        }
+    }
+
+    private function xmlCredential(string $key): mixed
+    {
+        return config('services.converge.xml_'.$key) ?: config('services.converge.'.$key);
     }
 
     private function safePayload(array $payload): array

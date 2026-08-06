@@ -48,6 +48,9 @@ return [
         'account_id' => env('CONVERGE_ACCOUNT_ID'),
         'user_id' => env('CONVERGE_USER_ID'),
         'pin' => env('CONVERGE_PIN'),
+        'xml_account_id' => env('CONVERGE_XML_ACCOUNT_ID', env('CONVERGE_ACCOUNT_ID')),
+        'xml_user_id' => env('CONVERGE_XML_USER_ID', env('CONVERGE_USER_ID')),
+        'xml_pin' => env('CONVERGE_XML_PIN', env('CONVERGE_PIN')),
         'return_url' => env('CONVERGE_RETURN_URL'),
     ],
 
