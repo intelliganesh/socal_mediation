@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Services;
 
 use App\Models\Consultation;
@@ -10,13 +9,14 @@ use Illuminate\Support\Str;
 
 class PaymentSimulationService
 {
-    public function __construct(private readonly BookingFinalizer $finalizer) {}
+    public function __construct(private readonly BookingFinalizer $finalizer)
+    {}
 
     public function isEnabled(): bool
     {
         return (bool) config('services.payment_simulation.enabled')
-            && ! app()->environment('production')
-            && config('app.env') !== 'production';
+        && ! app()->environment('production')
+        && config('app.env') !== 'production';
     }
 
     public function isActive(): bool
@@ -32,15 +32,15 @@ class PaymentSimulationService
         string $paymentRequestId,
     ): array {
         return [
-            'provider' => 'simulation',
-            'reference' => 'sim_'.Str::lower(Str::random(16)),
-            'url' => null,
-            'mode' => 'simulation',
-            'gateway_enabled' => false,
-            'amount_cents' => $amountCents,
-            'method' => $method,
-            'invoice_number' => $paymentRequestId,
-            'booking_number' => $consultation->booking_number,
+            'provider'          => 'simulation',
+            'reference'         => 'SIM' . Str::lower(Str::random(10)),
+            'url'               => null,
+            'mode'              => 'simulation',
+            'gateway_enabled'   => false,
+            'amount_cents'      => $amountCents,
+            'method'            => $method,
+            'invoice_number'    => $paymentRequestId,
+            'booking_number'    => $consultation->booking_number,
             'participant_email' => $participant->email,
         ];
     }
@@ -48,7 +48,7 @@ class PaymentSimulationService
     public function complete(PaymentRequest $payment): Consultation
     {
         $changed = DB::transaction(function () use ($payment): bool {
-            $payment = PaymentRequest::query()->lockForUpdate()->findOrFail($payment->id);
+            $payment      = PaymentRequest::query()->lockForUpdate()->findOrFail($payment->id);
             $consultation = $payment->consultation()->lockForUpdate()->firstOrFail();
 
             if (in_array($consultation->status, ['draft', 'cancelled'], true)) {
@@ -60,25 +60,25 @@ class PaymentSimulationService
             }
 
             $completedAt = now()->toIso8601String();
-            $metadata = array_merge($payment->metadata ?? [], [
+            $metadata    = array_merge($payment->metadata ?? [], [
                 'simulation_confirmation' => ['completed_at' => $completedAt],
             ]);
 
             $payment->update([
-                'status' => 'paid',
-                'paid_at' => now(),
+                'status'   => 'paid',
+                'paid_at'  => now(),
                 'metadata' => $metadata,
             ]);
 
             $payment->integrationLogs()->create([
-                'provider' => 'simulation',
-                'action' => 'payment_confirmation',
-                'status' => 'paid',
+                'provider'         => 'simulation',
+                'action'           => 'payment_confirmation',
+                'status'           => 'paid',
                 'response_payload' => [
                     'payment_request_uuid' => $payment->id,
-                    'completed_at' => $completedAt,
+                    'completed_at'         => $completedAt,
                 ],
-                'message' => 'Payment marked paid through the non-production simulation API.',
+                'message'          => 'Payment marked paid through the non-production simulation API.',
             ]);
 
             return true;

@@ -12,7 +12,7 @@ class ConvergeClient
 {
     public function createPaymentLink(Consultation $consultation, ConsultationParticipant $participant, int $amountCents, ?string $method, string $paymentRequestId): array
     {
-        $reference = 'conv_' . Str::lower(Str::random(16));
+        $reference = 'CONV' . Str::lower(Str::random(11));
 
         if (config('services.converge.enabled')) {
             $this->assertHostedPaymentConfigured();
@@ -28,7 +28,7 @@ class ConvergeClient
             'gateway_enabled'   => (bool) config('services.converge.enabled'),
             'amount_cents'      => $amountCents,
             'method'            => $method,
-            'invoice_number'    => $paymentRequestId,
+            'invoice_number'    => $reference,
             'booking_number'    => $consultation->booking_number,
             'participant_email' => $participant->email,
             'session_token'     => null,
@@ -129,7 +129,7 @@ class ConvergeClient
             throw new \RuntimeException('Converge payment status lookup failed: ' . $response->body());
         }
 
-        $payload = $this->parseXmlResponse($response->body());
+        $payload     = $this->parseXmlResponse($response->body());
         $transaction = $this->transactionFromQueryResponse($payload, $payment);
 
         return [
@@ -189,29 +189,26 @@ class ConvergeClient
             return $payload;
         }
 
-        $transactions = data_get($payload, 'transactions.transaction')
-            ?? data_get($payload, 'transactions.txn')
-            ?? data_get($payload, 'transaction')
-            ?? data_get($payload, 'txn');
+        $transactions = data_get($payload, 'transactions.transaction') ?? data_get($payload, 'transactions.txn') ?? data_get($payload, 'transaction') ?? data_get($payload, 'txn');
 
         if (! is_array($transactions) || $transactions === []) {
             return $payload;
         }
 
-        $candidates = array_is_list($transactions) ? $transactions : [$transactions];
+        $candidates     = array_is_list($transactions) ? $transactions : [$transactions];
         $expectedAmount = number_format($payment->amount_cents / 100, 2, '.', '');
-        $matching = array_values(array_filter($candidates, static function ($transaction) use ($expectedAmount) {
+        $matching       = array_values(array_filter($candidates, static function ($transaction) use ($expectedAmount) {
             if (! is_array($transaction)) {
                 return false;
             }
 
             return ! isset($transaction['ssl_amount'])
-                || number_format((float) $transaction['ssl_amount'], 2, '.', '') === $expectedAmount;
+            || number_format((float) $transaction['ssl_amount'], 2, '.', '') === $expectedAmount;
         }));
 
         if ($matching === []) {
             return [
-                'errorCode' => 'amount_mismatch',
+                'errorCode'    => 'amount_mismatch',
                 'errorMessage' => 'Converge transaction amount did not match the payment request.',
             ];
         }

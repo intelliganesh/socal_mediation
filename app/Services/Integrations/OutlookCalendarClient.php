@@ -9,6 +9,12 @@ use Illuminate\Support\Facades\Http;
 
 class OutlookCalendarClient
 {
+    private const CONSULTATION_MARKER = 'SMC-CONSULTATION:';
+
+    private const ACTIVE_CONSULTATION_STATUSES = [
+        'scheduled', 'paid', 'payment_pending', 'pending_payment', 'partially_paid',
+    ];
+
     public function syncCurrentWindow(): int
     {
         $this->assertEnabled();
@@ -24,12 +30,11 @@ class OutlookCalendarClient
         $this->assertEnabled();
 
         $from ??= CarbonImmutable::now(config('app.booking_timezone'))->startOfDay();
-        $activeStatuses = ['scheduled', 'paid', 'payment_pending', 'pending_payment', 'partially_paid'];
         $fromDatabase = $from->timezone(config('app.booking_timezone'))->format('Y-m-d H:i:s');
         $consultations = Consultation::query()
             ->with(['type', 'professional'])
             ->whereNotNull('starts_at')
-            ->whereIn('status', $activeStatuses)
+            ->whereIn('status', self::ACTIVE_CONSULTATION_STATUSES)
             ->where('starts_at', '>=', $fromDatabase)
             ->orderBy('starts_at')
             ->get();
@@ -40,18 +45,26 @@ class OutlookCalendarClient
             $synced++;
         }
 
-        $activeExternalIds = $consultations
-            ->map(fn (Consultation $consultation) => 'consultation-'.$consultation->id)
-            ->all();
-
         $deleted = 0;
         ExternalCalendarEvent::query()
             ->where('provider', 'outlook')
             ->where('external_id', 'like', 'consultation-%')
-            ->where('starts_at', '>=', $fromDatabase)
-            ->when($activeExternalIds !== [], fn ($query) => $query->whereNotIn('external_id', $activeExternalIds))
             ->get()
             ->each(function (ExternalCalendarEvent $event) use (&$deleted) {
+                $consultationId = $event->metadata['consultation_uuid']
+                    ?? str($event->external_id)->after('consultation-')->toString();
+
+                $stillExists = Consultation::query()
+                    ->whereKey($consultationId)
+                    ->whereNotNull('starts_at')
+                    ->whereNotNull('ends_at')
+                    ->whereIn('status', self::ACTIVE_CONSULTATION_STATUSES)
+                    ->exists();
+
+                if ($stillExists) {
+                    return;
+                }
+
                 $this->deleteConsultationEvent($event);
                 $deleted++;
             });
@@ -75,9 +88,36 @@ class OutlookCalendarClient
 
         foreach (['socal', 'legal'] as $application) {
             $activeExternalIds = [];
+            $trackedEvents = ExternalCalendarEvent::query()
+                ->where('provider', 'outlook')
+                ->where('application', $application)
+                ->where('external_id', 'like', 'consultation-%')
+                ->get()
+                ->filter(fn (ExternalCalendarEvent $event) => filled($event->metadata['outlook_event_id'] ?? null))
+                ->keyBy(fn (ExternalCalendarEvent $event) => $event->metadata['outlook_event_id']);
 
             foreach ($this->calendarView($application, $start, $end) as $event) {
                 if (($event['isCancelled'] ?? false) || ! ($event['showAs'] ?? null) || ($event['showAs'] ?? 'busy') === 'free') {
+                    continue;
+                }
+
+                $trackedEvent = $trackedEvents->get($event['id'] ?? '');
+                $consultationId = $this->consultationIdFromOutlookEvent($event)
+                    ?? ($trackedEvent?->metadata['consultation_uuid'] ?? null);
+
+                if ($consultationId !== null) {
+                    $stillExists = Consultation::query()
+                        ->whereKey($consultationId)
+                        ->whereNotNull('starts_at')
+                        ->whereNotNull('ends_at')
+                        ->whereIn('status', self::ACTIVE_CONSULTATION_STATUSES)
+                        ->exists();
+
+                    if (! $stillExists) {
+                        $this->deleteEvent($application, $event['id']);
+                        $trackedEvent?->delete();
+                    }
+
                     continue;
                 }
 
@@ -285,12 +325,13 @@ class OutlookCalendarClient
     public function consultationEventPayload(Consultation $consultation): array
     {
         $timezone = $consultation->timezone ?: config('app.booking_timezone');
+        $body = trim(($consultation->description ?: 'Consultation booking').' '.$consultation->primary_email);
 
         return [
             'subject' => $consultation->booking_number.' - '.$consultation->type->name,
             'body' => [
                 'contentType' => 'Text',
-                'content' => trim(($consultation->description ?: 'Consultation booking').' '.$consultation->primary_email),
+                'content' => $body."\n\n".self::CONSULTATION_MARKER.$consultation->id,
             ],
             'start' => [
                 'dateTime' => $consultation->starts_at->format('Y-m-d\TH:i:s'),
@@ -302,6 +343,17 @@ class OutlookCalendarClient
             ],
             'showAs' => 'busy',
         ];
+    }
+
+    private function consultationIdFromOutlookEvent(array $event): ?string
+    {
+        $body = (string) data_get($event, 'body.content', '');
+
+        if (! preg_match('/'.preg_quote(self::CONSULTATION_MARKER, '/').'([0-9a-f-]{36})/i', $body, $matches)) {
+            return null;
+        }
+
+        return $matches[1];
     }
 
     private function eventResponsePayload(array $event): array

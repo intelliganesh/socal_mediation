@@ -1066,6 +1066,7 @@ class ConsultationApiTest extends TestCase
         Mail::fake();
         config([
             'services.converge.mode' => 'sandbox',
+            'services.converge.payment_sync_enabled' => false,
             'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
             'services.converge.account_id' => 'account-id',
             'services.converge.user_id' => 'api-user',

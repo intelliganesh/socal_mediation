@@ -8,6 +8,7 @@ use App\Models\Consultation;
 use App\Models\ExternalCalendarEvent;
 use App\Models\PaymentRequest;
 use App\Models\User;
+use App\Services\Integrations\OutlookCalendarClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -203,6 +204,46 @@ class AdminPanelTest extends TestCase
         $this->assertDatabaseMissing('external_calendar_events', [
             'provider' => 'outlook',
             'external_id' => 'socal-stale-busy',
+        ]);
+    }
+
+    public function test_calendar_sync_deletes_marked_outlook_event_when_consultation_and_tracking_are_missing(): void
+    {
+        config([
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.socal_user_id' => 'socal@example.com',
+            'services.outlook.socal_calendar_id' => 'socal-calendar',
+            'services.outlook.legal_user_id' => 'legal@example.com',
+            'services.outlook.legal_calendar_id' => 'legal-calendar',
+        ]);
+
+        $missingConsultationId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
+            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/calendarView*' => Http::response(['value' => [[
+                'id' => 'orphan-application-event',
+                'subject' => 'Deleted consultation',
+                'showAs' => 'busy',
+                'body' => ['content' => 'Consultation booking\n\nSMC-CONSULTATION:'.$missingConsultationId],
+            ]]], 200),
+            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events/orphan-application-event' => Http::response(null, 204),
+            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/calendarView*' => Http::response(['value' => []], 200),
+        ]);
+
+        app(OutlookCalendarClient::class)->syncCurrentWindow();
+
+        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
+            && $request->url() === 'https://graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events/orphan-application-event');
+
+        $this->assertDatabaseMissing('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'orphan-application-event',
         ]);
     }
 
