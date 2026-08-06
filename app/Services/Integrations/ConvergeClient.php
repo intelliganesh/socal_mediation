@@ -123,7 +123,7 @@ class ConvergeClient
         return filled($value) && strlen($value) <= $maxLength;
     }
 
-    public function lookupPaymentStatus(PaymentRequest $payment): array
+    public function lookupPaymentStatus(PaymentRequest $payment, array $callbackPayload = []): array
     {
         $this->assertCredentialsConfigured();
 
@@ -132,7 +132,7 @@ class ConvergeClient
             ->connectTimeout(10)
             ->timeout((int) config('services.converge.http_timeout_seconds', 90))
             ->post($this->xmlEndpoint(), [
-                'xmldata' => $this->transactionQueryXml($payment),
+                'xmldata' => $this->transactionQueryXml($payment, $callbackPayload),
             ]);
 
         if ($response->failed()) {
@@ -150,15 +150,26 @@ class ConvergeClient
         ];
     }
 
-    private function transactionQueryXml(PaymentRequest $payment): string
+    private function transactionQueryXml(PaymentRequest $payment, array $callbackPayload = []): string
     {
         $fields = [
             'ssl_account_id'       => config('services.converge.account_id'),
             'ssl_user_id'          => config('services.converge.user_id'),
             'ssl_pin'              => config('services.converge.pin'),
             'ssl_transaction_type' => 'txnquery',
-            'ssl_invoice_number'   => $payment->id,
         ];
+
+        $transactionId = $callbackPayload['ssl_txn_id'] ?? null;
+
+        if (filled($transactionId)) {
+            $fields['ssl_txn_id'] = $transactionId;
+        } elseif ($this->fitsConvergeLimit($payment->id, 25)) {
+            $fields['ssl_invoice_number'] = $payment->id;
+        } elseif (filled($payment->provider_reference) && ! str_starts_with($payment->provider_reference, 'conv_')) {
+            $fields['ssl_txn_id'] = $payment->provider_reference;
+        } else {
+            throw new \RuntimeException('Converge transaction lookup requires ssl_txn_id because this payment id is too long for ssl_invoice_number.');
+        }
 
         $xml = '<txn>';
         foreach ($fields as $key => $value) {

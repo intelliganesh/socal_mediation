@@ -33,7 +33,7 @@ class PaymentReconciliationService
             return $payment->consultation->refresh();
         }
 
-        $result = $this->converge->lookupPaymentStatus($payment);
+        $result = $this->converge->lookupPaymentStatus($payment, $callbackPayload);
         $status = $result['status'] ?? 'unknown';
 
         if ($status === 'unknown') {

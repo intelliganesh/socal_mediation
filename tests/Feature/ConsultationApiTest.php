@@ -928,6 +928,9 @@ class ConsultationApiTest extends TestCase
             'status' => 'paid',
             'provider_reference' => 'path-return-txn',
         ]);
+
+        Http::assertSent(fn ($request) => str_contains((string) $request->body(), '%3Cssl_txn_id%3Ebrowser-approved-txn%3C%2Fssl_txn_id%3E')
+            && ! str_contains((string) $request->body(), '%3Cssl_invoice_number%3E'));
     }
 
     public function test_converge_payment_sync_command_updates_pending_payment_from_xml_api(): void
