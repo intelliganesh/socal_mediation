@@ -67,7 +67,7 @@ class ConvergeCheckoutController extends Controller
         requestBody: new OA\RequestBody(required: true, content: new OA\MediaType(
             mediaType: 'application/x-www-form-urlencoded',
             schema: new OA\Schema(required: ['ssl_invoice_number'], properties: [
-                new OA\Property(property: 'ssl_invoice_number', type: 'string', format: 'uuid'),
+                new OA\Property(property: 'ssl_invoice_number', type: 'string', example: 'conv_a1b2c3d4e5f6g7h8'),
                 new OA\Property(property: 'ssl_result', type: 'string', nullable: true),
                 new OA\Property(property: 'ssl_txn_id', type: 'string', nullable: true),
             ])
@@ -86,7 +86,10 @@ class ConvergeCheckoutController extends Controller
 
         abort_if(blank($paymentId), 422, 'Payment reference is required.');
 
-        $paymentRequest = PaymentRequest::with(['consultation.type', 'participant'])->findOrFail($paymentId);
+        $paymentRequest = PaymentRequest::with(['consultation.type', 'participant'])
+            ->whereKey($paymentId)
+            ->orWhere('provider_reference', $paymentId)
+            ->firstOrFail();
 
         try {
             $payments->verifyPayment($paymentRequest, 'payment_return', $request->all());

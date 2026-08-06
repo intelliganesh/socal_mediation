@@ -18,7 +18,7 @@ class PaymentWebhookController extends Controller
         description: 'Accepts the payment reference from a Hosted Payment Page return, then queries Converge server-to-server before changing payment status. Supplied status fields are logged but never trusted as proof of payment.',
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [
             new OA\Property(property: 'payment_request_id', type: 'string', format: 'uuid', example: '4af8ec35-3704-4aec-a936-6a0a99d30199'),
-            new OA\Property(property: 'ssl_invoice_number', type: 'string', example: '4af8ec35-3704-4aec-a936-6a0a99d30199'),
+            new OA\Property(property: 'ssl_invoice_number', type: 'string', example: 'conv_a1b2c3d4e5f6g7h8'),
             new OA\Property(property: 'ssl_result', type: 'string', example: '0'),
             new OA\Property(property: 'ssl_result_message', type: 'string', example: 'APPROVAL'),
             new OA\Property(property: 'ssl_txn_id', type: 'string', example: '020524C4A-D5EC1A3F-84BE-4D4A-A95C-4C36CFE5ECF2'),

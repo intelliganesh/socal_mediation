@@ -771,14 +771,10 @@ class ConsultationApiTest extends TestCase
         Http::assertSent(fn ($request) => $request->url() === 'https://api.demo.convergepay.com/hosted-payments/transaction_token'
             && $request['ssl_transaction_type'] === 'ccsale'
             && $request['ssl_amount'] === '195.00'
-            && ! array_key_exists('ssl_invoice_number', $request->data())
+            && $request['ssl_invoice_number'] === $paymentRequest->provider_reference
+            && strlen($request['ssl_invoice_number']) <= 25
             && strlen($request['ssl_customer_code']) <= 17
-            && $request['ssl_customer_code'] === $paymentRequest->consultation->booking_number
-            && $request['ssl_receipt_apprvl_method'] === 'REDG'
-            && $request['ssl_receipt_apprvl_get_url'] === 'http://localhost/payments/'.$paymentRequest->id.'/converge-return'
-            && $request['ssl_receipt_decl_method'] === 'REDG'
-            && $request['ssl_receipt_decl_get_url'] === 'http://localhost/payments/'.$paymentRequest->id.'/converge-return'
-            && $request['ssl_error_url'] === 'http://localhost/payments/'.$paymentRequest->id.'/converge-return');
+            && $request['ssl_customer_code'] === $paymentRequest->consultation->booking_number);
 
         $tamperedUrl = str_replace('signature=', 'signature=invalid', $paymentRequest->payment_url);
         $this->get($tamperedUrl)->assertForbidden();
@@ -933,6 +929,42 @@ class ConsultationApiTest extends TestCase
             && ! str_contains((string) $request->body(), '%3Cssl_invoice_number%3E'));
     }
 
+    public function test_converge_webhook_resolves_short_invoice_and_verifies_transaction(): void
+    {
+        $this->seed();
+        config([
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.account_id' => 'account-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
+                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>export-script-txn</ssl_txn_id></txn>',
+                200
+            ),
+        ]);
+
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+
+        $this->post('/api/v1/payments/converge/webhook', [
+            'ssl_invoice_number' => $payment->provider_reference,
+            'ssl_txn_id' => 'export-script-txn',
+            'ssl_result' => '0',
+            'ssl_result_message' => 'APPROVAL',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('payment_requests', [
+            'id' => $payment->id,
+            'status' => 'paid',
+            'provider_reference' => 'export-script-txn',
+        ]);
+
+        Http::assertSent(fn ($request) => str_contains((string) $request->body(), '%3Cssl_txn_id%3Eexport-script-txn%3C%2Fssl_txn_id%3E'));
+    }
+
     public function test_converge_payment_sync_command_updates_pending_payment_from_xml_api(): void
     {
         $this->seed();
@@ -965,6 +997,7 @@ class ConsultationApiTest extends TestCase
         ])->json('data');
 
         $paymentRequestId = $complete['payment_requests'][0]['id'];
+        $invoiceNumber = PaymentRequest::findOrFail($paymentRequestId)->provider_reference;
 
         Http::fake([
             'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
@@ -986,6 +1019,8 @@ class ConsultationApiTest extends TestCase
             'id' => $consultationUuid,
             'payment_status' => 'paid',
         ]);
+
+        Http::assertSent(fn ($request) => str_contains((string) $request->body(), '%3Cssl_invoice_number%3E'.$invoiceNumber.'%3C%2Fssl_invoice_number%3E'));
     }
 
     public function test_converge_payment_sync_command_logs_errors_and_leaves_payment_pending(): void

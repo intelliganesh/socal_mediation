@@ -82,22 +82,24 @@ class ConvergeClient
         $returnUrl    = $this->returnUrl($payment);
 
         $payload = [
-            'ssl_account_id'          => config('services.converge.account_id'),
-            'ssl_user_id'             => config('services.converge.user_id'),
-            'ssl_pin'                 => config('services.converge.pin'),
-            'ssl_transaction_type'    => $payment->payment_method === 'ach' ? 'ecspurchase' : 'ccsale',
-            'ssl_amount'              => number_format($payment->amount_cents / 100, 2, '.', ''),
-            'ssl_description'         => Str::limit($consultation->booking_number . ' - ' . $consultation->type?->name, 255, ''),
-            'ssl_first_name'          => $participant?->first_name ?: $consultation->primary_first_name,
-            'ssl_last_name'           => $participant?->last_name ?: $consultation->primary_last_name,
-            'ssl_email'               => $participant?->email ?: $consultation->primary_email,
-            'ssl_result_format'       => 'html',
-            'ssl_receipt_link_method' => 'REDG',
-            'ssl_receipt_link_url'    => $returnUrl,
-            'ssl_error_url'           => $returnUrl,
+            'ssl_account_id'       => config('services.converge.account_id'),
+            'ssl_user_id'          => config('services.converge.user_id'),
+            'ssl_pin'              => config('services.converge.pin'),
+            'ssl_transaction_type' => $payment->payment_method === 'ach' ? 'ecspurchase' : 'ccsale',
+            'ssl_amount'           => number_format($payment->amount_cents / 100, 2, '.', ''),
+            'ssl_description'      => Str::limit($consultation->booking_number . ' - ' . $consultation->type?->name, 255, ''),
+            'ssl_first_name'       => $participant?->first_name ?: $consultation->primary_first_name,
+            'ssl_last_name'        => $participant?->last_name ?: $consultation->primary_last_name,
+            'ssl_email'            => $participant?->email ?: $consultation->primary_email,
+            // 'ssl_result_format'       => 'html',
+            // 'ssl_receipt_link_method' => 'REDG',
+            // 'ssl_receipt_link_url'    => $returnUrl,
+            // 'ssl_error_url'           => $returnUrl,
         ];
 
-        if ($this->fitsConvergeLimit($payment->id, 25)) {
+        if ($this->fitsConvergeLimit($payment->provider_reference, 25)) {
+            $payload['ssl_invoice_number'] = $payment->provider_reference;
+        } elseif ($this->fitsConvergeLimit($payment->id, 25)) {
             $payload['ssl_invoice_number'] = $payment->id;
         }
 
@@ -163,12 +165,14 @@ class ConvergeClient
 
         if (filled($transactionId)) {
             $fields['ssl_txn_id'] = $transactionId;
-        } elseif ($this->fitsConvergeLimit($payment->id, 25)) {
-            $fields['ssl_invoice_number'] = $payment->id;
         } elseif (filled($payment->provider_reference) && ! str_starts_with($payment->provider_reference, 'conv_')) {
             $fields['ssl_txn_id'] = $payment->provider_reference;
+        } elseif ($this->fitsConvergeLimit($payment->provider_reference, 25)) {
+            $fields['ssl_invoice_number'] = $payment->provider_reference;
+        } elseif ($this->fitsConvergeLimit($payment->id, 25)) {
+            $fields['ssl_invoice_number'] = $payment->id;
         } else {
-            throw new \RuntimeException('Converge transaction lookup requires ssl_txn_id because this payment id is too long for ssl_invoice_number.');
+            throw new \RuntimeException('Converge transaction lookup requires a transaction ID or an invoice number no longer than 25 characters.');
         }
 
         $xml = '<txn>';

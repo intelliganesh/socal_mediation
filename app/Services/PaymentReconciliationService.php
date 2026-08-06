@@ -212,6 +212,11 @@ class PaymentReconciliationService
             if ($payment) {
                 return $payment;
             }
+
+            $payment = PaymentRequest::where('provider_reference', $reference)->first();
+            if ($payment) {
+                return $payment;
+            }
         }
 
         $providerReference = $payload['provider_reference'] ?? $payload['ssl_txn_id'] ?? null;
