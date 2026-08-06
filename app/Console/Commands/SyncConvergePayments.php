@@ -6,6 +6,8 @@ use App\Models\Consultation;
 use App\Models\PaymentRequest;
 use App\Services\PaymentReconciliationService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class SyncConvergePayments extends Command
 {
@@ -19,20 +21,42 @@ class SyncConvergePayments extends Command
 
     public function handle(PaymentReconciliationService $payments): int
     {
-        $paymentRequest = $this->option('payment-request')
-            ? PaymentRequest::findOrFail($this->option('payment-request'))
-            : null;
+        $context = [
+            'payment_request_id' => $this->option('payment-request'),
+            'consultation_id' => $this->option('consultation'),
+            'limit' => $this->option('limit') !== null ? (int) $this->option('limit') : null,
+            'dry_run' => (bool) $this->option('dry-run'),
+        ];
 
-        $consultation = $this->option('consultation')
-            ? Consultation::findOrFail($this->option('consultation'))
-            : null;
+        Log::info('Converge payment cron started.', $context);
 
-        $result = $payments->syncPendingPayments(
-            $consultation,
-            $paymentRequest,
-            $this->option('limit') !== null ? (int) $this->option('limit') : null,
-            (bool) $this->option('dry-run')
-        );
+        try {
+            $paymentRequest = $context['payment_request_id']
+                ? PaymentRequest::findOrFail($context['payment_request_id'])
+                : null;
+
+            $consultation = $context['consultation_id']
+                ? Consultation::findOrFail($context['consultation_id'])
+                : null;
+
+            $result = $payments->syncPendingPayments(
+                $consultation,
+                $paymentRequest,
+                $context['limit'],
+                $context['dry_run']
+            );
+        } catch (Throwable $exception) {
+            Log::error('Converge payment cron failed.', $context + [
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+
+            $this->components->error('Converge payment sync failed: '.$exception->getMessage());
+
+            return self::FAILURE;
+        }
+
+        Log::info('Converge payment cron completed.', $context + $result);
 
         $this->components->info(sprintf(
             'Converge payment sync checked %d payment(s): %d paid, %d failed, %d skipped, %d error(s).',
