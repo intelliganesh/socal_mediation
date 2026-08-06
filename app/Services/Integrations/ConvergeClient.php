@@ -96,12 +96,6 @@ class ConvergeClient
             // 'ssl_error_url'           => $returnUrl,
         ];
 
-        if ($this->fitsConvergeLimit($payment->provider_reference, 25)) {
-            $payload['ssl_invoice_number'] = $payment->provider_reference;
-        } elseif ($this->fitsConvergeLimit($payment->id, 25)) {
-            $payload['ssl_invoice_number'] = $payment->id;
-        }
-
         if ($this->fitsConvergeLimit($consultation->booking_number, 17)) {
             $payload['ssl_customer_code'] = $consultation->booking_number;
         }
