@@ -19,6 +19,9 @@ Route::get('payments/{paymentRequest}/checkout', [ConvergeCheckoutController::cl
     ->middleware('signed')
     ->name('payments.checkout');
 
+Route::match(['get', 'post'], 'payments/{paymentRequest}/converge-return', [ConvergeCheckoutController::class, 'returnForPayment'])
+    ->name('payments.converge.return.payment');
+
 Route::prefix('admin')->name('admin.')->group(function () {
 
     Route::middleware('guest')->group(function () {

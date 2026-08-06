@@ -771,7 +771,14 @@ class ConsultationApiTest extends TestCase
         Http::assertSent(fn ($request) => $request->url() === 'https://api.demo.convergepay.com/hosted-payments/transaction_token'
             && $request['ssl_transaction_type'] === 'ccsale'
             && $request['ssl_amount'] === '195.00'
-            && $request['ssl_invoice_number'] === $paymentRequest->id);
+            && ! array_key_exists('ssl_invoice_number', $request->data())
+            && strlen($request['ssl_customer_code']) <= 17
+            && $request['ssl_customer_code'] === $paymentRequest->consultation->booking_number
+            && $request['ssl_receipt_apprvl_method'] === 'REDG'
+            && $request['ssl_receipt_apprvl_get_url'] === 'http://localhost/payments/'.$paymentRequest->id.'/converge-return'
+            && $request['ssl_receipt_decl_method'] === 'REDG'
+            && $request['ssl_receipt_decl_get_url'] === 'http://localhost/payments/'.$paymentRequest->id.'/converge-return'
+            && $request['ssl_error_url'] === 'http://localhost/payments/'.$paymentRequest->id.'/converge-return');
 
         $tamperedUrl = str_replace('signature=', 'signature=invalid', $paymentRequest->payment_url);
         $this->get($tamperedUrl)->assertForbidden();
@@ -884,6 +891,42 @@ class ConsultationApiTest extends TestCase
             'provider' => 'converge',
             'action' => 'payment_return',
             'status' => 'paid',
+        ]);
+    }
+
+    public function test_converge_path_return_verifies_transaction_without_invoice_number(): void
+    {
+        $this->seed();
+        config([
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.account_id' => 'account-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
+                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>path-return-txn</ssl_txn_id><ssl_approval_code>654321</ssl_approval_code></txn>',
+                200
+            ),
+        ]);
+
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+
+        $this->get(route('payments.converge.return.payment', [
+            'paymentRequest' => $payment,
+            'ssl_result' => '0',
+            'ssl_result_message' => 'APPROVAL',
+            'ssl_txn_id' => 'browser-approved-txn',
+        ]))
+            ->assertOk()
+            ->assertSee('Payment Successful');
+
+        $this->assertDatabaseHas('payment_requests', [
+            'id' => $payment->id,
+            'status' => 'paid',
+            'provider_reference' => 'path-return-txn',
         ]);
     }
 

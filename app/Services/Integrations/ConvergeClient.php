@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Services\Integrations;
 
 use App\Models\Consultation;
@@ -13,26 +12,26 @@ class ConvergeClient
 {
     public function createPaymentLink(Consultation $consultation, ConsultationParticipant $participant, int $amountCents, ?string $method, string $paymentRequestId): array
     {
-        $reference = 'conv_'.Str::lower(Str::random(16));
+        $reference = 'conv_' . Str::lower(Str::random(16));
 
         if (config('services.converge.enabled')) {
             $this->assertHostedPaymentConfigured();
         }
 
         return [
-            'provider' => 'converge',
-            'reference' => $reference,
-            'url' => config('services.converge.enabled')
+            'provider'          => 'converge',
+            'reference'         => $reference,
+            'url'               => config('services.converge.enabled')
                 ? URL::signedRoute('payments.checkout', ['paymentRequest' => $paymentRequestId])
                 : null,
-            'mode' => config('services.converge.mode'),
-            'gateway_enabled' => (bool) config('services.converge.enabled'),
-            'amount_cents' => $amountCents,
-            'method' => $method,
-            'invoice_number' => $paymentRequestId,
-            'booking_number' => $consultation->booking_number,
+            'mode'              => config('services.converge.mode'),
+            'gateway_enabled'   => (bool) config('services.converge.enabled'),
+            'amount_cents'      => $amountCents,
+            'method'            => $method,
+            'invoice_number'    => $paymentRequestId,
+            'booking_number'    => $consultation->booking_number,
             'participant_email' => $participant->email,
-            'session_token' => null,
+            'session_token'     => null,
         ];
     }
 
@@ -43,8 +42,8 @@ class ConvergeClient
         $payload = $this->hostedPaymentPayload($payment);
 
         return [
-            'action' => rtrim($this->hostedPaymentBaseUrl(), '/').'/hosted-payments/',
-            'token' => $this->requestHostedPaymentToken($payload),
+            'action'  => rtrim($this->hostedPaymentBaseUrl(), '/') . '/hosted-payments/',
+            'token'   => $this->requestHostedPaymentToken($payload),
             'request' => $this->safePayload($payload),
         ];
     }
@@ -64,13 +63,13 @@ class ConvergeClient
         }
 
         if ($response->failed()) {
-            throw new \RuntimeException('Converge hosted payment token request failed: '.$response->body());
+            throw new \RuntimeException('Converge hosted payment token request failed: ' . $response->body());
         }
 
         $token = trim($response->body());
 
         if ($token === '' || str_starts_with(strtolower($token), 'error')) {
-            throw new \RuntimeException('Converge hosted payment token request failed: '.$response->body());
+            throw new \RuntimeException('Converge hosted payment token request failed: ' . $response->body());
         }
 
         return $token;
@@ -79,26 +78,49 @@ class ConvergeClient
     private function hostedPaymentPayload(PaymentRequest $payment): array
     {
         $consultation = $payment->consultation;
-        $participant = $payment->participant;
+        $participant  = $payment->participant;
+        $returnUrl    = $this->returnUrl($payment);
 
-        return [
-            'ssl_account_id' => config('services.converge.account_id'),
-            'ssl_user_id' => config('services.converge.user_id'),
-            'ssl_pin' => config('services.converge.pin'),
-            'ssl_transaction_type' => $payment->payment_method === 'ach' ? 'ecspurchase' : 'ccsale',
-            'ssl_amount' => number_format($payment->amount_cents / 100, 2, '.', ''),
-            'ssl_invoice_number' => $payment->id,
-            'ssl_description' => $consultation->booking_number.' - '.$consultation->type?->name,
-            'ssl_customer_code' => $participant?->email ?: $payment->id,
-            'ssl_first_name' => $participant?->first_name ?: $consultation->primary_first_name,
-            'ssl_last_name' => $participant?->last_name ?: $consultation->primary_last_name,
-            'ssl_email' => $participant?->email ?: $consultation->primary_email,
+        $payload = [
+            'ssl_account_id'          => config('services.converge.account_id'),
+            'ssl_user_id'             => config('services.converge.user_id'),
+            'ssl_pin'                 => config('services.converge.pin'),
+            'ssl_transaction_type'    => $payment->payment_method === 'ach' ? 'ecspurchase' : 'ccsale',
+            'ssl_amount'              => number_format($payment->amount_cents / 100, 2, '.', ''),
+            'ssl_description'         => Str::limit($consultation->booking_number . ' - ' . $consultation->type?->name, 255, ''),
+            'ssl_first_name'          => $participant?->first_name ?: $consultation->primary_first_name,
+            'ssl_last_name'           => $participant?->last_name ?: $consultation->primary_last_name,
+            'ssl_email'               => $participant?->email ?: $consultation->primary_email,
+            'ssl_result_format'       => 'html',
+            'ssl_receipt_link_method' => 'REDG',
+            'ssl_receipt_link_url'    => $returnUrl,
+            'ssl_error_url'           => $returnUrl,
         ];
+
+        if ($this->fitsConvergeLimit($payment->id, 25)) {
+            $payload['ssl_invoice_number'] = $payment->id;
+        }
+
+        if ($this->fitsConvergeLimit($consultation->booking_number, 17)) {
+            $payload['ssl_customer_code'] = $consultation->booking_number;
+        }
+
+        return $payload;
     }
 
     private function hostedPaymentTokenEndpoint(): string
     {
-        return rtrim($this->hostedPaymentBaseUrl(), '/').'/hosted-payments/transaction_token';
+        return rtrim($this->hostedPaymentBaseUrl(), '/') . '/hosted-payments/transaction_token';
+    }
+
+    private function returnUrl(PaymentRequest $payment): string
+    {
+        return route('payments.converge.return.payment', ['paymentRequest' => $payment]);
+    }
+
+    private function fitsConvergeLimit(?string $value, int $maxLength): bool
+    {
+        return filled($value) && strlen($value) <= $maxLength;
     }
 
     public function lookupPaymentStatus(PaymentRequest $payment): array
@@ -114,36 +136,36 @@ class ConvergeClient
             ]);
 
         if ($response->failed()) {
-            throw new \RuntimeException('Converge payment status lookup failed: '.$response->body());
+            throw new \RuntimeException('Converge payment status lookup failed: ' . $response->body());
         }
 
         $payload = $this->parseXmlResponse($response->body());
 
         return [
-            'status' => $this->statusFromResponse($payload),
+            'status'         => $this->statusFromResponse($payload),
             'transaction_id' => $payload['ssl_txn_id'] ?? null,
-            'approval_code' => $payload['ssl_approval_code'] ?? null,
+            'approval_code'  => $payload['ssl_approval_code'] ?? null,
             'result_message' => $payload['ssl_result_message'] ?? $payload['errorMessage'] ?? null,
-            'raw' => $payload,
+            'raw'            => $payload,
         ];
     }
 
     private function transactionQueryXml(PaymentRequest $payment): string
     {
         $fields = [
-            'ssl_account_id' => config('services.converge.account_id'),
-            'ssl_user_id' => config('services.converge.user_id'),
-            'ssl_pin' => config('services.converge.pin'),
+            'ssl_account_id'       => config('services.converge.account_id'),
+            'ssl_user_id'          => config('services.converge.user_id'),
+            'ssl_pin'              => config('services.converge.pin'),
             'ssl_transaction_type' => 'txnquery',
-            'ssl_invoice_number' => $payment->id,
+            'ssl_invoice_number'   => $payment->id,
         ];
 
         $xml = '<txn>';
         foreach ($fields as $key => $value) {
-            $xml .= '<'.$key.'>'.htmlspecialchars((string) $value, ENT_XML1 | ENT_COMPAT, 'UTF-8').'</'.$key.'>';
+            $xml .= '<' . $key . '>' . htmlspecialchars((string) $value, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '</' . $key . '>';
         }
 
-        return $xml.'</txn>';
+        return $xml . '</txn>';
     }
 
     private function parseXmlResponse(string $body): array
@@ -176,7 +198,7 @@ class ConvergeClient
             ? '/VirtualMerchant/processxml.do'
             : '/VirtualMerchantDemo/processxml.do';
 
-        return rtrim($this->gatewayBaseUrl(), '/').$path;
+        return rtrim($this->gatewayBaseUrl(), '/') . $path;
     }
 
     private function gatewayBaseUrl(): string
@@ -203,8 +225,8 @@ class ConvergeClient
     private function assertCredentialsConfigured(): void
     {
         foreach (['account_id', 'user_id', 'pin'] as $key) {
-            if (blank(config('services.converge.'.$key))) {
-                throw new \RuntimeException('CONVERGE_'.strtoupper($key).' is not configured.');
+            if (blank(config('services.converge.' . $key))) {
+                throw new \RuntimeException('CONVERGE_' . strtoupper($key) . ' is not configured.');
             }
         }
     }

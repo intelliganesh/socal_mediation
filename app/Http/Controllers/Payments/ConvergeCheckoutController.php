@@ -109,6 +109,31 @@ class ConvergeCheckoutController extends Controller
         };
     }
 
+    public function returnForPayment(Request $request, PaymentRequest $paymentRequest, PaymentReconciliationService $payments): View
+    {
+        $paymentRequest->loadMissing(['consultation.type', 'participant']);
+
+        try {
+            $payments->verifyPayment($paymentRequest, 'payment_return', $request->all());
+            $paymentRequest->refresh();
+        } catch (\Throwable $exception) {
+            $paymentRequest->integrationLogs()->create([
+                'provider' => 'converge',
+                'action' => 'payment_return',
+                'status' => 'failed',
+                'message' => $exception->getMessage(),
+            ]);
+
+            return $this->resultView($paymentRequest, 'error', 'Payment verification is temporarily unavailable. Your payment status has not been changed.');
+        }
+
+        return match ($paymentRequest->status) {
+            'paid' => $this->resultView($paymentRequest, 'paid', 'Your payment was completed successfully.'),
+            'failed' => $this->resultView($paymentRequest, 'failed', 'The payment was not approved. You can try again with a fresh payment session.'),
+            default => $this->resultView($paymentRequest, 'pending', 'We are still verifying your payment. Please check again shortly.'),
+        };
+    }
+
     private function resultView(PaymentRequest $paymentRequest, string $state, string $message): View
     {
         return view('payments.converge-result', compact('paymentRequest', 'state', 'message'));
