@@ -446,7 +446,7 @@ class ConsultationApiTest extends TestCase
         $this->assertDatabaseHas('payment_requests', [
             'id' => $paymentRequestId,
             'status' => 'paid',
-            'provider_reference' => 'converge-txn-100',
+            'transaction_id' => 'converge-txn-100',
         ]);
         $this->assertDatabaseHas('integration_logs', [
             'loggable_type' => PaymentRequest::class,
@@ -828,7 +828,7 @@ class ConsultationApiTest extends TestCase
         $this->assertSame('[FILTERED]', $log->request_payload['ssl_card_number']);
     }
 
-    public function test_converge_return_verifies_transaction_and_renders_payment_result(): void
+    public function test_converge_return_processes_approved_payload_and_redirects_to_success(): void
     {
         $this->seed();
         Mail::fake();
@@ -841,13 +841,6 @@ class ConsultationApiTest extends TestCase
             'services.converge.pin' => 'secret-pin',
             'services.converge.return_url' => 'http://localhost/api/v1/payments/converge/return',
         ]);
-        Http::fake([
-            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
-                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>return-verified-txn</ssl_txn_id><ssl_approval_code>123456</ssl_approval_code></txn>',
-                200
-            ),
-        ]);
-
         $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
         $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
             'consultation_type_id' => $type->id,
@@ -868,22 +861,56 @@ class ConsultationApiTest extends TestCase
 
         $paymentRequestId = $complete['payment_requests'][0]['id'];
         $paymentRequest = PaymentRequest::findOrFail($paymentRequestId);
+        $transactionId = 'return-verified-txn';
+        $invoiceNumber = $paymentRequest->provider_reference;
+        $amount = number_format($paymentRequest->amount_cents / 100, 2, '.', '');
 
-        $this->get(route('payments.converge.return.web', [
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
+                '<txn><ssl_txn_id>'.$transactionId.'</ssl_txn_id><ssl_trans_status>OPN</ssl_trans_status><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$invoiceNumber.'</ssl_invoice_number><ssl_result_message>APPROVAL</ssl_result_message><ssl_approval_code>026077</ssl_approval_code></txn>',
+                200
+            ),
+        ]);
+
+        $response = $this->post(route('payments.converge.return.web'), [
+            'ssl_last_name' => 'Payer',
+            'ssl_approval_code' => '026077',
             'ssl_customer_code' => $paymentRequest->consultation->booking_number,
             'ssl_email' => $paymentRequest->participant->email,
-            'ssl_amount' => number_format($paymentRequest->amount_cents / 100, 2, '.', ''),
+            'ssl_amount' => $amount,
+            'ssl_description' => $paymentRequest->consultation->booking_number.' - Consultation',
+            'ssl_exp_date' => '1230',
+            'ssl_card_short_description' => 'VISA',
+            'ssl_first_name' => 'Return',
+            'ssl_invoice_number' => $invoiceNumber,
+            'ssl_txn_id' => $transactionId,
+            'ssl_transaction_type' => 'SALE',
             'ssl_result' => '0',
-        ]))
+            'ssl_result_message' => 'APPROVAL',
+            'ssl_card_number' => '40**********0002',
+            'ssl_cvv2_response' => 'M',
+            'ssl_txn_time' => '08/06/2026 08:56:46 AM',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertStringContainsString('/payments/'.$paymentRequestId.'/status/success', $response->headers->get('Location'));
+
+        $statusUrl = $response->headers->get('Location');
+        $requestsBeforeStatusPage = Http::recorded()->count();
+        $this->get($statusUrl)
             ->assertOk()
             ->assertSee('Payment Successful')
             ->assertSee('Your payment was completed successfully.');
+        $this->get($statusUrl)->assertOk();
+        $this->assertCount($requestsBeforeStatusPage, Http::recorded());
 
         $this->assertDatabaseHas('payment_requests', [
             'id' => $paymentRequestId,
             'status' => 'paid',
-            'provider_reference' => 'return-verified-txn',
+            'transaction_id' => $transactionId,
+            'approval_code' => '026077',
         ]);
+        $this->assertSame($transactionId, PaymentRequest::findOrFail($paymentRequestId)->metadata['converge_transaction_id']);
         $this->assertDatabaseHas('integration_logs', [
             'loggable_type' => PaymentRequest::class,
             'loggable_id' => $paymentRequestId,
@@ -891,9 +918,10 @@ class ConsultationApiTest extends TestCase
             'action' => 'payment_return',
             'status' => 'paid',
         ]);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
     }
 
-    public function test_converge_path_return_verifies_transaction_without_invoice_number(): void
+    public function test_converge_path_return_processes_approved_response_without_xml_lookup(): void
     {
         $this->seed();
         config([
@@ -906,30 +934,66 @@ class ConsultationApiTest extends TestCase
 
         Http::fake([
             'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
-                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>path-return-txn</ssl_txn_id><ssl_approval_code>654321</ssl_approval_code></txn>',
+                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>browser-approved-txn</ssl_txn_id><ssl_approval_code>654321</ssl_approval_code></txn>',
                 200
             ),
         ]);
 
         $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
 
-        $this->get(route('payments.converge.return.payment', [
-            'paymentRequest' => $payment,
+        $response = $this->post(route('payments.converge.return.payment', ['paymentRequest' => $payment]), [
             'ssl_result' => '0',
             'ssl_result_message' => 'APPROVAL',
             'ssl_txn_id' => 'browser-approved-txn',
-        ]))
+        ]);
+
+        $response->assertRedirect();
+        $this->assertStringContainsString('/payments/'.$payment->id.'/status/success', $response->headers->get('Location'));
+        $this->get($response->headers->get('Location'))
             ->assertOk()
             ->assertSee('Payment Successful');
 
         $this->assertDatabaseHas('payment_requests', [
             'id' => $payment->id,
             'status' => 'paid',
-            'provider_reference' => 'path-return-txn',
+            'transaction_id' => 'browser-approved-txn',
         ]);
 
-        Http::assertSent(fn ($request) => str_contains((string) $request->body(), '%3Cssl_txn_id%3Ebrowser-approved-txn%3C%2Fssl_txn_id%3E')
-            && ! str_contains((string) $request->body(), '%3Cssl_invoice_number%3E'));
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
+    }
+
+    public function test_converge_post_return_redirects_a_declined_payment_to_failed_status(): void
+    {
+        $this->seed();
+        config([
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.account_id' => 'account-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
+                '<txn><ssl_result>1</ssl_result><ssl_result_message>DECLINED</ssl_result_message><ssl_txn_id>declined-return-txn</ssl_txn_id></txn>',
+                200
+            ),
+        ]);
+
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+        $response = $this->post(route('payments.converge.return.payment', ['paymentRequest' => $payment]), [
+            'ssl_result' => '1',
+            'ssl_result_message' => 'DECLINED',
+            'ssl_txn_id' => 'declined-return-txn',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertStringContainsString('/payments/'.$payment->id.'/status/failed', $response->headers->get('Location'));
+        $this->get($response->headers->get('Location'))
+            ->assertOk()
+            ->assertSee('The payment was not approved.')
+            ->assertSee('Try Payment Again');
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
     }
 
     public function test_converge_webhook_resolves_short_invoice_and_verifies_transaction(): void
@@ -962,7 +1026,7 @@ class ConsultationApiTest extends TestCase
         $this->assertDatabaseHas('payment_requests', [
             'id' => $payment->id,
             'status' => 'paid',
-            'provider_reference' => 'export-script-txn',
+            'transaction_id' => 'export-script-txn',
         ]);
 
         Http::assertSent(fn ($request) => str_contains((string) $request->body(), '%3Cssl_txn_id%3Eexport-script-txn%3C%2Fssl_txn_id%3E'));
@@ -1003,8 +1067,6 @@ class ConsultationApiTest extends TestCase
         $paymentRequest = PaymentRequest::findOrFail($paymentRequestId);
         $invoiceNumber = $paymentRequest->provider_reference;
         $convergeAmount = number_format($paymentRequest->amount_cents / 100, 2, '.', '');
-        $paymentRequest->update(['status' => 'failed']);
-
         Http::fake([
             'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
                 '<txn><ssl_txn_count>1</ssl_txn_count><transactions><transaction><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>poll-txn-200</ssl_txn_id><ssl_approval_code>123456</ssl_approval_code><ssl_amount>'.$convergeAmount.'</ssl_amount></transaction></transactions></txn>',
@@ -1019,7 +1081,8 @@ class ConsultationApiTest extends TestCase
         $this->assertDatabaseHas('payment_requests', [
             'id' => $paymentRequestId,
             'status' => 'paid',
-            'provider_reference' => 'poll-txn-200',
+            'transaction_id' => 'poll-txn-200',
+            'approval_code' => '123456',
         ]);
         $this->assertDatabaseHas('consultations', [
             'id' => $consultationUuid,
@@ -1064,7 +1127,7 @@ class ConsultationApiTest extends TestCase
         ]);
     }
 
-    public function test_converge_return_saves_transaction_id_when_verification_is_unavailable(): void
+    public function test_converge_return_saves_transaction_id_and_redirects_pending_without_a_result(): void
     {
         $this->seed();
         config([
@@ -1082,16 +1145,115 @@ class ConsultationApiTest extends TestCase
             'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response('temporarily unavailable', 503),
         ]);
 
-        $this->get(route('payments.converge.return.payment', [
-            'paymentRequest' => $payment,
+        $response = $this->post(route('payments.converge.return.payment', ['paymentRequest' => $payment]), [
             'ssl_txn_id' => 'stored-return-txn',
-        ]))
+        ]);
+
+        $response->assertRedirect();
+        $this->assertStringContainsString('/payments/'.$payment->id.'/status/pending', $response->headers->get('Location'));
+        $pendingUrl = $response->headers->get('Location');
+        $this->get($pendingUrl)
             ->assertOk()
-            ->assertSee('Payment verification is temporarily unavailable.');
+            ->assertSee('We are still verifying your payment.');
+        $this->get(str_replace('/status/pending', '/status/success', $pendingUrl))->assertForbidden();
 
         $payment->refresh();
         $this->assertSame('stored-return-txn', $payment->metadata['converge_transaction_id']);
         $this->assertContains('stored-return-txn', $payment->metadata['converge_transaction_ids']);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
+    }
+
+    public function test_converge_cron_verifies_a_pending_return_in_the_background(): void
+    {
+        $this->seed();
+        config([
+            'services.converge.payment_sync_enabled' => true,
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.account_id' => 'account-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+        $amount = number_format($payment->amount_cents / 100, 2, '.', '');
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
+                '<txn><ssl_txn_id>background-audit-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_result_message>APPROVAL</ssl_result_message><ssl_approval_code>654321</ssl_approval_code></txn>',
+                200
+            ),
+        ]);
+
+        $this->post(route('payments.converge.return.payment', ['paymentRequest' => $payment]), [
+            'ssl_txn_id' => 'background-audit-txn',
+            'ssl_amount' => $amount,
+        ])->assertRedirect();
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
+        $this->assertDatabaseHas('payment_requests', [
+            'id' => $payment->id,
+            'status' => 'pending',
+            'transaction_id' => 'background-audit-txn',
+        ]);
+
+        $this->artisan('payments:sync-converge', ['--payment-request' => $payment->id])
+            ->expectsOutputToContain('checked 1 payment(s): 1 paid, 0 failed, 0 skipped, 0 error(s).')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseHas('payment_requests', [
+            'id' => $payment->id,
+            'status' => 'paid',
+            'transaction_id' => 'background-audit-txn',
+            'approval_code' => '654321',
+        ]);
+        $this->assertNotNull(PaymentRequest::findOrFail($payment->id)->last_status_check_at);
+        $this->assertNotNull(PaymentRequest::findOrFail($payment->id)->txnquery_response);
+        Http::assertSent(fn ($request) => str_contains((string) $request->body(), '%3Cssl_txn_id%3Ebackground-audit-txn%3C%2Fssl_txn_id%3E'));
+
+        $this->artisan('payments:sync-converge', ['--payment-request' => $payment->id])
+            ->expectsOutputToContain('checked 0 payment(s)')
+            ->assertExitCode(0);
+        $this->assertCount(1, Http::recorded()->filter(fn ($entry) => str_contains($entry[0]->url(), 'processxml.do')));
+    }
+
+    public function test_converge_cron_marks_a_pending_decline_failed_and_stops_checking(): void
+    {
+        $this->seed();
+        config([
+            'services.converge.payment_sync_enabled' => true,
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.account_id' => 'account-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+        $payment->update(['transaction_id' => 'background-declined-txn']);
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
+                '<txn><ssl_txn_id>background-declined-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_result_message>DECLINED</ssl_result_message></txn>',
+                200
+            ),
+        ]);
+
+        $this->artisan('payments:sync-converge', ['--payment-request' => $payment->id])
+            ->expectsOutputToContain('checked 1 payment(s): 0 paid, 1 failed, 0 skipped, 0 error(s).')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseHas('payment_requests', [
+            'id' => $payment->id,
+            'status' => 'failed',
+            'transaction_id' => 'background-declined-txn',
+        ]);
+        $payment->refresh();
+        $this->assertNotNull($payment->last_status_check_at);
+        $this->assertNotNull($payment->txnquery_response);
+
+        $this->artisan('payments:sync-converge', ['--payment-request' => $payment->id])
+            ->expectsOutputToContain('checked 0 payment(s)')
+            ->assertExitCode(0);
+        $this->assertCount(1, Http::recorded()->filter(fn ($entry) => str_contains($entry[0]->url(), 'processxml.do')));
     }
 
     public function test_converge_lookup_uses_transaction_id_saved_from_an_earlier_return(): void

@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\PaymentRequest;
 use App\Services\Integrations\ConvergeClient;
 use App\Services\PaymentReconciliationService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\URL;
 use Illuminate\View\View;
 use OpenApi\Attributes as OA;
 
@@ -63,7 +65,7 @@ class ConvergeCheckoutController extends Controller
         path: '/v1/payments/converge/return',
         tags: ['Payments'],
         summary: 'Receive the Hosted Payment Page browser return',
-        description: 'Configure this URL in the Converge Hosted Payment Page profile. The callback reference triggers an independent server-to-server transaction query before payment status changes.',
+        description: 'Configure this URL in the Converge Hosted Payment Page profile. The callback is stored and processed immediately, then the browser is redirected without waiting for XML transaction verification.',
         requestBody: new OA\RequestBody(required: true, content: new OA\MediaType(
             mediaType: 'application/x-www-form-urlencoded',
             schema: new OA\Schema(properties: [
@@ -76,42 +78,41 @@ class ConvergeCheckoutController extends Controller
             ])
         )),
         responses: [
-            new OA\Response(response: 200, description: 'HTML payment result page'),
+            new OA\Response(response: 302, description: 'Redirect to the signed payment status page'),
             new OA\Response(response: 404, description: 'Payment request not found'),
             new OA\Response(response: 422, description: 'Payment reference missing'),
         ]
     )]
-    public function return(Request $request, PaymentReconciliationService $payments): View
+    public function return(Request $request, PaymentReconciliationService $payments): RedirectResponse
     {
         $paymentRequest = $this->resolveReturnedPayment($request);
 
-        try {
-            $payments->verifyPayment($paymentRequest, 'payment_return', $request->all());
-            $paymentRequest->refresh();
-        } catch (\Throwable $exception) {
-            $paymentRequest->integrationLogs()->create([
-                'provider' => 'converge',
-                'action' => 'payment_return',
-                'status' => 'failed',
-                'message' => $exception->getMessage(),
-            ]);
-
-            return $this->resultView($paymentRequest, 'error', 'Payment verification is temporarily unavailable. Your payment status has not been changed.');
-        }
-
-        return match ($paymentRequest->status) {
-            'paid' => $this->resultView($paymentRequest, 'paid', 'Your payment was completed successfully.'),
-            'failed' => $this->resultView($paymentRequest, 'failed', 'The payment was not approved. You can try again with a fresh payment session.'),
-            default => $this->resultView($paymentRequest, 'pending', 'We are still verifying your payment. Please check again shortly.'),
-        };
+        return $this->processReturn($request, $paymentRequest, $payments);
     }
 
-    public function returnForPayment(Request $request, PaymentRequest $paymentRequest, PaymentReconciliationService $payments): View
+    public function returnForPayment(Request $request, PaymentRequest $paymentRequest, PaymentReconciliationService $payments): RedirectResponse
     {
         $paymentRequest->loadMissing(['consultation.type', 'participant']);
 
+        return $this->processReturn($request, $paymentRequest, $payments);
+    }
+
+    public function status(PaymentRequest $paymentRequest, string $state): View|RedirectResponse
+    {
+        $paymentRequest->loadMissing(['consultation.type', 'participant']);
+        $actualState = $this->statusState($paymentRequest);
+
+        if ($state !== $actualState) {
+            return redirect()->to($this->statusUrl($paymentRequest, $actualState));
+        }
+
+        return $this->resultView($paymentRequest, $state, $this->statusMessage($state));
+    }
+
+    private function processReturn(Request $request, PaymentRequest $paymentRequest, PaymentReconciliationService $payments): RedirectResponse
+    {
         try {
-            $payments->verifyPayment($paymentRequest, 'payment_return', $request->all());
+            $payments->processReturnPayload($paymentRequest, $request->all());
             $paymentRequest->refresh();
         } catch (\Throwable $exception) {
             $paymentRequest->integrationLogs()->create([
@@ -121,19 +122,41 @@ class ConvergeCheckoutController extends Controller
                 'message' => $exception->getMessage(),
             ]);
 
-            return $this->resultView($paymentRequest, 'error', 'Payment verification is temporarily unavailable. Your payment status has not been changed.');
+            return redirect()->to($this->statusUrl($paymentRequest, 'pending'));
         }
 
-        return match ($paymentRequest->status) {
-            'paid' => $this->resultView($paymentRequest, 'paid', 'Your payment was completed successfully.'),
-            'failed' => $this->resultView($paymentRequest, 'failed', 'The payment was not approved. You can try again with a fresh payment session.'),
-            default => $this->resultView($paymentRequest, 'pending', 'We are still verifying your payment. Please check again shortly.'),
-        };
+        return redirect()->to($this->statusUrl($paymentRequest, $this->statusState($paymentRequest)));
     }
 
     private function resultView(PaymentRequest $paymentRequest, string $state, string $message): View
     {
         return view('payments.converge-result', compact('paymentRequest', 'state', 'message'));
+    }
+
+    private function statusState(PaymentRequest $paymentRequest): string
+    {
+        return match ($paymentRequest->status) {
+            'paid' => 'success',
+            'failed' => 'failed',
+            default => 'pending',
+        };
+    }
+
+    private function statusMessage(string $state): string
+    {
+        return match ($state) {
+            'success' => 'Your payment was completed successfully.',
+            'failed' => 'The payment was not approved. You can try again with a fresh payment session.',
+            default => 'We are still verifying your payment. Please check again shortly.',
+        };
+    }
+
+    private function statusUrl(PaymentRequest $paymentRequest, string $state): string
+    {
+        return URL::signedRoute('payments.status.show', [
+            'paymentRequest' => $paymentRequest,
+            'state' => $state,
+        ]);
     }
 
     private function resolveReturnedPayment(Request $request): PaymentRequest
@@ -146,6 +169,8 @@ class ConvergeCheckoutController extends Controller
             return PaymentRequest::with(['consultation.type', 'participant'])
                 ->whereKey($paymentId)
                 ->orWhere('provider_reference', $paymentId)
+                ->orWhere('transaction_id', $paymentId)
+                ->orWhere('metadata->invoice_number', $paymentId)
                 ->firstOrFail();
         }
 

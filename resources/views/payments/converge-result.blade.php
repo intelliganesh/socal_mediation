@@ -2,15 +2,8 @@
     $consultation = $paymentRequest->consultation;
     $isLegal = $consultation?->application === 'legal';
     $brand = $isLegal ? '#75172E' : '#082BC3';
-    $success = $state === 'paid';
+    $success = in_array($state, ['paid', 'success'], true);
     $canRetryPayment = $state === 'failed';
-    $canRecheckStatus = in_array($state, ['pending', 'error'], true);
-    $verificationAttempt = max(0, (int) request()->query('verification_attempt', 0));
-    $recheckUrl = route('payments.converge.return.payment', array_filter([
-        'paymentRequest' => $paymentRequest,
-        'ssl_txn_id' => request()->query('ssl_txn_id'),
-        'verification_attempt' => $verificationAttempt + 1,
-    ], fn ($value) => $value !== null && $value !== ''));
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -30,18 +23,9 @@
                 <p style="margin:22px 0 0;font-size:20px;font-weight:700;">${{ number_format($paymentRequest->amount_cents / 100, 2) }} {{ $paymentRequest->currency }}</p>
                 @if($canRetryPayment && filled($paymentRequest->payment_url) && !in_array($consultation?->status, ['draft', 'cancelled'], true))
                     <a href="{{ $paymentRequest->payment_url }}" style="display:inline-block;margin-top:24px;border-radius:6px;background:{{ $brand }};color:#fff;font-weight:700;padding:13px 22px;text-decoration:none;">Try Payment Again</a>
-                @elseif($canRecheckStatus)
-                    <a href="{{ $recheckUrl }}" style="display:inline-block;margin-top:24px;border-radius:6px;background:{{ $brand }};color:#fff;font-weight:700;padding:13px 22px;text-decoration:none;">Check Payment Status</a>
                 @endif
             </div>
         </section>
     </main>
-    @if($state === 'pending' && $verificationAttempt < 5)
-        <script>
-            window.setTimeout(function () {
-                window.location.replace(@json($recheckUrl));
-            }, 10000);
-        </script>
-    @endif
 </body>
 </html>

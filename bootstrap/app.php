@@ -12,7 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
+        $middleware->validateCsrfTokens(except: [
+            'payments/converge/return',
+            'payments/*/converge-return',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

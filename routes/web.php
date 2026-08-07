@@ -19,11 +19,16 @@ Route::get('payments/{paymentRequest}/checkout', [ConvergeCheckoutController::cl
     ->middleware('signed')
     ->name('payments.checkout');
 
-Route::get('payments/converge/return', [ConvergeCheckoutController::class, 'return'])
+Route::post('payments/converge/return', [ConvergeCheckoutController::class, 'return'])
     ->name('payments.converge.return.web');
 
-Route::match(['get', 'post'], 'payments/{paymentRequest}/converge-return', [ConvergeCheckoutController::class, 'returnForPayment'])
+Route::post('payments/{paymentRequest}/converge-return', [ConvergeCheckoutController::class, 'returnForPayment'])
     ->name('payments.converge.return.payment');
+
+Route::get('payments/{paymentRequest}/status/{state}', [ConvergeCheckoutController::class, 'status'])
+    ->whereIn('state', ['success', 'failed', 'pending'])
+    ->middleware('signed')
+    ->name('payments.status.show');
 
 Route::prefix('admin')->name('admin.')->group(function () {
 

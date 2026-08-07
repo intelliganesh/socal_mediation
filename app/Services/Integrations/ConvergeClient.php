@@ -157,6 +157,7 @@ class ConvergeClient
         ];
 
         $transactionId = $callbackPayload['ssl_txn_id']
+            ?? $payment->transaction_id
             ?? data_get($payment->metadata, 'converge_transaction_id');
         $invoiceNumber = $payment->metadata['invoice_number'] ?? null;
 
@@ -243,6 +244,18 @@ class ConvergeClient
 
     private function validateTransaction(array $transaction, PaymentRequest $payment): array
     {
+        $expectedTransactionId = $payment->transaction_id
+            ?? data_get($payment->metadata, 'converge_transaction_id');
+
+        if (filled($expectedTransactionId)
+            && isset($transaction['ssl_txn_id'])
+            && (string) $transaction['ssl_txn_id'] !== (string) $expectedTransactionId) {
+            return [
+                'errorCode' => 'transaction_id_mismatch',
+                'errorMessage' => 'Converge transaction ID does not match the returned payment transaction.',
+            ];
+        }
+
         // Verify amount
         $expectedAmount = number_format($payment->amount_cents / 100, 2, '.', '');
 
@@ -288,6 +301,13 @@ class ConvergeClient
 
         if ($transactionType === 'SALE' && $resultMessage === 'APPROVAL' && filled($approvalCode)) {
             return 'paid';
+        }
+
+        if ($resultMessage !== '' && (
+            str_contains($resultMessage, 'DECLIN')
+            || in_array($resultMessage, ['FAILED', 'FAILURE', 'ERROR'], true)
+        )) {
+            return 'failed';
         }
 
         return 'unknown';

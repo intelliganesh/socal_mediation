@@ -25,7 +25,7 @@ Route::prefix('v1')->group(function () {
 
     Route::post('payments/converge/confirmation', [PaymentWebhookController::class, 'confirmation']);
     Route::post('payments/converge/webhook', [PaymentWebhookController::class, 'converge']);
-    Route::match(['get', 'post'], 'payments/converge/return', [ConvergeCheckoutController::class, 'return'])
+    Route::post('payments/converge/return', [ConvergeCheckoutController::class, 'return'])
         ->name('payments.converge.return');
     Route::post('testing/payments/{payment_request_uuid}/complete', [SimulatedPaymentController::class, 'complete']);
 });

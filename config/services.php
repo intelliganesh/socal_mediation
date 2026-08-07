@@ -38,7 +38,6 @@ return [
     'converge' => [
         'enabled' => env('CONVERGE_ENABLED', false),
         'payment_sync_enabled' => env('CONVERGE_PAYMENT_SYNC_ENABLED', false),
-        'payment_sync_interval_minutes' => env('CONVERGE_PAYMENT_SYNC_INTERVAL_MINUTES', 15),
         'payment_sync_lookback_days' => env('CONVERGE_PAYMENT_SYNC_LOOKBACK_DAYS', 30),
         'payment_sync_batch_size' => env('CONVERGE_PAYMENT_SYNC_BATCH_SIZE', 50),
         'http_timeout_seconds' => env('CONVERGE_HTTP_TIMEOUT_SECONDS', 90),

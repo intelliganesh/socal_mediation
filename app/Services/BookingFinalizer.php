@@ -15,7 +15,7 @@ class BookingFinalizer
     ) {
     }
 
-    public function syncPaymentStatus(Consultation $consultation): Consultation
+    public function syncPaymentStatus(Consultation $consultation, bool $deferExternalSync = false): Consultation
     {
         $wasFullyPaid = $consultation->payment_status === 'paid';
         $total = $consultation->paymentRequests()->count();
@@ -28,7 +28,18 @@ class BookingFinalizer
 
             if (! $wasFullyPaid) {
                 $consultation = $consultation->refresh()->load(['type', 'professional', 'participants']);
-                $this->finalizePaidConsultation($consultation);
+                if ($deferExternalSync) {
+                    $consultationId = $consultation->id;
+                    app()->terminating(function () use ($consultationId) {
+                        $consultation = Consultation::with(['type', 'professional', 'participants'])->find($consultationId);
+
+                        if ($consultation) {
+                            $this->finalizePaidConsultation($consultation);
+                        }
+                    });
+                } else {
+                    $this->finalizePaidConsultation($consultation);
+                }
             }
         } elseif ($paid > 0) {
             $consultation->update(['payment_status' => 'partially_paid', 'status' => 'payment_pending']);

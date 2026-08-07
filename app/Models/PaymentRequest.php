@@ -13,13 +13,20 @@ class PaymentRequest extends Model
 
     protected $fillable = [
         'id', 'consultation_id', 'participant_id', 'provider', 'status', 'amount_cents',
-        'currency', 'payment_method', 'provider_reference', 'payment_url', 'sent_at',
-        'paid_at', 'metadata',
+        'currency', 'payment_method', 'provider_reference', 'transaction_id', 'payment_url',
+        'sent_at', 'paid_at', 'approval_code', 'last_status_check_at', 'txnquery_response',
+        'metadata',
     ];
 
     protected function casts(): array
     {
-        return ['sent_at' => 'datetime', 'paid_at' => 'datetime', 'metadata' => 'array'];
+        return [
+            'sent_at' => 'datetime',
+            'paid_at' => 'datetime',
+            'last_status_check_at' => 'datetime',
+            'txnquery_response' => 'array',
+            'metadata' => 'array',
+        ];
     }
 
     public function getUuidAttribute(): string
