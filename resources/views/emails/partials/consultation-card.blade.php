@@ -3,6 +3,8 @@
     $amountCents = $amountCents ?? null;
     $buttonUrl = $buttonUrl ?? null;
     $buttonLabel = $buttonLabel ?? null;
+    $rescheduleButtonUrl = $rescheduleButtonUrl ?? null;
+    $rescheduleButtonLabel = $rescheduleButtonLabel ?? null;
     $zoomUrl = $zoomUrl ?? null;
     $isLegalApplication = ($consultation?->application ?? null) === 'legal';
     $iconPrefix = $isLegalApplication ? 'legal' : 'socal';
@@ -152,19 +154,27 @@
                             </table>
                         </td>
                     </tr>
-                    @if($buttonUrl || $reccheduleButtonUrl)
+                    @if(($buttonUrl && $buttonLabel) || ($rescheduleButtonUrl && $rescheduleButtonLabel))
                         <tr>
-                            @if($buttonUrl && $buttonLabel)
                             <td align="center" style="padding-top:26px;">
-                                <a href="{{ $buttonUrl }}" style="display:inline-block;background:{{ $brandColor }};color:#ffffff;text-decoration:none;border-radius:8px;padding:14px 30px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;">{{ $buttonLabel }}</a>
+                                <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                                    <tr>
+                                        @if($buttonUrl && $buttonLabel)
+                                            <td align="center" bgcolor="{{ $brandColor }}" style="border:1px solid {{ $brandColor }};border-radius:8px;">
+                                                <a href="{{ $buttonUrl }}" style="display:inline-block;color:#ffffff;text-decoration:none;padding:14px 30px;font-family:Arial,sans-serif;font-size:14px;line-height:18px;font-weight:700;">{{ $buttonLabel }}</a>
+                                            </td>
+                                        @endif
+                                        @if($buttonUrl && $buttonLabel && $rescheduleButtonUrl && $rescheduleButtonLabel)
+                                            <td width="16" style="width:16px;font-size:1px;line-height:1px;">&nbsp;</td>
+                                        @endif
+                                        @if($rescheduleButtonUrl && $rescheduleButtonLabel)
+                                            <td align="center" bgcolor="#ffffff" style="border:1px solid {{ $brandColor }};border-radius:8px;">
+                                                <a href="{{ $rescheduleButtonUrl }}" style="display:inline-block;color:{{ $brandColor }};text-decoration:none;padding:14px 30px;font-family:Arial,sans-serif;font-size:14px;line-height:18px;font-weight:700;">{{ $rescheduleButtonLabel }}</a>
+                                            </td>
+                                        @endif
+                                    </tr>
+                                </table>
                             </td>
-                            @endif
-                            @if($rescheduleButtonUrl && $rescheduleButtonLabel)
-                            <td align="center" style="padding-top:26px;">
-                                <a href="{{ $rescheduleButtonUrl }}" style="display:inline-block;background:none;border: 1px solid {{ $brandColor }}; color:{{ $brandColor }};text-decoration:none;border-radius:8px;padding:14px 30px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;">{{ $rescheduleButtonLabel }}</a>
-                            </td>
-                            @endif
-
                         </tr>
                     @endif
                 </table>

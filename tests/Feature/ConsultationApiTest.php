@@ -268,6 +268,7 @@ class ConsultationApiTest extends TestCase
     public function test_final_paid_email_uses_confirmation_template_and_includes_zoom_link_when_available(): void
     {
         $this->seed();
+        config(['app.frontend_url' => 'https://booking.example.test/']);
 
         $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
         $participant = $consultation->participants()->whereNotNull('email')->firstOrFail();
@@ -278,6 +279,9 @@ class ConsultationApiTest extends TestCase
         $this->assertStringContainsString('BOOKING ID: '.$consultation->booking_number, $html);
         $this->assertStringContainsString('Join Zoom Meeting', $html);
         $this->assertStringContainsString($consultation->zoom_join_url, $html);
+        $this->assertStringContainsString('href="https://booking.example.test/reschedule/'.$consultation->id.'"', $html);
+        $this->assertStringContainsString('>Reschedule Booking</a>', $html);
+        $this->assertStringNotContainsString('[reschedule/', $html);
         $this->assertStringContainsString('admin-icons/socal_payment_check.svg', $html);
         $this->assertStringContainsString('admin-icons/video.svg', $html);
     }

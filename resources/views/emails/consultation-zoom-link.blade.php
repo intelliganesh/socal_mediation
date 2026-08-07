@@ -12,6 +12,6 @@
     'zoomUrl' => $consultation->zoom_join_url,
     'buttonUrl' => $consultation->zoom_join_url,
     'buttonLabel' => 'Join Zoom Meeting',
-    'rescheduleButtonUrl' => env('FRONTEND_URL').'reschedule/'.$consultation->id,
+    'rescheduleButtonUrl' => rtrim(config('app.frontend_url'), '/').'/reschedule/'.$consultation->id,
     'rescheduleButtonLabel' => 'Reschedule Booking',
 ])

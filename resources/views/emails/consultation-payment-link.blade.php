@@ -12,6 +12,6 @@
     'amountCents' => $paymentRequest->amount_cents,
     'buttonUrl' => $paymentRequest->payment_url,
     'buttonLabel' => 'Pay Consultation Fee',
-    'rescheduleButtonUrl' => env('FRONTEND_URL').'reschedule/'.$consultation->id,
+    'rescheduleButtonUrl' => rtrim(config('app.frontend_url'), '/').'/reschedule/'.$consultation->id,
     'rescheduleButtonLabel' => 'Reschedule Booking',
 ])
