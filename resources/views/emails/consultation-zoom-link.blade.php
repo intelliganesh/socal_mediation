@@ -6,7 +6,7 @@
 @include('emails.partials.consultation-card', [
     'consultation' => $consultation,
     'title' => 'Consultation Confirmed',
-    'intro' => 'Hello <strong>'.e($clientName).'</strong>, your appointment with <strong>'.e($professional).'</strong> has been successfully scheduled. We have sent a calendar invitation to your email.',
+    'intro' => 'Hello <strong>'.e($clientName).'</strong>, Thank you for your booking. Your consultation with <strong>.'e($professional).'</strong> has been confirmed and scheduled successfully. Please find the consultation details below. A calendar invitation and meeting information have been sent to your email for your convenience.',
     'statusLabel' => 'Payment Successful',
     'amountCents' => $consultation->total_amount_cents,
     'zoomUrl' => $consultation->zoom_join_url,

@@ -62,7 +62,7 @@
                     <tr>
                         <td align="center">
                             <div style="width:70px;height:70px;border-radius:999px;background:{{ $brandColor }};text-align:center;line-height:70px;">
-                                <img src="{{ asset($heroIcon) }}" width="34" height="34" alt="" style="display:inline-block;width:34px;height:34px;vertical-align:middle;margin-top:18px;">
+                                <img src="{{ asset($heroIcon) }}" width="34" height="34" alt="" style="display:inline-block;width:34px;height:34px;vertical-align:middle;">
                             </div>
                             <h1 style="margin:22px 0 10px;font-size:34px;line-height:1.15;color:#111827;font-weight:700;">{{ $title }}</h1>
                             <p style="margin:0 auto 28px;max-width:440px;color:#4b5563;font-size:14px;line-height:1.55;">{!! $intro !!}</p>
@@ -105,11 +105,15 @@
                                 <tr>
                                     <td width="50%" valign="top" style="padding:0 18px 22px 0;">
                                         <div style="font-size:12px;color:#374151;margin-bottom:7px;">Professional</div>
-                                        <div style="font-size:14px;line-height:1.4;">{{ $professional }}</div>
-                                        <div style="font-size:14px;line-height:1.4;">
+                                       {{--  <div style="font-size:14px;line-height:1.4;">
                                             <span style="display:inline-block;width:20px;height:20px;border-radius:999px;background:{{ $brandSoftColor }};text-align:center;vertical-align:-5px;margin-right:7px;">
                                                 <img src="{{ asset($professionalIcon) }}" width="12" height="12" alt="" style="display:inline-block;width:12px;height:12px;vertical-align:middle;margin-top:4px;">
                                             </span>
+                                            {{ $professional }}
+                                        </div> --}}
+
+                                        <div style="font-size:14px;line-height:1.4;">
+                                            <img src="{{ asset($professionalIcon) }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
                                             {{ $professional }}
                                         </div>
                                     </td>
@@ -124,10 +128,14 @@
                                 <tr>
                                     <td width="50%" valign="top" style="padding:0 18px 22px 0;">
                                         <div style="font-size:12px;color:#374151;margin-bottom:7px;">Consultation Type</div>
-                                        <div style="font-size:14px;line-height:1.4;">
+                                        {{-- <div style="font-size:14px;line-height:1.4;">
                                             <span style="display:inline-block;width:20px;height:20px;border-radius:999px;background:{{ $brandSoftColor }};text-align:center;vertical-align:-5px;margin-right:7px;">
                                                 <img src="{{ asset($consultationTypeIcon) }}" width="12" height="12" alt="" style="display:inline-block;width:12px;height:12px;vertical-align:middle;margin-top:4px;">
                                             </span>
+                                            {{ $consultation?->type?->name }}
+                                        </div> --}}
+                                        <div style="font-size:14px;line-height:1.4;">
+                                            <img src="{{ asset($consultationTypeIcon) }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
                                             {{ $consultation?->type?->name }}
                                         </div>
                                     </td>

@@ -282,6 +282,82 @@ class AdminPanelTest extends TestCase
         ]);
     }
 
+    public function test_cancelling_from_status_controls_deletes_outlook_event_and_manual_sync_cannot_recreate_it(): void
+    {
+        $this->seed();
+        config([
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.socal_user_id' => 'socal@example.com',
+            'services.outlook.socal_calendar_id' => 'socal-calendar',
+            'services.outlook.legal_user_id' => 'legal@example.com',
+            'services.outlook.legal_calendar_id' => 'legal-calendar',
+        ]);
+
+        Consultation::query()->update(['starts_at' => null, 'ends_at' => null]);
+        $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+        $consultation->update([
+            'status' => 'scheduled',
+            'starts_at' => now(config('app.booking_timezone'))->addDays(5)->setTime(10, 0),
+            'ends_at' => now(config('app.booking_timezone'))->addDays(5)->setTime(11, 0),
+        ]);
+        ExternalCalendarEvent::create([
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultation->id,
+            'application' => $consultation->application,
+            'title' => 'Cancelled consultation',
+            'starts_at' => $consultation->starts_at,
+            'ends_at' => $consultation->ends_at,
+            'is_busy' => true,
+            'metadata' => [
+                'consultation_uuid' => $consultation->id,
+                'outlook_event_id' => 'cancelled-outlook-event-id',
+            ],
+        ]);
+
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
+            'graph.microsoft.com/v1.0/users/*/calendarView*' => Http::response(['value' => []], 200),
+            'graph.microsoft.com/v1.0/users/*/events/cancelled-outlook-event-id' => Http::response(null, 204),
+        ]);
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.statuses', $consultation), [
+                'status' => 'cancelled',
+                'payment_status' => $consultation->payment_status,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Consultation statuses updated.');
+
+        $this->assertDatabaseMissing('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultation->id,
+        ]);
+        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
+            && str_ends_with($request->url(), '/events/cancelled-outlook-event-id'));
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.sync-outlook', $consultation))
+            ->assertRedirect()
+            ->assertSessionHas('status', 'This consultation is inactive. Its Outlook event was removed and all events were synced.');
+
+        Http::assertNotSent(fn ($request) => $request->method() === 'POST'
+            && str_contains($request->url(), 'graph.microsoft.com')
+            && str_ends_with($request->url(), '/events'));
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'outlook',
+            'action' => 'automatic_status_change_sync',
+            'status' => 'synced',
+        ]);
+    }
+
     public function test_admin_can_resend_zoom_meeting_link(): void
     {
         $this->seed();

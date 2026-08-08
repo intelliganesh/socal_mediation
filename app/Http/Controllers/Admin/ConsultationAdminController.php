@@ -155,11 +155,13 @@ class ConsultationAdminController extends Controller
         if (config('services.outlook.enabled')) {
             try {
                 $outlook->deleteConsultationEvent($consultation);
+                $sync = $outlook->syncAllConsultations();
                 $consultation->integrationLogs()->create([
                     'provider' => 'outlook',
                     'action' => 'automatic_cancel_delete',
                     'status' => 'deleted',
-                    'message' => 'Outlook event deleted after consultation cancellation.',
+                    'response_payload' => $sync,
+                    'message' => 'Outlook event deleted and all consultation events reconciled after cancellation.',
                 ]);
             } catch (\DomainException|\RuntimeException $exception) {
                 return back()->with('error', 'Consultation cancelled, but Outlook event deletion failed: '.$exception->getMessage());
@@ -274,6 +276,19 @@ class ConsultationAdminController extends Controller
             return back()->with('error', $exception->getMessage());
         }
 
+        if ($outlookEvent === null) {
+            $sync = $outlook->syncAllConsultations();
+            $consultation->integrationLogs()->create([
+                'provider' => 'outlook',
+                'action' => 'manual_booking_sync',
+                'status' => 'deleted',
+                'response_payload' => $sync,
+                'message' => 'Inactive consultation event removed and all Outlook events reconciled.',
+            ]);
+
+            return back()->with('status', 'This consultation is inactive. Its Outlook event was removed and all events were synced.');
+        }
+
         $consultation->integrationLogs()->create([
             'provider' => 'outlook',
             'action' => 'manual_booking_sync',
@@ -286,7 +301,7 @@ class ConsultationAdminController extends Controller
         return back()->with('status', 'This booking was synced to Outlook.');
     }
 
-    public function updateStatuses(Request $request, Consultation $consultation)
+    public function updateStatuses(Request $request, Consultation $consultation, OutlookCalendarClient $outlook)
     {
         $data = $request->validate([
             'status' => ['required', 'string', 'in:draft,pending,payment_pending,paid,scheduled,rescheduled,in_progress,completed,cancelled,overdue'],
@@ -316,6 +331,24 @@ class ConsultationAdminController extends Controller
             ],
             'message' => 'Consultation and payment statuses updated from admin panel.',
         ]);
+
+        $statusChanged = $oldStatus !== $data['status']
+            || $oldPaymentStatus !== $data['payment_status'];
+
+        if ($statusChanged && config('services.outlook.enabled')) {
+            try {
+                $sync = $outlook->syncAllConsultations();
+                $consultation->integrationLogs()->create([
+                    'provider' => 'outlook',
+                    'action' => 'automatic_status_change_sync',
+                    'status' => 'synced',
+                    'response_payload' => $sync,
+                    'message' => 'All Outlook consultation events reconciled after a status change.',
+                ]);
+            } catch (\DomainException|\RuntimeException $exception) {
+                return back()->with('error', 'Statuses updated, but Outlook sync failed: '.$exception->getMessage());
+            }
+        }
 
         return back()->with('status', 'Consultation statuses updated.');
     }

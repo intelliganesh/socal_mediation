@@ -15,6 +15,18 @@ class OutlookCalendarClient
         'scheduled', 'paid', 'payment_pending', 'pending_payment', 'partially_paid',
     ];
 
+    public function syncAllConsultations(): array
+    {
+        $busy = $this->syncCurrentWindow();
+        $future = $this->syncFutureConsultations();
+
+        return [
+            'busy' => $busy,
+            'synced' => $future['synced'],
+            'deleted' => $future['deleted'],
+        ];
+    }
+
     public function syncCurrentWindow(): int
     {
         $this->assertEnabled();
@@ -155,9 +167,15 @@ class OutlookCalendarClient
         return $count;
     }
 
-    public function syncConsultation(Consultation $consultation, string $source = 'admin_manual_sync'): ExternalCalendarEvent
+    public function syncConsultation(Consultation $consultation, string $source = 'admin_manual_sync'): ?ExternalCalendarEvent
     {
         $this->assertEnabled();
+
+        if (! in_array($consultation->status, self::ACTIVE_CONSULTATION_STATUSES, true)) {
+            $this->deleteConsultationEvent($consultation);
+
+            return null;
+        }
 
         if ($consultation->starts_at === null || $consultation->ends_at === null) {
             throw new \DomainException('Consultation must be scheduled before syncing to Outlook.');

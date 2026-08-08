@@ -45,15 +45,14 @@ class CalendarController extends Controller
     {
         try {
             $payments->syncLightweight();
-            $busyCount = $outlook->syncCurrentWindow();
-            $futureSync = $outlook->syncFutureConsultations();
+            $sync = $outlook->syncAllConsultations();
         } catch (\DomainException|\RuntimeException $exception) {
             return back()->with('error', $exception->getMessage());
         }
 
         return back()->with(
             'status',
-            "Outlook sync completed. {$busyCount} busy event(s) refreshed, {$futureSync['synced']} future consultation(s) synced, {$futureSync['deleted']} stale consultation event(s) deleted."
+            "Outlook sync completed. {$sync['busy']} busy event(s) refreshed, {$sync['synced']} future consultation(s) synced, {$sync['deleted']} stale consultation event(s) deleted."
         );
     }
 }
