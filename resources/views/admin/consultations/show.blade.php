@@ -114,7 +114,7 @@
         </form>
         @endif
     </section>
-    <section class="mb-5 grid gap-5 xl:grid-cols-4">
+    <section class="mb-5 grid gap-5 xl:grid-cols-3">
         <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
             <div class="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
                 <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="circle-user-round" class="h-5 w-5 text-[#082BC3]"></i>Primary Client Information</h3>
@@ -142,8 +142,7 @@
                 <div class="flex gap-3"><i data-lucide="video" class="h-5 w-5 text-gray-500"></i>
                     <div>
                         <dt class="text-gray-500">Zoom Meeting</dt>
-                        <dd class="mt-1 flex font-semibold text-[#111827]">{{ $zoomStatus }}  @if(filled($consultation->zoom_join_url)) <a class="font-bold text-[#082BC3] ml-2" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener"><i data-lucide="external-link" class="h-4 w-4"></i></a> @endif</dd>
-
+                        <dd class="mt-1 flex font-semibold text-[#111827]">{{ $zoomStatus }} @if(filled($consultation->zoom_join_url)) <a class="font-bold text-[#082BC3] ml-2" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener"><i data-lucide="external-link" class="h-4 w-4"></i></a> @endif</dd>
                     </div>
                 </div>
                 <div class="flex gap-3"><i data-lucide="clock" class="h-5 w-5 text-gray-500"></i>
@@ -151,7 +150,7 @@
                         <dd class="mt-1 font-semibold text-[#111827]">{{ $consultation->type->name }}</dd>
                     </div>
                 </div>
-                 <div class="flex gap-3"><i data-lucide="calendar-check" class="h-5 w-5 text-gray-500"></i>
+                <div class="flex gap-3"><i data-lucide="calendar-check" class="h-5 w-5 text-gray-500"></i>
                     <div><dt class="text-gray-500">Outlook Event</dt>
                         <dd class="mt-1 font-semibold text-[#082BC3]">{{ $outlookStatus }}</dd>
                     </div>
@@ -161,7 +160,6 @@
                         <dd class="mt-1 font-semibold text-[#111827]">{{ $consultation->legal_service_name ?: 'Not selected' }}</dd>
                     </div>
                 </div>
-
                 <div class="flex gap-3"><i data-lucide="monitor" class="h-5 w-5 text-gray-500"></i>
                     <div><dt class="text-gray-500">Meeting Mode</dt>
                         <dd class="mt-1 font-semibold text-[#111827]">{{ ucfirst((string) $consultation->consultation_mode) ?: 'Not selected' }}</dd>
@@ -172,7 +170,6 @@
                         <dd class="mt-1 font-semibold text-[#111827]">{{ $consultation->referral_source ?: 'Not provided' }}</dd>
                     </div>
                 </div>
-
                 <div class="flex gap-3"><i data-lucide="calendar" class="h-5 w-5 text-gray-500"></i>
                     <div><dt class="text-gray-500">Created</dt>
                         <dd class="mt-1 font-semibold text-[#111827]">{{ $consultation->created_at?->format('M d, Y g:i A') }}</dd>
@@ -184,30 +181,10 @@
             </dl>
         </article>
         <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
-            <div class="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
-                <h3 class="text-xl font-bold text-[#111827]">Payment Progress</h3>
-                <span class="status-badge {{ $paymentStatus['badge'] }}">{{ $paymentStatus['label'] }}</span>
-            </div>
-            <div class="p-5">
-                <div class="mb-3 flex items-center justify-between gap-4 text-sm">
-                    <span class="text-gray-500">{{ $totalPaymentCount }} {{ Str::plural('participant', $totalPaymentCount) }}</span>
-                    <span class="font-bold text-gray-500">{{ $paidPaymentCount }} Paid · {{ $pendingPaymentCount }} Pending</span>
-                </div>
-                <div class="progress-track">
-                    <div class="progress-fill {{ $paymentStatus['progress'] }}" style="width: {{ $progressPercent }}%"></div>
-                </div>
-                <div class="mt-5 flex items-center justify-between gap-4 text-sm">
-                    <span class="text-gray-500">${{ number_format($collectedAmountCents / 100, 2) }} collected</span>
-                    <span class="text-gray-500">${{ number_format($consultation->total_amount_cents / 100, 2) }} total</span>
-                </div>
-                <div class="sr-only">{{ $totalPaymentCount }} participants - {{ $paidPaymentCount }} Paid - {{ $pendingPaymentCount }} Pending</div>
-            </div>
-        </article>
-        <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
             <div class="border-b border-[#E5E7EB] px-5 py-4">
                 <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="sliders-horizontal" class="h-5 w-5 text-[#082BC3]"></i>Status Controls</h3>
             </div>
-            <form class="grid gap-4 p-5 text-sm" method="post" action="{{ route('admin.consultations.statuses', $consultation) }}">
+            <form class="action-card-primary grid gap-4 p-5 text-sm" method="post" action="{{ route('admin.consultations.statuses', $consultation) }}">
                 @csrf
                 <label class="grid gap-2 font-bold text-[#111827]">
                     Consultation Status
@@ -225,11 +202,11 @@
                         @endforeach
                     </select>
                 </label>
-                <button class="action-card-button h-10 w-full rounded-lg text-sm font-bold">Update Statuses</button>
+                <button class="action-card-button h-10 w-full rounded-lg text-sm font-bold" type="submit">Update Statuses</button>
             </form>
         </article>
     </section>
-    <div class="grid gap-5 xl:grid-cols-3">
+    <div class="grid gap-5 xl:grid-cols-3 mb-5">
         <div class="space-y-5 xl:col-span-2">
             <section class="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
                 <h3 class="mb-4 font-bold text-[#111827]">Participants</h3>
@@ -251,6 +228,32 @@
                     @endforeach
                 </div>
             </section>
+        </div>
+        <section class="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+            <article class="">
+                <div class="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+                    <h3 class="font-bold text-[#111827]">Payment Progress</h3>
+                    <span class="status-badge {{ $paymentStatus['badge'] }}">{{ $paymentStatus['label'] }}</span>
+                </div>
+                <div class="p-5">
+                    <div class="mb-3 flex items-center justify-between gap-4 text-sm">
+                        <span class="text-gray-500">{{ $totalPaymentCount }} {{ Str::plural('participant', $totalPaymentCount) }}</span>
+                        <span class="font-bold text-gray-500">{{ $paidPaymentCount }} Paid · {{ $pendingPaymentCount }} Pending</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill {{ $paymentStatus['progress'] }}" style="width: {{ $progressPercent }}%"></div>
+                    </div>
+                    <div class="mt-5 flex items-center justify-between gap-4 text-sm">
+                        <span class="text-gray-500">${{ number_format($collectedAmountCents / 100, 2) }} collected</span>
+                        <span class="text-gray-500">${{ number_format($consultation->total_amount_cents / 100, 2) }} total</span>
+                    </div>
+                    <div class="sr-only">{{ $totalPaymentCount }} participants - {{ $paidPaymentCount }} Paid - {{ $pendingPaymentCount }} Pending</div>
+                </div>
+            </article>
+        </section>
+    </div>
+    <div class="grid gap-5 xl:grid-cols-3 ">
+        <div class="space-y-5 xl:col-span-2">
             <section class="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
                 <h3 class="mb-4 font-bold text-[#111827]">Email Activity</h3>
                 <div class="space-y-3">
@@ -274,35 +277,37 @@
                 </div>
             </section>
         </div>
-        <section class="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
-            <div class="border-b border-[#E5E7EB] px-5 py-4">
-                <h3 class="font-bold text-[#111827]">Payment Shares</h3>
-            </div>
-            <div class="grid grid-cols-[1fr_auto_auto] gap-3 bg-[#F7F8FC] px-5 py-3 text-xs font-bold text-gray-500">
-                <div>Participant</div>
-                <div>Amount</div>
-                <div>Status</div>
-            </div>
-            <div class="divide-y divide-[#E5E7EB]">
-                @forelse($consultation->paymentRequests as $payment)
-                @php($status = $statusTheme($payment->status))
-                @php($payer = trim(($payment->participant?->first_name ?? 'Client').' '.($payment->participant?->last_name ?? '')))
-                <div class="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-5 py-4 text-sm">
-                    <div class="flex min-w-0 items-center gap-3">
-                        <div class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#ECEDF9] text-xs font-bold text-[#082BC3]">{{ Str::upper(Str::substr($payer, 0, 2)) }}</div>
-                        <div class="truncate font-semibold text-[#111827]">{{ $payer }}</div>
-                    </div>
-                    <div class="font-bold">${{ number_format($payment->amount_cents / 100, 2) }}</div>
-                    <div class="flex items-center gap-2">
-                        <span class="status-badge {{ $status['badge'] }}">{{ $status['label'] }}</span>
-                        @if(filled($payment->payment_url) && $payment->status !== 'paid')
-                        <a href="{{ $payment->payment_url }}" target="_blank" rel="noopener" aria-label="View Payment Link"><i data-lucide="link" class="h-4 w-4 text-[#082BC3]"></i><span class="sr-only">View Payment Link</span></a>
-                        @endif
-                    </div>
+        <section>
+            <div class="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+                <div class="border-b border-[#E5E7EB] px-5 py-4">
+                    <h3 class="font-bold text-[#111827]">Payment Shares</h3>
                 </div>
-                @empty
-                <div class="px-5 py-8 text-center text-sm text-gray-500">No payment shares created yet.</div>
-                @endforelse
+                <div class="grid grid-cols-[1fr_auto_auto] gap-3 bg-[#F7F8FC] px-5 py-3 text-xs font-bold text-gray-500">
+                    <div>Participant</div>
+                    <div>Amount</div>
+                    <div>Status</div>
+                </div>
+                <div class="divide-y divide-[#E5E7EB]">
+                    @forelse($consultation->paymentRequests as $payment)
+                    @php($status = $statusTheme($payment->status))
+                    @php($payer = trim(($payment->participant?->first_name ?? 'Client').' '.($payment->participant?->last_name ?? '')))
+                    <div class="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-5 py-4 text-sm">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <div class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#ECEDF9] text-xs font-bold text-[#082BC3]">{{ Str::upper(Str::substr($payer, 0, 2)) }}</div>
+                            <div class="truncate font-semibold text-[#111827]">{{ $payer }}</div>
+                        </div>
+                        <div class="font-bold">${{ number_format($payment->amount_cents / 100, 2) }}</div>
+                        <div class="flex items-center gap-2">
+                            <span class="status-badge {{ $status['badge'] }}">{{ $status['label'] }}</span>
+                            @if(filled($payment->payment_url) && $payment->status !== 'paid')
+                            <a href="{{ $payment->payment_url }}" target="_blank" rel="noopener" aria-label="View Payment Link"><i data-lucide="link" class="h-4 w-4 text-[#082BC3]"></i><span class="sr-only">View Payment Link</span></a>
+                            @endif
+                        </div>
+                    </div>
+                    @empty
+                    <div class="px-5 py-8 text-center text-sm text-gray-500">No payment shares created yet.</div>
+                    @endforelse
+                </div>
             </div>
         </section>
     </div>
