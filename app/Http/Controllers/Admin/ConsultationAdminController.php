@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
@@ -18,8 +19,8 @@ class ConsultationAdminController extends Controller
     {
         $query = Consultation::query()
             ->with(['type', 'participants', 'paymentRequests'])
-            ->when($request->query('application'), fn($query, $application) => $query->where('application', $application))
-            ->when($request->query('status'), fn($query, $status) => $query->where('status', $status))
+            ->when($request->query('application'), fn ($query, $application) => $query->where('application', $application))
+            ->when($request->query('status'), fn ($query, $status) => $query->where('status', $status))
             ->when($request->query('q'), function ($query, $search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('booking_number', 'like', "%{$search}%")
@@ -28,8 +29,8 @@ class ConsultationAdminController extends Controller
                         ->orWhere('primary_email', 'like', "%{$search}%");
                 });
             })
-            ->when($request->query('date_from'), fn($query, $date) => $query->whereDate('starts_at', '>=', $date))
-            ->when($request->query('date_to'), fn($query, $date) => $query->whereDate('starts_at', '<=', $date));
+            ->when($request->query('date_from'), fn ($query, $date) => $query->whereDate('starts_at', '>=', $date))
+            ->when($request->query('date_to'), fn ($query, $date) => $query->whereDate('starts_at', '<=', $date));
 
         if ($request->boolean('export')) {
             return response()->streamDownload(function () use ($query) {
@@ -73,6 +74,7 @@ class ConsultationAdminController extends Controller
                 'professional',
                 'participants',
                 'paymentRequests.participant',
+                'paymentRequests.integrationLogs',
                 'integrationLogs',
             ]),
         ]);
@@ -124,16 +126,16 @@ class ConsultationAdminController extends Controller
 
         $consultation->update([
             'zoom_meeting_id' => $meeting['id'],
-            'zoom_join_url'   => $meeting['join_url'],
+            'zoom_join_url' => $meeting['join_url'],
             'status' => 'scheduled',
         ]);
 
         $consultation->integrationLogs()->create([
-            'provider'         => 'zoom',
-            'action'           => 'manual_regenerate_meeting',
-            'status'           => 'generated',
+            'provider' => 'zoom',
+            'action' => 'manual_regenerate_meeting',
+            'status' => 'generated',
             'response_payload' => $meeting,
-            'message'          => 'Zoom meeting link regenerated from admin panel.',
+            'message' => 'Zoom meeting link regenerated from admin panel.',
         ]);
 
         return back()->with('status', 'Zoom meeting link regenerated.');
@@ -147,9 +149,9 @@ class ConsultationAdminController extends Controller
 
         $consultation->integrationLogs()->create([
             'provider' => 'admin',
-            'action'   => 'manual_cancel',
-            'status'   => 'cancelled',
-            'message'  => 'Consultation cancelled from admin panel.',
+            'action' => 'manual_cancel',
+            'status' => 'cancelled',
+            'message' => 'Consultation cancelled from admin panel.',
         ]);
 
         if (config('services.outlook.enabled')) {
@@ -178,15 +180,14 @@ class ConsultationAdminController extends Controller
         OutlookCalendarClient $outlook,
         ZoomClient $zoom,
         AdminZoomNotificationService $zoomNotifications
-    )
-    {
+    ) {
         $data = $request->validate([
             'starts_at' => ['required', 'date_format:Y-m-d\TH:i'],
         ]);
 
         $timezone = $consultation->timezone ?: config('app.booking_timezone');
         $startsAt = CarbonImmutable::createFromFormat('Y-m-d\TH:i', $data['starts_at'], $timezone);
-        $type     = $consultation->type;
+        $type = $consultation->type;
 
         if ($consultation->status === 'completed') {
             return back()->withInput()->with('error', 'Completed consultations cannot be rescheduled.');
@@ -200,16 +201,16 @@ class ConsultationAdminController extends Controller
 
         $consultation->update([
             'starts_at' => $startsAt,
-            'ends_at'   => $startsAt->addMinutes($type->duration_minutes),
-            'status'    => $this->statusAfterReschedule($consultation),
+            'ends_at' => $startsAt->addMinutes($type->duration_minutes),
+            'status' => $this->statusAfterReschedule($consultation),
         ]);
 
         $consultation->integrationLogs()->create([
-            'provider'        => 'admin',
-            'action'          => 'manual_reschedule',
-            'status'          => 'rescheduled',
+            'provider' => 'admin',
+            'action' => 'manual_reschedule',
+            'status' => 'rescheduled',
             'request_payload' => ['starts_at' => $startsAt->toIso8601String()],
-            'message'         => 'Consultation rescheduled from admin panel.',
+            'message' => 'Consultation rescheduled from admin panel.',
         ]);
 
         if ($consultation->consultation_mode === 'online') {

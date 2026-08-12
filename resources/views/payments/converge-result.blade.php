@@ -3,7 +3,7 @@
     $isLegal = $consultation?->application === 'legal';
     $brand = $isLegal ? '#75172E' : '#082BC3';
     $success = in_array($state, ['paid', 'success'], true);
-    $canRetryPayment = $state === 'failed';
+    $canRetryPayment = in_array($state, ['failed', 'error'], true);
     $redirectUrl = $success
         ? config('app.payment_redirect_urls.'.($isLegal ? 'legal' : 'socal'))
         : null;
@@ -29,6 +29,9 @@
             <div style="padding:32px 24px;text-align:center;">
                 <h1 style="margin:0 0 12px;font-size:26px;">{{ $success ? 'Payment Successful' : 'Payment Status' }}</h1>
                 <p style="margin:0;color:#64748b;line-height:1.6;">{{ $message }}</p>
+                @if(filled($errorReference ?? null))
+                    <p style="margin:10px 0 0;color:#64748b;font-size:13px;">Support reference: <strong style="color:#111827;">{{ $errorReference }}</strong></p>
+                @endif
                 <p style="margin:22px 0 0;font-size:20px;font-weight:700;">${{ number_format($paymentRequest->amount_cents / 100, 2) }} {{ $paymentRequest->currency }}</p>
                 @if(filled($redirectUrl))
                     <a href="{{ $redirectUrl }}" style="display:inline-block;margin-top:24px;border-radius:6px;background:{{ $brand }};color:#fff;font-weight:700;padding:13px 22px;text-decoration:none;">{{ $redirectLabel }}</a>

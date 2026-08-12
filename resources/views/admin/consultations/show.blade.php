@@ -26,6 +26,13 @@
     $progressPercent = $totalPaymentCount ? round(($paidPaymentCount / $totalPaymentCount) * 100) : 0;
     $unpaidPaymentCount = $consultation->paymentRequests->filter(fn ($payment) => $payment->status !== 'paid')->count();
     $emailActivities = $consultation->integrationLogs->where('provider', 'mail')->sortByDesc('created_at')->values();
+    $paymentGatewayActivities = $consultation->paymentRequests
+        ->flatMap(fn ($payment) => $payment->integrationLogs->map(fn ($log) => [
+            'log' => $log,
+            'payment' => $payment,
+        ]))
+        ->sortByDesc(fn ($activity) => $activity['log']->created_at)
+        ->values();
     $emailActivityMeta = function (string $action) {
     return match ($action) {
     'manual_payment_reminder' => ['label' => 'Payment Reminder', 'icon' => 'bell'],
@@ -311,4 +318,33 @@
             </div>
         </section>
     </div>
+    <section class="mt-5 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+        <div class="border-b border-[#E5E7EB] px-5 py-4">
+            <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="activity" class="h-5 w-5 text-[#082BC3]"></i>Payment Gateway Activity</h3>
+        </div>
+        <div class="divide-y divide-[#E5E7EB]">
+            @forelse($paymentGatewayActivities as $activity)
+            @php($log = $activity['log'])
+            @php($payment = $activity['payment'])
+            @php($gatewayStatus = $statusTheme($log->status))
+            @php($payerName = trim(($payment->participant?->first_name ?? $consultation->primary_first_name).' '.($payment->participant?->last_name ?? $consultation->primary_last_name)))
+            <article class="grid gap-3 px-5 py-4 text-sm lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="font-bold text-[#111827]">{{ Str::headline($log->action) }}</span>
+                        <span class="status-badge {{ $gatewayStatus['badge'] }}">{{ Str::headline($log->status) }}</span>
+                        <span class="font-bold text-gray-500">PAY-{{ $log->id }}</span>
+                    </div>
+                    <div class="mt-1 text-xs text-gray-500">{{ $payerName ?: 'Unknown payer' }} · ${{ number_format($payment->amount_cents / 100, 2) }} {{ $payment->currency }}</div>
+                    @if(filled($log->message))
+                    <div class="mt-3 break-words rounded-lg bg-[#F7F8FC] p-3 font-semibold text-[#374151]">{{ $log->message }}</div>
+                    @endif
+                </div>
+                <time class="text-xs font-semibold text-gray-500" datetime="{{ $log->created_at?->toIso8601String() }}">{{ $log->created_at?->format('M d, Y g:i A') }}</time>
+            </article>
+            @empty
+            <div class="px-5 py-8 text-center text-sm text-gray-500">No payment gateway activity recorded yet.</div>
+            @endforelse
+        </div>
+    </section>
 </x-admin.layout>

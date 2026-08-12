@@ -419,6 +419,29 @@ class AdminPanelTest extends TestCase
             ->assertSee('reschedule@example.com');
     }
 
+    public function test_admin_can_view_payment_gateway_failure_details_and_reference(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-03')->firstOrFail();
+        $payment = $consultation->paymentRequests()->firstOrFail();
+        $log = $payment->integrationLogs()->create([
+            'provider' => 'converge',
+            'action' => 'hosted_payment_session',
+            'status' => 'failed',
+            'message' => 'Converge rejected the request because the account is not enabled for Hosted Payments.',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $consultation))
+            ->assertOk()
+            ->assertSee('Payment Gateway Activity')
+            ->assertSee('PAY-'.$log->id)
+            ->assertSee('Hosted Payment Session')
+            ->assertSee('Converge rejected the request because the account is not enabled for Hosted Payments.');
+    }
+
     public function test_admin_can_cancel_reschedule_and_regenerate_meeting_link(): void
     {
         $this->seed();

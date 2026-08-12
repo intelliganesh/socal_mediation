@@ -42,14 +42,19 @@ class ConvergeCheckoutController extends Controller
                 'message' => 'Fresh Converge Hosted Payment Page session created.',
             ]);
         } catch (\Throwable $exception) {
-            $paymentRequest->integrationLogs()->create([
+            $integrationLog = $paymentRequest->integrationLogs()->create([
                 'provider' => 'converge',
                 'action' => 'hosted_payment_session',
                 'status' => 'failed',
                 'message' => $exception->getMessage(),
             ]);
 
-            return $this->resultView($paymentRequest, 'error', 'We could not start the secure payment session. Please try again.');
+            return $this->resultView(
+                $paymentRequest,
+                'error',
+                'We could not start the secure payment session. Please try again.',
+                'PAY-'.$integrationLog->id,
+            );
         }
 
         return response()
@@ -128,9 +133,13 @@ class ConvergeCheckoutController extends Controller
         return redirect()->to($this->statusUrl($paymentRequest, $this->statusState($paymentRequest)));
     }
 
-    private function resultView(PaymentRequest $paymentRequest, string $state, string $message): View
-    {
-        return view('payments.converge-result', compact('paymentRequest', 'state', 'message'));
+    private function resultView(
+        PaymentRequest $paymentRequest,
+        string $state,
+        string $message,
+        ?string $errorReference = null,
+    ): View {
+        return view('payments.converge-result', compact('paymentRequest', 'state', 'message', 'errorReference'));
     }
 
     private function statusState(PaymentRequest $paymentRequest): string

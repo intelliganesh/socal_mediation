@@ -855,6 +855,47 @@ class ConsultationApiTest extends TestCase
         $this->get($tamperedUrl)->assertForbidden();
     }
 
+    public function test_converge_session_creation_error_shows_retry_button(): void
+    {
+        $this->seed();
+        config([
+            'services.converge.enabled' => true,
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.account_id' => 'account-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+            'services.converge.return_url' => 'http://localhost/api/v1/payments/converge/return',
+        ]);
+
+        Http::fake([
+            'api.demo.convergepay.com/hosted-payments/transaction_token' => Http::response('Gateway unavailable', 503),
+        ]);
+
+        $payment = Consultation::where('booking_number', 'SAMPLE-03')
+            ->firstOrFail()
+            ->paymentRequests()
+            ->where('status', 'pending')
+            ->firstOrFail();
+        $checkoutUrl = URL::signedRoute('payments.checkout', ['paymentRequest' => $payment]);
+        $payment->update(['payment_url' => $checkoutUrl]);
+
+        $response = $this->get($checkoutUrl)
+            ->assertOk()
+            ->assertSee('We could not start the secure payment session. Please try again.')
+            ->assertSee('Try Payment Again')
+            ->assertSee('href="'.$checkoutUrl.'"', false)
+            ->assertSee('background:#082BC3', false);
+
+        $failureLog = $payment->integrationLogs()
+            ->where('action', 'hosted_payment_session')
+            ->where('status', 'failed')
+            ->latest()
+            ->firstOrFail();
+
+        $response->assertSee('Support reference:')->assertSee('PAY-'.$failureLog->id);
+    }
+
     public function test_forged_confirmation_cannot_mark_payment_paid_without_converge_verification(): void
     {
         $this->seed();
