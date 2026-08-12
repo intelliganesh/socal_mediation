@@ -237,7 +237,7 @@ meeting:write:meeting
 meeting:write:meeting:admin
 ```
 
-For Outlook app-only sync, set `OUTLOOK_SOCAL_USER_ID` and `OUTLOOK_LEGAL_USER_ID` to the mailbox user principal name or Microsoft Graph user id that owns each calendar. The calendar id values identify the specific calendars under those users.
+For Outlook app-only sync, set `OUTLOOK_SOCAL_USER_ID` and `OUTLOOK_LEGAL_USER_ID` to the mailbox user principal name or Microsoft Graph user id that owns each calendar. The calendar id values identify the specific calendars under those users. Both mailbox/calendar pairs are required: each consultation is mirrored to both calendars when created, rescheduled, synchronized, or cancelled.
 
 Local email defaults to the log mailer:
 

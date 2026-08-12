@@ -179,8 +179,12 @@ class AdminPanelTest extends TestCase
             'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/calendarView*' => Http::response(['value' => []], 200),
             'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/calendarView*' => Http::response(['value' => []], 200),
             'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events' => Http::response([
-                'id' => 'future-consultation-outlook-id',
-                'webLink' => 'https://outlook.office.com/future-consultation',
+                'id' => 'future-consultation-legal-outlook-id',
+                'webLink' => 'https://outlook.office.com/future-consultation-legal',
+            ], 201),
+            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events' => Http::response([
+                'id' => 'future-consultation-socal-outlook-id',
+                'webLink' => 'https://outlook.office.com/future-consultation-socal',
             ], 201),
         ]);
 
@@ -191,12 +195,14 @@ class AdminPanelTest extends TestCase
             ->assertRedirect()
             ->assertSessionHas('status', 'Outlook sync completed. 0 busy event(s) refreshed, 1 future consultation(s) synced, 1 stale consultation event(s) deleted.');
 
-        $this->assertDatabaseHas('external_calendar_events', [
-            'provider' => 'outlook',
-            'external_id' => 'consultation-'.$consultation->id,
-            'application' => 'legal',
-            'is_busy' => true,
-        ]);
+        foreach (['socal', 'legal'] as $application) {
+            $this->assertDatabaseHas('external_calendar_events', [
+                'provider' => 'outlook',
+                'external_id' => 'consultation-'.$consultation->id.'-'.$application,
+                'application' => $application,
+                'is_busy' => true,
+            ]);
+        }
         $this->assertDatabaseMissing('external_calendar_events', [
             'provider' => 'outlook',
             'external_id' => 'consultation-stale-future',
@@ -305,24 +311,26 @@ class AdminPanelTest extends TestCase
             'starts_at' => now(config('app.booking_timezone'))->addDays(5)->setTime(10, 0),
             'ends_at' => now(config('app.booking_timezone'))->addDays(5)->setTime(11, 0),
         ]);
-        ExternalCalendarEvent::create([
-            'provider' => 'outlook',
-            'external_id' => 'consultation-'.$consultation->id,
-            'application' => $consultation->application,
-            'title' => 'Cancelled consultation',
-            'starts_at' => $consultation->starts_at,
-            'ends_at' => $consultation->ends_at,
-            'is_busy' => true,
-            'metadata' => [
-                'consultation_uuid' => $consultation->id,
-                'outlook_event_id' => 'cancelled-outlook-event-id',
-            ],
-        ]);
+        foreach (['socal', 'legal'] as $application) {
+            ExternalCalendarEvent::create([
+                'provider' => 'outlook',
+                'external_id' => 'consultation-'.$consultation->id.'-'.$application,
+                'application' => $application,
+                'title' => 'Cancelled consultation',
+                'starts_at' => $consultation->starts_at,
+                'ends_at' => $consultation->ends_at,
+                'is_busy' => true,
+                'metadata' => [
+                    'consultation_uuid' => $consultation->id,
+                    'outlook_event_id' => 'cancelled-'.$application.'-outlook-event-id',
+                ],
+            ]);
+        }
 
         Http::fake([
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
             'graph.microsoft.com/v1.0/users/*/calendarView*' => Http::response(['value' => []], 200),
-            'graph.microsoft.com/v1.0/users/*/events/cancelled-outlook-event-id' => Http::response(null, 204),
+            'graph.microsoft.com/v1.0/users/*/events/cancelled-*-outlook-event-id' => Http::response(null, 204),
         ]);
 
         $admin = User::where('email', 'admin@socal.test')->firstOrFail();
@@ -334,12 +342,14 @@ class AdminPanelTest extends TestCase
             ->assertRedirect()
             ->assertSessionHas('status', 'Consultation statuses updated.');
 
-        $this->assertDatabaseMissing('external_calendar_events', [
-            'provider' => 'outlook',
-            'external_id' => 'consultation-'.$consultation->id,
-        ]);
-        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
-            && str_ends_with($request->url(), '/events/cancelled-outlook-event-id'));
+        foreach (['socal', 'legal'] as $application) {
+            $this->assertDatabaseMissing('external_calendar_events', [
+                'provider' => 'outlook',
+                'external_id' => 'consultation-'.$consultation->id.'-'.$application,
+            ]);
+            Http::assertSent(fn ($request) => $request->method() === 'DELETE'
+                && str_ends_with($request->url(), '/events/cancelled-'.$application.'-outlook-event-id'));
+        }
 
         $this->actingAs($admin)
             ->post(route('admin.consultations.sync-outlook', $consultation))
@@ -575,13 +585,19 @@ class AdminPanelTest extends TestCase
             'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
             'services.outlook.socal_user_id' => 'socal@example.com',
             'services.outlook.socal_calendar_id' => 'socal-calendar',
+            'services.outlook.legal_user_id' => 'legal@example.com',
+            'services.outlook.legal_calendar_id' => 'legal-calendar',
         ]);
 
         Http::fake([
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
             'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events' => Http::response([
-                'id' => 'outlook-event-id',
-                'webLink' => 'https://outlook.office.com/event',
+                'id' => 'socal-outlook-event-id',
+                'webLink' => 'https://outlook.office.com/socal-event',
+            ], 201),
+            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events' => Http::response([
+                'id' => 'legal-outlook-event-id',
+                'webLink' => 'https://outlook.office.com/legal-event',
             ], 201),
         ]);
 
@@ -606,15 +622,17 @@ class AdminPanelTest extends TestCase
             'provider' => 'outlook',
             'action' => 'manual_booking_sync',
             'request_payload->subject' => $consultation->booking_number.' - '.$consultation->type->name,
-            'response_payload->id' => 'outlook-event-id',
+            'response_payload->id' => 'socal-outlook-event-id',
         ]);
 
-        $this->assertDatabaseHas('external_calendar_events', [
-            'provider' => 'outlook',
-            'external_id' => 'consultation-'.$consultation->uuid,
-            'application' => 'socal',
-            'is_busy' => true,
-        ]);
+        foreach (['socal', 'legal'] as $application) {
+            $this->assertDatabaseHas('external_calendar_events', [
+                'provider' => 'outlook',
+                'external_id' => 'consultation-'.$consultation->uuid.'-'.$application,
+                'application' => $application,
+                'is_busy' => true,
+            ]);
+        }
     }
 
     public function test_reschedule_automatically_syncs_consultation_to_outlook_when_enabled(): void
@@ -627,15 +645,21 @@ class AdminPanelTest extends TestCase
             'services.outlook.client_secret' => 'client-secret',
             'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
             'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.socal_user_id' => 'socal@example.com',
+            'services.outlook.socal_calendar_id' => 'socal-calendar',
             'services.outlook.legal_user_id' => 'legal@example.com',
             'services.outlook.legal_calendar_id' => 'legal-calendar',
         ]);
 
         Http::fake([
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
+            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events' => Http::response([
+                'id' => 'rescheduled-socal-outlook-event-id',
+                'webLink' => 'https://outlook.office.com/rescheduled-socal-event',
+            ], 201),
             'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events' => Http::response([
-                'id' => 'rescheduled-outlook-event-id',
-                'webLink' => 'https://outlook.office.com/rescheduled-event',
+                'id' => 'rescheduled-legal-outlook-event-id',
+                'webLink' => 'https://outlook.office.com/rescheduled-legal-event',
             ], 201),
         ]);
 
@@ -663,13 +687,15 @@ class AdminPanelTest extends TestCase
             'provider' => 'outlook',
             'action' => 'automatic_reschedule_sync',
             'request_payload->subject' => $consultation->booking_number.' - '.$consultation->type->name,
-            'response_payload->id' => 'rescheduled-outlook-event-id',
+            'response_payload->id' => 'rescheduled-legal-outlook-event-id',
         ]);
-        $this->assertDatabaseHas('external_calendar_events', [
-            'provider' => 'outlook',
-            'external_id' => 'consultation-'.$consultation->uuid,
-            'application' => 'legal',
-            'is_busy' => true,
-        ]);
+        foreach (['socal', 'legal'] as $application) {
+            $this->assertDatabaseHas('external_calendar_events', [
+                'provider' => 'outlook',
+                'external_id' => 'consultation-'.$consultation->uuid.'-'.$application,
+                'application' => $application,
+                'is_busy' => true,
+            ]);
+        }
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Consultation;
+use App\Services\Integrations\OutlookCalendarClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -14,8 +15,8 @@ class ConsultationCompletionService
         private readonly PaymentLinkService $payments,
         private readonly AdminPaymentNotificationService $notifications,
         private readonly PaymentSimulationService $simulation,
-    ) {
-    }
+        private readonly OutlookCalendarClient $outlook,
+    ) {}
 
     public function complete(Consultation $consultation, array $data): Consultation
     {
@@ -64,7 +65,37 @@ class ConsultationCompletionService
             $this->notifications->sendPaymentLinks($consultation, 'automatic_payment_link');
         }
 
+        $this->syncToOutlook($consultation);
+
         return $consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests']);
+    }
+
+    private function syncToOutlook(Consultation $consultation): void
+    {
+        if (! config('services.outlook.enabled')) {
+            return;
+        }
+
+        try {
+            $syncedConsultation = $consultation->refresh()->load(['type', 'professional']);
+            $outlookEvent = $this->outlook->syncConsultation($syncedConsultation, 'automatic_completion_sync');
+
+            $consultation->integrationLogs()->create([
+                'provider' => 'outlook',
+                'action' => 'automatic_completion_sync',
+                'status' => 'synced',
+                'request_payload' => $this->outlook->consultationEventPayload($syncedConsultation),
+                'response_payload' => $outlookEvent?->metadata['outlook_response'] ?? $outlookEvent?->metadata,
+                'message' => 'Booking synced to both Outlook calendars after consultation completion.',
+            ]);
+        } catch (\Throwable $exception) {
+            $consultation->integrationLogs()->create([
+                'provider' => 'outlook',
+                'action' => 'automatic_completion_sync',
+                'status' => 'failed',
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     private function mergeDraftDetails(Consultation $consultation, array $data): array
