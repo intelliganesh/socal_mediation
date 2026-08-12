@@ -13,12 +13,82 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class ConsultationApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_successful_payment_status_uses_application_redirect_and_brand(): void
+    {
+        $this->seed();
+        config([
+            'app.payment_redirect_urls.socal' => 'https://socal.example.test/payment-complete',
+            'app.payment_redirect_urls.legal' => 'https://legal.example.test/payment-complete',
+        ]);
+
+        $socalPayment = Consultation::where('booking_number', 'SAMPLE-03')
+            ->firstOrFail()
+            ->paymentRequests()
+            ->firstOrFail();
+        $socalPayment->update(['status' => 'paid']);
+
+        $this->get(URL::signedRoute('payments.status.show', [
+            'paymentRequest' => $socalPayment,
+            'state' => 'success',
+        ]))
+            ->assertOk()
+            ->assertSee('Continue to SoCal Mediation Center')
+            ->assertSee('href="https://socal.example.test/payment-complete" style="display:inline-block;margin-top:24px;border-radius:6px;background:#082BC3', false)
+            ->assertDontSee('https://legal.example.test/payment-complete');
+
+        $legalPayment = Consultation::where('booking_number', 'SAMPLE-08')
+            ->firstOrFail()
+            ->paymentRequests()
+            ->firstOrFail();
+        $legalPayment->update(['status' => 'paid']);
+
+        $this->get(URL::signedRoute('payments.status.show', [
+            'paymentRequest' => $legalPayment,
+            'state' => 'success',
+        ]))
+            ->assertOk()
+            ->assertSee('Continue to Legal Consultation')
+            ->assertSee('href="https://legal.example.test/payment-complete" style="display:inline-block;margin-top:24px;border-radius:6px;background:#75172E', false)
+            ->assertDontSee('https://socal.example.test/payment-complete');
+    }
+
+    public function test_payment_redirect_is_hidden_until_paid_and_for_unsafe_url(): void
+    {
+        $this->seed();
+        $payment = Consultation::where('booking_number', 'SAMPLE-08')
+            ->firstOrFail()
+            ->paymentRequests()
+            ->firstOrFail();
+
+        config(['app.payment_redirect_urls.legal' => 'https://legal.example.test/payment-complete']);
+
+        $this->get(URL::signedRoute('payments.status.show', [
+            'paymentRequest' => $payment,
+            'state' => 'pending',
+        ]))
+            ->assertOk()
+            ->assertDontSee('Continue to Legal Consultation')
+            ->assertDontSee('https://legal.example.test/payment-complete');
+
+        $payment->update(['status' => 'paid']);
+        config(['app.payment_redirect_urls.legal' => 'javascript:alert(1)']);
+
+        $this->get(URL::signedRoute('payments.status.show', [
+            'paymentRequest' => $payment,
+            'state' => 'success',
+        ]))
+            ->assertOk()
+            ->assertDontSee('Continue to Legal Consultation')
+            ->assertDontSee('javascript:alert(1)');
+    }
 
     public function test_it_creates_a_draft_consultation(): void
     {

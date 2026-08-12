@@ -37,9 +37,19 @@
     $mode = match ($consultation?->consultation_mode) {
         'online' => 'Video Consultation'.($zoomUrl ? ' (Zoom)' : ''),
         'offline' => 'In-Person Consultation',
+        'in_person' => 'In-Person Consultation',
         'phone' => 'Phone Consultation',
         default => 'Not selected',
     };
+    $modeIconSuffix = match ($consultation?->consultation_mode) {
+        'online' => 'video',
+        'offline' => 'inperson',
+        'in_person' => 'inperson',
+        'phone' => 'phone',
+        default => 'video',
+    };
+
+    $modeIcon=$iconPath([$iconPrefix.'_'.$modeIconSuffix, $iconPrefix, 'video']);
 @endphp
 
 <!DOCTYPE html>
@@ -120,7 +130,7 @@
                                     <td width="50%" valign="top" style="padding:0 0 22px 18px;">
                                         <div style="font-size:12px;color:#374151;margin-bottom:7px;">Consultation mode</div>
                                         <div style="font-size:14px;line-height:1.4;">
-                                            <img src="{{ asset('admin-icons/video.svg') }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
+                                            <img src="{{ asset($modeIcon) }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
                                             {{ $mode }}
                                         </div>
                                     </td>

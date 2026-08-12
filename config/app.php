@@ -56,6 +56,11 @@ return [
 
     'frontend_url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost')),
 
+    'payment_redirect_urls' => [
+        'socal' => env('SOCAL_REDIRECT_URL'),
+        'legal' => env('LEGAL_REDIRECT_URL'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

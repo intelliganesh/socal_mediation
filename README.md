@@ -145,6 +145,15 @@ Draft flow:
 
 The application is ready for sandbox and production configuration through `.env`.
 
+After a successful payment, the result page can show a branded Continue button
+for the corresponding frontend application. Leave a value blank to hide the
+button for that application.
+
+```env
+SOCAL_REDIRECT_URL=https://socal.example.com/payment-complete
+LEGAL_REDIRECT_URL=https://legal.example.com/payment-complete
+```
+
 Payment gateway:
 
 ```env
