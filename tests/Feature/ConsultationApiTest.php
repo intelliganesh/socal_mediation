@@ -572,7 +572,7 @@ class ConsultationApiTest extends TestCase
         Mail::assertNotSent(ConsultationPaymentLinkMail::class, fn (ConsultationPaymentLinkMail $mail) => $mail->paymentRequest->participant->email === 'jordan.skipped@example.com');
     }
 
-    public function test_full_payment_link_is_sent_to_primary_client(): void
+    public function test_full_payment_uses_checkout_js_without_payment_link_email(): void
     {
         $this->seed();
         Mail::fake();
@@ -605,15 +605,25 @@ class ConsultationApiTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.payment_progress.total', 1)
+            ->assertJsonPath('data.payment_requests.0.checkout_method', 'checkout_js')
+            ->assertJsonPath('data.payment_requests.0.payment_url', null)
             ->json('data');
 
         $this->assertCount(1, $response['payment_requests']);
         $this->assertFalse(Schema::hasColumn('payment_requests', 'uuid'));
         $this->assertTrue(Str::isUuid($response['payment_requests'][0]['id']));
+        $this->assertSame('checkout_js', $response['payment_requests'][0]['checkout_method']);
+        $this->assertNull($response['payment_requests'][0]['payment_url']);
 
-        Mail::assertSent(ConsultationPaymentLinkMail::class, 1);
-        Mail::assertSent(ConsultationPaymentLinkMail::class, fn (ConsultationPaymentLinkMail $mail) => $mail->paymentRequest->participant->email === 'primary.payer@example.com');
-        Mail::assertNotSent(ConsultationPaymentLinkMail::class, fn (ConsultationPaymentLinkMail $mail) => $mail->paymentRequest->participant->email === 'other.participant@example.com');
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultationUuid,
+            'provider' => 'converge',
+            'action' => 'automatic_payment_link',
+            'status' => 'skipped',
+        ]);
+
+        Mail::assertNotSent(ConsultationPaymentLinkMail::class);
     }
 
     public function test_payment_link_email_uses_confirmation_template_with_socal_brand_and_type_icon(): void
@@ -862,6 +872,7 @@ class ConsultationApiTest extends TestCase
 
         $this->assertNull($paymentRequest->payment_url);
         $this->assertSame('pending', $paymentRequest->status);
+        $this->assertSame('checkout_js', $paymentRequest->metadata['checkout_method']);
         Mail::assertNotSent(ConsultationPaymentLinkMail::class);
     }
 
@@ -1112,7 +1123,7 @@ class ConsultationApiTest extends TestCase
         Mail::assertNotSent(ConsultationPaymentLinkMail::class);
     }
 
-    public function test_enabled_converge_gateway_creates_fresh_hosted_payment_session_on_signed_checkout(): void
+    public function test_full_payment_checkout_token_endpoint_creates_fresh_converge_checkout_js_session(): void
     {
         $this->seed();
         Mail::fake();
@@ -1152,15 +1163,17 @@ class ConsultationApiTest extends TestCase
         $paymentRequest = PaymentRequest::findOrFail($complete['payment_requests'][0]['id']);
 
         Http::assertNotSent(fn ($request) => $request->url() === 'https://api.demo.convergepay.com/hosted-payments/transaction_token');
-        $this->assertStringContainsString('/payments/'.$paymentRequest->id.'/checkout?', $paymentRequest->payment_url);
+        $this->assertNull($paymentRequest->payment_url);
+        $this->assertSame('checkout_js', $paymentRequest->metadata['checkout_method']);
         $this->assertNull($paymentRequest->metadata['session_token']);
 
-        $this->get($paymentRequest->payment_url)
+        $this->postJson('/api/v1/payments/'.$paymentRequest->id.'/checkout-token')
             ->assertOk()
-            ->assertHeader('Cache-Control', 'no-store, private')
-            ->assertSee('action="https://api.demo.convergepay.com/hosted-payments/"', false)
-            ->assertSee('method="post"', false)
-            ->assertSee('name="ssl_txn_auth_token" value="session-token-123"', false);
+            ->assertJsonPath('data.payment_request_uuid', $paymentRequest->id)
+            ->assertJsonPath('data.ssl_txn_auth_token', 'session-token-123')
+            ->assertJsonPath('data.checkout_method', 'checkout_js')
+            ->assertJsonPath('data.converge_mode', 'sandbox')
+            ->assertJsonPath('data.hosted_payment_action', 'https://api.demo.convergepay.com/hosted-payments/');
 
         Http::assertSent(fn ($request) => $request->url() === 'https://api.demo.convergepay.com/hosted-payments/transaction_token'
             && $request['ssl_transaction_type'] === 'ccsale'
@@ -1170,8 +1183,52 @@ class ConsultationApiTest extends TestCase
             && strlen($request['ssl_customer_code']) <= 17
             && $request['ssl_customer_code'] === $paymentRequest->consultation->booking_number);
 
-        $tamperedUrl = str_replace('signature=', 'signature=invalid', $paymentRequest->payment_url);
-        $this->get($tamperedUrl)->assertForbidden();
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => PaymentRequest::class,
+            'loggable_id' => $paymentRequest->id,
+            'provider' => 'converge',
+            'action' => 'checkout_js_session',
+            'status' => 'created',
+        ]);
+    }
+
+    public function test_split_payment_keeps_hpp_signed_checkout_links(): void
+    {
+        $this->seed();
+        Mail::fake();
+        $this->enableConverge();
+
+        $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
+        $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+        ])->assertCreated()->json('data.uuid');
+
+        $complete = $this->postJson('/api/v1/consultations/'.$consultationUuid.'/complete', [
+            'legal_service_name' => 'Business, Payment & Contract Disputes',
+            'consultation_mode' => 'online',
+            'starts_at' => '2026-08-15T09:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+            'payment_mode' => 'split',
+            'payment_method' => 'card',
+            'primary_client' => [
+                'first_name' => 'Split',
+                'last_name' => 'Primary',
+                'email' => 'split.primary@example.com',
+            ],
+            'participants' => [[
+                'first_name' => 'Split',
+                'last_name' => 'Participant',
+                'email' => 'split.participant@example.com',
+            ]],
+        ])->assertOk()->json('data');
+
+        $this->assertSame(2, $complete['payment_progress']['total']);
+        foreach ($complete['payment_requests'] as $paymentRequest) {
+            $this->assertSame('hpp_link', $paymentRequest['checkout_method']);
+            $this->assertStringContainsString('/payments/'.$paymentRequest['id'].'/checkout?', $paymentRequest['payment_url']);
+        }
+
+        Mail::assertSent(ConsultationPaymentLinkMail::class, 2);
     }
 
     public function test_converge_session_creation_error_shows_retry_button(): void

@@ -9,7 +9,7 @@ class ConsultationResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $paymentRequests = $this->whenLoaded('paymentRequests', fn () => $this->paymentRequests);
+        $paymentRequests = $this->whenLoaded('paymentRequests', fn () => PaymentRequestResource::collection($this->paymentRequests));
         $paidCount = $this->relationLoaded('paymentRequests') ? $this->paymentRequests->where('status', 'paid')->count() : 0;
         $paymentCount = $this->relationLoaded('paymentRequests') ? $this->paymentRequests->count() : 0;
 

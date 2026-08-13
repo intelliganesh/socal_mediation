@@ -31,6 +31,10 @@ class ConvergeCheckoutController extends Controller
             return $this->resultView($paymentRequest, 'unavailable', 'This consultation cannot accept payment.');
         }
 
+        if (data_get($paymentRequest->metadata, 'checkout_method') === 'checkout_js') {
+            return $this->resultView($paymentRequest, 'unavailable', 'This payment must be completed from the checkout screen.');
+        }
+
         try {
             $session = $converge->createHostedPaymentSession($paymentRequest);
 

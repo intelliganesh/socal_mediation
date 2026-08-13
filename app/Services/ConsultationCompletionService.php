@@ -62,7 +62,14 @@ class ConsultationCompletionService
 
         $freeIntroHandled = $this->freeIntroCalls->afterCompletion($consultation);
 
-        if (! $freeIntroHandled && $this->simulation->isActive()) {
+        if (! $freeIntroHandled && $consultation->payment_mode === 'full') {
+            $consultation->integrationLogs()->create([
+                'provider' => 'converge',
+                'action' => 'automatic_payment_link',
+                'status' => 'skipped',
+                'message' => 'Payment-link email skipped because full payments use Converge Checkout.js.',
+            ]);
+        } elseif (! $freeIntroHandled && $this->simulation->isActive()) {
             $consultation->integrationLogs()->create([
                 'provider' => 'simulation',
                 'action' => 'automatic_payment_link',

@@ -706,6 +706,99 @@
                 }
             }
         },
+        "/v1/payments/{payment_request_uuid}/checkout-token": {
+            "post": {
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Create a Converge Checkout.js token for a full payment",
+                "description": "Full-payment consultations use React Checkout.js/Lightbox. Split-payment requests continue using Hosted Payment Page links and cannot use this endpoint.",
+                "operationId": "94b9d683f17a6e691aa58850596e4c4c",
+                "parameters": [
+                    {
+                        "name": "payment_request_uuid",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Checkout token created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Checkout token created."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "payment_request_uuid": {
+                                                    "type": "string",
+                                                    "format": "uuid"
+                                                },
+                                                "amount_cents": {
+                                                    "type": "integer",
+                                                    "example": 260000
+                                                },
+                                                "currency": {
+                                                    "type": "string",
+                                                    "example": "USD"
+                                                },
+                                                "provider_reference": {
+                                                    "type": "string",
+                                                    "example": "CONVabc123"
+                                                },
+                                                "ssl_txn_auth_token": {
+                                                    "type": "string",
+                                                    "example": "session-token"
+                                                },
+                                                "checkout_method": {
+                                                    "type": "string",
+                                                    "example": "checkout_js"
+                                                },
+                                                "converge_mode": {
+                                                    "type": "string",
+                                                    "example": "sandbox"
+                                                },
+                                                "converge_base_url": {
+                                                    "type": "string",
+                                                    "example": "https://api.demo.convergepay.com"
+                                                },
+                                                "hosted_payment_action": {
+                                                    "type": "string",
+                                                    "example": "https://api.demo.convergepay.com/hosted-payments/"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Payment request not found"
+                    },
+                    "409": {
+                        "description": "Payment request is not eligible for Checkout.js"
+                    },
+                    "422": {
+                        "description": "Converge token creation failed"
+                    }
+                }
+            }
+        },
         "/v1/payments/converge/confirmation": {
             "post": {
                 "tags": [

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Services\Integrations;
 
 use App\Models\Consultation;
@@ -10,28 +11,53 @@ use Illuminate\Support\Str;
 
 class ConvergeClient
 {
-    public function createPaymentLink(Consultation $consultation, ConsultationParticipant $participant, int $amountCents, ?string $method, string $paymentRequestId): array
-    {
-        $reference = 'CONV' . Str::lower(Str::random(11));
+    public function createPaymentLink(
+        Consultation $consultation,
+        ConsultationParticipant $participant,
+        int $amountCents,
+        ?string $method,
+        string $paymentRequestId,
+        string $checkoutMethod = 'hpp_link',
+    ): array {
+        $reference = 'CONV'.Str::lower(Str::random(11));
 
         if (config('services.converge.enabled')) {
             $this->assertHostedPaymentConfigured();
         }
 
         return [
-            'provider'          => 'converge',
-            'reference'         => $reference,
-            'url'               => config('services.converge.enabled')
+            'provider' => 'converge',
+            'reference' => $reference,
+            'url' => $checkoutMethod === 'hpp_link' && config('services.converge.enabled')
                 ? URL::signedRoute('payments.checkout', ['paymentRequest' => $paymentRequestId])
                 : null,
-            'mode'              => config('services.converge.mode'),
-            'gateway_enabled'   => (bool) config('services.converge.enabled'),
-            'amount_cents'      => $amountCents,
-            'method'            => $method,
-            'invoice_number'    => $reference,
-            'booking_number'    => $consultation->booking_number,
+            'checkout_method' => $checkoutMethod,
+            'mode' => config('services.converge.mode'),
+            'gateway_enabled' => (bool) config('services.converge.enabled'),
+            'amount_cents' => $amountCents,
+            'method' => $method,
+            'invoice_number' => $reference,
+            'booking_number' => $consultation->booking_number,
             'participant_email' => $participant->email,
-            'session_token'     => null,
+            'session_token' => null,
+        ];
+    }
+
+    public function createCheckoutJsSession(PaymentRequest $payment): array
+    {
+        $session = $this->createHostedPaymentSession($payment);
+
+        return [
+            'payment_request_uuid' => $payment->id,
+            'amount_cents' => $payment->amount_cents,
+            'currency' => $payment->currency,
+            'provider_reference' => $payment->provider_reference,
+            'ssl_txn_auth_token' => $session['token'],
+            'checkout_method' => 'checkout_js',
+            'converge_mode' => config('services.converge.mode'),
+            'converge_base_url' => $this->gatewayBaseUrl(),
+            'hosted_payment_action' => $session['action'],
+            'request' => $session['request'],
         ];
     }
 
@@ -42,8 +68,8 @@ class ConvergeClient
         $payload = $this->hostedPaymentPayload($payment);
 
         return [
-            'action'  => rtrim($this->hostedPaymentBaseUrl(), '/') . '/hosted-payments/',
-            'token'   => $this->requestHostedPaymentToken($payload),
+            'action' => rtrim($this->hostedPaymentBaseUrl(), '/').'/hosted-payments/',
+            'token' => $this->requestHostedPaymentToken($payload),
             'request' => $this->safePayload($payload),
         ];
     }
@@ -63,13 +89,13 @@ class ConvergeClient
         }
 
         if ($response->failed()) {
-            throw new \RuntimeException('Converge hosted payment token request failed: ' . $response->body());
+            throw new \RuntimeException('Converge hosted payment token request failed: '.$response->body());
         }
 
         $token = trim($response->body());
 
         if ($token === '' || str_starts_with(strtolower($token), 'error')) {
-            throw new \RuntimeException('Converge hosted payment token request failed: ' . $response->body());
+            throw new \RuntimeException('Converge hosted payment token request failed: '.$response->body());
         }
 
         return $token;
@@ -78,18 +104,18 @@ class ConvergeClient
     private function hostedPaymentPayload(PaymentRequest $payment): array
     {
         $consultation = $payment->consultation;
-        $participant  = $payment->participant;
+        $participant = $payment->participant;
 
         $payload = [
-            'ssl_account_id'       => config('services.converge.account_id'),
-            'ssl_user_id'          => config('services.converge.user_id'),
-            'ssl_pin'              => config('services.converge.pin'),
+            'ssl_account_id' => config('services.converge.account_id'),
+            'ssl_user_id' => config('services.converge.user_id'),
+            'ssl_pin' => config('services.converge.pin'),
             'ssl_transaction_type' => $payment->payment_method === 'ach' ? 'ecspurchase' : 'ccsale',
-            'ssl_amount'           => number_format($payment->amount_cents / 100, 2, '.', ''),
-            'ssl_description'      => Str::limit($consultation->booking_number . ' - ' . $consultation->type?->name, 255, ''),
-            'ssl_first_name'       => $participant?->first_name ?: $consultation->primary_first_name,
-            'ssl_last_name'        => $participant?->last_name ?: $consultation->primary_last_name,
-            'ssl_email'            => $participant?->email ?: $consultation->primary_email,
+            'ssl_amount' => number_format($payment->amount_cents / 100, 2, '.', ''),
+            'ssl_description' => Str::limit($consultation->booking_number.' - '.$consultation->type?->name, 255, ''),
+            'ssl_first_name' => $participant?->first_name ?: $consultation->primary_first_name,
+            'ssl_last_name' => $participant?->last_name ?: $consultation->primary_last_name,
+            'ssl_email' => $participant?->email ?: $consultation->primary_email,
             // 'ssl_result_format'       => 'html',
             // 'ssl_receipt_link_method' => 'REDG',
             // 'ssl_receipt_link_url'    => $returnUrl,
@@ -110,7 +136,7 @@ class ConvergeClient
 
     private function hostedPaymentTokenEndpoint(): string
     {
-        return rtrim($this->hostedPaymentBaseUrl(), '/') . '/hosted-payments/transaction_token';
+        return rtrim($this->hostedPaymentBaseUrl(), '/').'/hosted-payments/transaction_token';
     }
 
     private function fitsConvergeLimit(?string $value, int $maxLength): bool
@@ -131,28 +157,27 @@ class ConvergeClient
             ]);
 
         if ($response->failed()) {
-            throw new \RuntimeException('Converge payment status lookup failed: ' . $response->body());
-
+            throw new \RuntimeException('Converge payment status lookup failed: '.$response->body());
         }
 
-        $payload     = $this->parseXmlResponse($response->body());
+        $payload = $this->parseXmlResponse($response->body());
         $transaction = $this->transactionFromQueryResponse($payload, $payment);
 
         return [
-            'status'         => $this->statusFromResponse($transaction),
+            'status' => $this->statusFromResponse($transaction),
             'transaction_id' => $transaction['ssl_txn_id'] ?? null,
-            'approval_code'  => $transaction['ssl_approval_code'] ?? null,
+            'approval_code' => $transaction['ssl_approval_code'] ?? null,
             'result_message' => $transaction['ssl_result_message'] ?? $transaction['errorMessage'] ?? null,
-            'raw'            => $payload,
+            'raw' => $payload,
         ];
     }
 
     private function transactionQueryXml(PaymentRequest $payment, array $callbackPayload = []): string
     {
         $fields = [
-            'ssl_account_id'       => $this->xmlCredential('account_id'),
-            'ssl_user_id'          => $this->xmlCredential('user_id'),
-            'ssl_pin'              => $this->xmlCredential('pin'),
+            'ssl_account_id' => $this->xmlCredential('account_id'),
+            'ssl_user_id' => $this->xmlCredential('user_id'),
+            'ssl_pin' => $this->xmlCredential('pin'),
             'ssl_transaction_type' => 'txnquery',
         ];
 
@@ -177,10 +202,10 @@ class ConvergeClient
 
         $xml = '<txn>';
         foreach ($fields as $key => $value) {
-            $xml .= '<' . $key . '>' . htmlspecialchars((string) $value, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '</' . $key . '>';
+            $xml .= '<'.$key.'>'.htmlspecialchars((string) $value, ENT_XML1 | ENT_COMPAT, 'UTF-8').'</'.$key.'>';
         }
 
-        return $xml . '</txn>';
+        return $xml.'</txn>';
     }
 
     private function parseXmlResponse(string $body): array
@@ -212,7 +237,7 @@ class ConvergeClient
 
         if (! is_array($transactions) || $transactions === []) {
             return [
-                'errorCode'    => 'transaction_not_found',
+                'errorCode' => 'transaction_not_found',
                 'errorMessage' => 'Converge transaction was not found.',
             ];
         }
@@ -237,7 +262,7 @@ class ConvergeClient
         }
 
         return [
-            'errorCode'    => 'transaction_mismatch',
+            'errorCode' => 'transaction_mismatch',
             'errorMessage' => 'No matching Converge transaction was found.',
         ];
     }
@@ -261,9 +286,8 @@ class ConvergeClient
 
         if (isset($transaction['ssl_amount']) && number_format((float) $transaction['ssl_amount'], 2, '.', '') !== $expectedAmount) {
             return [
-                'errorCode'    => 'amount_mismatch',
-                'errorMessage' =>
-                'Converge transaction amount does not match the payment request.',
+                'errorCode' => 'amount_mismatch',
+                'errorMessage' => 'Converge transaction amount does not match the payment request.',
             ];
         }
 
@@ -273,7 +297,7 @@ class ConvergeClient
 
         if (filled($expectedInvoice) && isset($transaction['ssl_invoice_number']) && (string) $transaction['ssl_invoice_number'] !== (string) $expectedInvoice) {
             return [
-                'errorCode'    => 'invoice_mismatch',
+                'errorCode' => 'invoice_mismatch',
                 'errorMessage' => 'Converge transaction invoice does not match the payment request.',
             ];
         }
@@ -296,8 +320,8 @@ class ConvergeClient
 
         // txnquery response
         $transactionType = strtoupper((string) ($payload['ssl_transaction_type'] ?? ''));
-        $resultMessage   = strtoupper((string) ($payload['ssl_result_message'] ?? ''));
-        $approvalCode    = $payload['ssl_approval_code'] ?? null;
+        $resultMessage = strtoupper((string) ($payload['ssl_result_message'] ?? ''));
+        $approvalCode = $payload['ssl_approval_code'] ?? null;
 
         if ($transactionType === 'SALE' && $resultMessage === 'APPROVAL' && filled($approvalCode)) {
             return 'paid';
@@ -319,7 +343,7 @@ class ConvergeClient
             ? '/VirtualMerchant/processxml.do'
             : '/VirtualMerchantDemo/processxml.do';
 
-        return rtrim($this->gatewayBaseUrl(), '/') . $path;
+        return rtrim($this->gatewayBaseUrl(), '/').$path;
     }
 
     private function gatewayBaseUrl(): string
@@ -342,8 +366,8 @@ class ConvergeClient
     private function assertCredentialsConfigured(): void
     {
         foreach (['account_id', 'user_id', 'pin'] as $key) {
-            if (blank(config('services.converge.' . $key))) {
-                throw new \RuntimeException('CONVERGE_' . strtoupper($key) . ' is not configured.');
+            if (blank(config('services.converge.'.$key))) {
+                throw new \RuntimeException('CONVERGE_'.strtoupper($key).' is not configured.');
             }
         }
     }
@@ -352,14 +376,14 @@ class ConvergeClient
     {
         foreach (['account_id', 'user_id', 'pin'] as $key) {
             if (blank($this->xmlCredential($key))) {
-                throw new \RuntimeException('CONVERGE_XML_' . strtoupper($key) . ' is not configured.');
+                throw new \RuntimeException('CONVERGE_XML_'.strtoupper($key).' is not configured.');
             }
         }
     }
 
     private function xmlCredential(string $key): mixed
     {
-        return config('services.converge.xml_' . $key) ?: config('services.converge.' . $key);
+        return config('services.converge.xml_'.$key) ?: config('services.converge.'.$key);
     }
 
     private function safePayload(array $payload): array
