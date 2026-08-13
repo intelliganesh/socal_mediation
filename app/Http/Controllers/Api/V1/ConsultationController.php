@@ -7,7 +7,6 @@ use App\Http\Requests\Api\CompleteConsultationRequest;
 use App\Http\Requests\Api\CreateDraftConsultationRequest;
 use App\Http\Resources\ConsultationResource;
 use App\Models\Consultation;
-use App\Models\ConsultationParticipant;
 use App\Models\ConsultationType;
 use App\Services\ApiResponse;
 use App\Services\AvailabilityService;
@@ -201,15 +200,14 @@ class ConsultationController extends Controller
     }
 
     #[OA\Post(
-        path: '/v1/consultation-participants/{participant}/free-intro-slot',
+        path: '/v1/free-intro-slots/{scheduling_token}',
         tags: ['Consultations'],
         summary: 'Schedule an invited free intro participant slot',
-        description: 'Used by additional Free 15-Min Intro Call participants who receive a scheduling email. The primary participant slot is reserved when the consultation is completed.',
+        description: 'Used by additional Free 15-Min Intro Call participants who receive a secure scheduling email. The primary participant slot is reserved when the consultation is completed.',
         parameters: [
-            new OA\Parameter(name: 'participant', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'scheduling_token', in: 'path', required: true, schema: new OA\Schema(type: 'string', example: 'token-from-email')),
         ],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['scheduling_token', 'starts_at'], properties: [
-            new OA\Property(property: 'scheduling_token', type: 'string', example: 'token-from-email'),
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['starts_at'], properties: [
             new OA\Property(property: 'starts_at', type: 'string', format: 'date-time', example: '2026-08-14T09:15:00-07:00'),
             new OA\Property(property: 'timezone', type: 'string', nullable: true, example: 'America/Los_Angeles'),
             new OA\Property(property: 'professional_id', type: 'integer', nullable: true, example: 1),
@@ -223,17 +221,16 @@ class ConsultationController extends Controller
             new OA\Response(response: 422, description: 'Invalid token, unavailable slot, or unsupported consultation type'),
         ]
     )]
-    public function scheduleFreeIntroParticipantSlot(Request $request, ConsultationParticipant $participant, FreeIntroCallWorkflowService $workflow)
+    public function scheduleFreeIntroParticipantSlot(Request $request, string $schedulingToken, FreeIntroCallWorkflowService $workflow)
     {
         $data = $request->validate([
-            'scheduling_token' => ['required', 'string'],
             'starts_at' => ['required', 'date'],
             'timezone' => ['nullable', 'timezone'],
             'professional_id' => ['nullable', 'integer', 'exists:professionals,id'],
         ]);
 
         try {
-            $consultation = $workflow->scheduleParticipant($participant, $data);
+            $consultation = $workflow->scheduleParticipantByToken($schedulingToken, $data);
         } catch (\DomainException $exception) {
             return ApiResponse::error($exception->getMessage(), 422);
         }

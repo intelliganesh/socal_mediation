@@ -2,7 +2,7 @@
     $consultation = $participant->consultation;
     $clientName = trim($participant->first_name.' '.($participant->last_name ?? '')) ?: 'Client';
     $baseUrl = rtrim(config('app.frontend_url'), '/');
-    $scheduleUrl = $baseUrl.'/free-intro/participants/'.$participant->id.'/schedule?token='.$participant->scheduling_token;
+    $scheduleUrl = $baseUrl.'/free-intro/schedule?token='.$participant->scheduling_token;
 @endphp
 
 @include('emails.partials.consultation-card', [

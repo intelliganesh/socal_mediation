@@ -545,21 +545,22 @@
                 }
             }
         },
-        "/v1/consultation-participants/{participant}/free-intro-slot": {
+        "/v1/free-intro-slots/{scheduling_token}": {
             "post": {
                 "tags": [
                     "Consultations"
                 ],
                 "summary": "Schedule an invited free intro participant slot",
-                "description": "Used by additional Free 15-Min Intro Call participants who receive a scheduling email. The primary participant slot is reserved when the consultation is completed.",
-                "operationId": "3b1ca65e40b30695455280983cea0e16",
+                "description": "Used by additional Free 15-Min Intro Call participants who receive a secure scheduling email. The primary participant slot is reserved when the consultation is completed.",
+                "operationId": "7ed93f2d72504cecb306ff32a3d2444c",
                 "parameters": [
                     {
-                        "name": "participant",
+                        "name": "scheduling_token",
                         "in": "path",
                         "required": true,
                         "schema": {
-                            "type": "integer"
+                            "type": "string",
+                            "example": "token-from-email"
                         }
                     }
                 ],
@@ -569,14 +570,9 @@
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "scheduling_token",
                                     "starts_at"
                                 ],
                                 "properties": {
-                                    "scheduling_token": {
-                                        "type": "string",
-                                        "example": "token-from-email"
-                                    },
                                     "starts_at": {
                                         "type": "string",
                                         "format": "date-time",

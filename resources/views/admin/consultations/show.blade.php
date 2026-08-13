@@ -14,7 +14,7 @@
     'overdue' => ['badge' => 'status-badge-overdue', 'progress' => 'progress-fill-overdue', 'label' => 'Overdue'],
     'partially_paid' => ['badge' => 'status-badge-partially-paid', 'progress' => 'progress-fill-partially-paid', 'label' => 'Partially Paid'],
     'pending', 'payment_pending' => ['badge' => 'status-badge-pending', 'progress' => 'progress-fill-pending', 'label' => $status === 'payment_pending' ? 'Payment Pending' : 'Pending'],
-    default => ['badge' => 'status-badge-draft', 'progress' => 'progress-fill-draft', 'label' => str_replace('_', ' ', ucfirst((string) $status ?: 'Draft'))],
+    default => ['badge' => 'status-badge-draft', 'progress' => 'progress-fill-draft', 'label' => str_replace('_', ' ', ucfirst((string) $status ?: 'Not Required'))],
     };
     };
     $bookingStatus = $statusTheme($consultation->status);

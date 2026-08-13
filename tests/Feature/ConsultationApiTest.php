@@ -408,7 +408,7 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('data.payment_status', 'paid');
 
         Mail::assertSent(FreeIntroParticipantScheduleMail::class, 2);
-        Mail::assertNotSent(ConsultationConfirmationMail::class);
+        Mail::assertSent(ConsultationConfirmationMail::class, 1);
         Mail::assertNotSent(ConsultationPaymentLinkMail::class);
 
         $participants = Consultation::findOrFail($consultationId)->participants()->where('is_primary', false)->orderBy('email')->get();
@@ -416,18 +416,16 @@ class ConsultationApiTest extends TestCase
         $this->assertNotNull($participants[0]->scheduling_token);
         $this->assertSame('pending', $participants[0]->scheduling_status);
 
-        $this->postJson('/api/v1/consultation-participants/'.$participants[0]->id.'/free-intro-slot', [
-            'scheduling_token' => $participants[0]->scheduling_token,
+        $this->postJson('/api/v1/free-intro-slots/'.$participants[0]->scheduling_token, [
             'starts_at' => '2026-10-21T09:15:00-07:00',
             'timezone' => 'America/Los_Angeles',
         ])
             ->assertOk()
             ->assertJsonPath('data.status', 'paid');
 
-        Mail::assertNotSent(ConsultationConfirmationMail::class);
+        Mail::assertSent(ConsultationConfirmationMail::class, 2);
 
-        $this->postJson('/api/v1/consultation-participants/'.$participants[1]->id.'/free-intro-slot', [
-            'scheduling_token' => $participants[1]->scheduling_token,
+        $this->postJson('/api/v1/free-intro-slots/'.$participants[1]->scheduling_token, [
             'starts_at' => '2026-10-21T09:30:00-07:00',
             'timezone' => 'America/Los_Angeles',
         ])
@@ -472,8 +470,7 @@ class ConsultationApiTest extends TestCase
 
         $participant = Consultation::findOrFail($consultationId)->participants()->where('is_primary', false)->firstOrFail();
 
-        $this->postJson('/api/v1/consultation-participants/'.$participant->id.'/free-intro-slot', [
-            'scheduling_token' => 'wrong-token',
+        $this->postJson('/api/v1/free-intro-slots/wrong-token', [
             'starts_at' => '2026-10-22T09:15:00-07:00',
             'timezone' => 'America/Los_Angeles',
         ])
@@ -511,7 +508,7 @@ class ConsultationApiTest extends TestCase
         $participant = Consultation::findOrFail($consultationId)->participants()->where('is_primary', false)->firstOrFail();
         $html = (new FreeIntroParticipantScheduleMail($participant))->render();
 
-        $this->assertStringContainsString('https://booking-frontend.example.test/free-intro/participants/'.$participant->id.'/schedule?token='.$participant->scheduling_token, $html);
+        $this->assertStringContainsString('https://booking-frontend.example.test/free-intro/schedule?token='.$participant->scheduling_token, $html);
         $this->assertStringNotContainsString('https://payment-result.example.test', $html);
     }
 

@@ -127,6 +127,19 @@ class FreeIntroCallWorkflowService
         return $consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests']);
     }
 
+    public function scheduleParticipantByToken(string $schedulingToken, array $data): Consultation
+    {
+        $participant = ConsultationParticipant::query()
+            ->where('scheduling_token', $schedulingToken)
+            ->first();
+
+        if (! $participant) {
+            throw new \DomainException('The participant scheduling token is invalid.');
+        }
+
+        return $this->scheduleParticipant($participant, $data + ['scheduling_token' => $schedulingToken]);
+    }
+
     private function sendSchedulingInvites(Consultation $consultation): void
     {
         $sent = 0;
@@ -170,6 +183,8 @@ class FreeIntroCallWorkflowService
         if (! $this->handles($consultation)) {
             return;
         }
+
+        $this->sendConfirmations($consultation);
 
         if ($consultation->participants->contains(fn (ConsultationParticipant $participant) => $participant->scheduling_status !== 'scheduled')) {
             return;
