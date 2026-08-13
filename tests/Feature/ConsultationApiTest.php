@@ -11,6 +11,7 @@ use App\Models\ConsultationType;
 use App\Models\ExternalCalendarEvent;
 use App\Models\PaymentRequest;
 use App\Services\Integrations\ConvergeClient;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -2045,6 +2046,26 @@ class ConsultationApiTest extends TestCase
         $this->assertSame('2026-08-03T10:00:00+05:30', $data['slots'][0]['starts_at']);
     }
 
+    public function test_availability_excludes_same_day_slots_that_have_already_started(): void
+    {
+        config([
+            'app.booking_timezone' => 'America/Los_Angeles',
+            'app.booking_day_start' => '09:00',
+            'app.booking_day_end' => '17:00',
+        ]);
+        $this->travelTo(CarbonImmutable::parse('2026-08-13 15:55:00', 'America/Los_Angeles'));
+        $this->seed();
+
+        $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
+
+        $data = $this->getJson('/api/v1/availability?consultation_type_id='.$type->id.'&date=2026-08-13')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame('2026-08-13', $data['date']);
+        $this->assertSame([], $data['slots']);
+    }
+
     public function test_availability_slot_spacing_uses_consultation_type_duration(): void
     {
         config([
@@ -2347,6 +2368,36 @@ class ConsultationApiTest extends TestCase
         ])
             ->assertStatus(422)
             ->assertJsonPath('message', 'Selected slot is outside the configured booking hours.');
+    }
+
+    public function test_schedule_rejects_slots_that_have_already_started(): void
+    {
+        config([
+            'app.booking_timezone' => 'America/Los_Angeles',
+            'app.booking_day_start' => '09:00',
+            'app.booking_day_end' => '17:00',
+        ]);
+        $this->travelTo(CarbonImmutable::parse('2026-08-13 15:55:00', 'America/Los_Angeles'));
+        $this->seed();
+
+        $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
+        $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+        ])->json('data.uuid');
+
+        $this->postJson("/api/v1/consultations/{$consultationUuid}/complete", [
+            'legal_service_name' => 'Business, Payment & Contract Disputes',
+            'consultation_mode' => 'online',
+            'starts_at' => '2026-08-13T13:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+            'payment_mode' => 'full',
+            'primary_client' => [
+                'first_name' => 'Taylor',
+                'email' => 'taylor.reed@example.com',
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Selected slot has already started.');
     }
 
     private function enableConverge(): void

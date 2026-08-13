@@ -38,6 +38,10 @@ class AvailabilityService
             throw new \DomainException('Selected slot is outside the configured booking hours.');
         }
 
+        if ($startsAt->lessThanOrEqualTo(CarbonImmutable::now($startsAt->timezone))) {
+            throw new \DomainException('Selected slot has already started.');
+        }
+
         if ($this->hasOverlap($startsAt, $endsAt, $professionalId, $ignoreConsultationId, $ignoreParticipantId)) {
             throw new \DomainException('Selected slot overlaps with an existing booking or Outlook event.');
         }
@@ -59,6 +63,12 @@ class AvailabilityService
                 );
 
                 if ($endsAt->greaterThan($workdayEnd)) {
+                    return null;
+                }
+
+                $now = CarbonImmutable::now($day->timezone);
+
+                if ($startsAt->isSameDay($now) && $startsAt->lessThanOrEqualTo($now)) {
                     return null;
                 }
 
