@@ -17,7 +17,7 @@ class Consultation extends Model
     protected $fillable = [
         'id', 'booking_number', 'consultation_type_id', 'legal_service_name', 'professional_id',
         'application', 'status', 'payment_status', 'consultation_mode', 'timezone', 'starts_at',
-        'ends_at', 'description', 'referral_source', 'primary_first_name', 'primary_last_name',
+        'ends_at', 'description', 'referral_source', 'referral_source_others', 'primary_first_name', 'primary_last_name',
         'primary_email', 'primary_phone_country', 'primary_phone', 'total_amount_cents', 'currency',
         'payment_mode', 'zoom_meeting_id', 'zoom_join_url', 'confirmed_at', 'metadata',
     ];
@@ -30,6 +30,15 @@ class Consultation extends Model
     public function getUuidAttribute(): string
     {
         return $this->id;
+    }
+
+    public function getReferralSourceDisplayAttribute(): ?string
+    {
+        if (strcasecmp((string) $this->referral_source, 'Other Referral') === 0 && filled($this->referral_source_others)) {
+            return $this->referral_source_others;
+        }
+
+        return $this->referral_source;
     }
 
     protected function casts(): array

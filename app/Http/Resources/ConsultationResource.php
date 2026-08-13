@@ -26,6 +26,8 @@ class ConsultationResource extends JsonResource
             'legal_service_name' => $this->legal_service_name,
             'description' => $this->description,
             'referral_source' => $this->referral_source,
+            'referral_source_others' => $this->referral_source_others,
+            'referral_source_display' => $this->referral_source_display,
             'primary_client' => [
                 'first_name' => $this->primary_first_name,
                 'last_name' => $this->primary_last_name,

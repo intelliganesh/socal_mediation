@@ -40,6 +40,8 @@
     'automatic_payment_link' => ['label' => 'Payment Link', 'icon' => 'credit-card'],
     'manual_zoom_link' => ['label' => 'Zoom Link', 'icon' => 'video'],
     'manual_reschedule_zoom_link' => ['label' => 'Reschedule Zoom Link', 'icon' => 'refresh-cw'],
+    'free_intro_schedule_invite' => ['label' => 'Free Intro Slot Invite', 'icon' => 'calendar-plus'],
+    'free_intro_confirmation' => ['label' => 'Free Intro Confirmation', 'icon' => 'calendar-check'],
     default => ['label' => Str::headline($action), 'icon' => 'mail'],
     };
     };
@@ -174,7 +176,10 @@
                 </div>
                 <div class="flex gap-3"><i data-lucide="network" class="h-5 w-5 text-gray-500"></i>
                     <div><dt class="text-gray-500">Referral Source</dt>
-                        <dd class="mt-1 font-semibold text-[#111827]">{{ $consultation->referral_source ?: 'Not provided' }}</dd>
+                        <dd class="mt-1 font-semibold text-[#111827]">{{ $consultation->referral_source_display ?: 'Not provided' }}</dd>
+                        @if(strcasecmp((string) $consultation->referral_source, 'Other Referral') === 0 && filled($consultation->referral_source_others))
+                        <dd class="mt-1 text-xs font-semibold text-gray-500">Other Referral</dd>
+                        @endif
                     </div>
                 </div>
                 <div class="flex gap-3"><i data-lucide="calendar" class="h-5 w-5 text-gray-500"></i>
@@ -228,6 +233,14 @@
                             <div class="min-w-0">
                                 <div class="truncate font-bold text-[#111827]">{{ $participantName }}</div>
                                 <div class="truncate text-xs text-gray-500">{{ $participant->email ?: 'Not provided' }}</div>
+                                @if($consultation->type->slug === 'socal-free-intro-call')
+                                <div class="mt-1 text-xs font-semibold text-gray-500">
+                                    {{ Str::headline($participant->scheduling_status ?? 'pending') }}
+                                    @if($participant->scheduled_starts_at)
+                                    - {{ $participant->scheduled_starts_at->format('M d, Y g:i A') }}
+                                    @endif
+                                </div>
+                                @endif
                                 <div class="mt-2"><span class="status-badge {{ $participantStatus['badge'] }}">{{ $participantStatus['label'] }}</span></div>
                             </div>
                         </div>

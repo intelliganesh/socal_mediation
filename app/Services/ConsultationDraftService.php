@@ -10,9 +10,7 @@ use Illuminate\Support\Str;
 
 class ConsultationDraftService
 {
-    public function __construct(private readonly PaymentReconciliationService $payments)
-    {
-    }
+    public function __construct(private readonly PaymentReconciliationService $payments) {}
 
     public function createDraft(ConsultationType $type, array $data = []): Consultation
     {
@@ -50,6 +48,7 @@ class ConsultationDraftService
                 'consultation_mode' => $data['consultation_mode'],
                 'description' => $data['description'] ?? null,
                 'referral_source' => $data['referral_source'] ?? null,
+                'referral_source_others' => $this->otherReferralSource($data),
                 'primary_first_name' => $primary['first_name'],
                 'primary_last_name' => $primary['last_name'] ?? null,
                 'primary_email' => $primary['email'],
@@ -104,6 +103,7 @@ class ConsultationDraftService
             'consultation_mode',
             'description',
             'referral_source',
+            'referral_source_others',
             'primary_client',
             'participants',
         ])->contains(fn (string $field) => array_key_exists($field, $data));
@@ -119,6 +119,7 @@ class ConsultationDraftService
             'consultation_mode' => $data['consultation_mode'] ?? null,
             'description' => $data['description'] ?? null,
             'referral_source' => $data['referral_source'] ?? null,
+            'referral_source_others' => $this->otherReferralSource($data),
             'primary_first_name' => $primary['first_name'] ?? null,
             'primary_last_name' => $primary['last_name'] ?? null,
             'primary_email' => $primary['email'] ?? null,
@@ -161,5 +162,14 @@ class ConsultationDraftService
         } while (Consultation::where('booking_number', $number)->exists());
 
         return $number;
+    }
+
+    private function otherReferralSource(array $data): ?string
+    {
+        if (strcasecmp((string) ($data['referral_source'] ?? ''), 'Other Referral') !== 0) {
+            return null;
+        }
+
+        return $data['referral_source_others'] ?? null;
     }
 }

@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Mail\ConsultationConfirmationMail;
 use App\Mail\ConsultationPaymentLinkMail;
 use App\Mail\ConsultationZoomLinkMail;
+use App\Mail\FreeIntroParticipantScheduleMail;
 use App\Models\Consultation;
 use App\Models\ConsultationType;
 use App\Models\ExternalCalendarEvent;
@@ -214,6 +216,58 @@ class ConsultationApiTest extends TestCase
             ->assertJsonCount(2, 'data.participants');
     }
 
+    public function test_it_saves_and_displays_other_referral_source(): void
+    {
+        $this->seed();
+
+        $type = ConsultationType::where('slug', 'socal-full-day-mediation')->firstOrFail();
+
+        $draft = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'online',
+            'referral_source' => 'Other Referral',
+            'referral_source_others' => 'Neighbor referral group',
+            'primary_client' => [
+                'first_name' => 'Referral',
+                'email' => 'referral@example.com',
+            ],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.referral_source', 'Other Referral')
+            ->assertJsonPath('data.referral_source_others', 'Neighbor referral group')
+            ->assertJsonPath('data.referral_source_display', 'Neighbor referral group')
+            ->json('data.uuid');
+
+        $this->assertDatabaseHas('consultations', [
+            'id' => $draft,
+            'referral_source' => 'Other Referral',
+            'referral_source_others' => 'Neighbor referral group',
+        ]);
+
+        $this->getJson('/api/v1/consultations/'.$draft)
+            ->assertOk()
+            ->assertJsonPath('data.referral_source_display', 'Neighbor referral group');
+    }
+
+    public function test_non_other_referral_source_clears_custom_referral_text(): void
+    {
+        $this->seed();
+
+        $type = ConsultationType::where('slug', 'socal-full-day-mediation')->firstOrFail();
+
+        $response = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'referral_source' => 'Google',
+            'referral_source_others' => 'Should not be stored',
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.referral_source', 'Google')
+            ->assertJsonPath('data.referral_source_others', null)
+            ->assertJsonPath('data.referral_source_display', 'Google');
+    }
+
     public function test_it_returns_consultation_type_catalog(): void
     {
         $this->seed();
@@ -275,6 +329,189 @@ class ConsultationApiTest extends TestCase
             'action' => 'automatic_payment_link',
             'status' => 'sent',
         ]);
+    }
+
+    public function test_free_intro_single_participant_confirms_without_payment(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        $type = ConsultationType::where('slug', 'socal-free-intro-call')->firstOrFail();
+
+        $consultationId = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'phone',
+            'primary_client' => [
+                'first_name' => 'Single',
+                'last_name' => 'Intro',
+                'email' => 'single.intro@example.com',
+            ],
+        ])->assertCreated()->json('data.uuid');
+
+        $this->postJson('/api/v1/consultations/'.$consultationId.'/complete', [
+            'starts_at' => '2026-10-20T09:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'scheduled')
+            ->assertJsonPath('data.payment_status', 'paid')
+            ->assertJsonPath('data.payment_progress.total', 0);
+
+        $this->assertDatabaseHas('consultation_participants', [
+            'consultation_id' => $consultationId,
+            'email' => 'single.intro@example.com',
+            'is_primary' => true,
+            'scheduling_status' => 'scheduled',
+        ]);
+
+        Mail::assertSent(ConsultationConfirmationMail::class, 1);
+        Mail::assertNotSent(FreeIntroParticipantScheduleMail::class);
+        Mail::assertNotSent(ConsultationPaymentLinkMail::class);
+    }
+
+    public function test_free_intro_multiple_participants_invites_others_before_final_confirmation(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        $type = ConsultationType::where('slug', 'socal-free-intro-call')->firstOrFail();
+
+        $consultationId = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'phone',
+            'primary_client' => [
+                'first_name' => 'Primary',
+                'last_name' => 'Intro',
+                'email' => 'primary.intro@example.com',
+            ],
+            'participants' => [
+                [
+                    'first_name' => 'Second',
+                    'last_name' => 'Intro',
+                    'email' => 'second.intro@example.com',
+                ],
+                [
+                    'first_name' => 'Third',
+                    'last_name' => 'Intro',
+                    'email' => 'third.intro@example.com',
+                ],
+            ],
+        ])->assertCreated()->json('data.uuid');
+
+        $this->postJson('/api/v1/consultations/'.$consultationId.'/complete', [
+            'starts_at' => '2026-10-21T09:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'paid')
+            ->assertJsonPath('data.payment_status', 'paid');
+
+        Mail::assertSent(FreeIntroParticipantScheduleMail::class, 2);
+        Mail::assertNotSent(ConsultationConfirmationMail::class);
+        Mail::assertNotSent(ConsultationPaymentLinkMail::class);
+
+        $participants = Consultation::findOrFail($consultationId)->participants()->where('is_primary', false)->orderBy('email')->get();
+        $this->assertCount(2, $participants);
+        $this->assertNotNull($participants[0]->scheduling_token);
+        $this->assertSame('pending', $participants[0]->scheduling_status);
+
+        $this->postJson('/api/v1/consultation-participants/'.$participants[0]->id.'/free-intro-slot', [
+            'scheduling_token' => $participants[0]->scheduling_token,
+            'starts_at' => '2026-10-21T09:15:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'paid');
+
+        Mail::assertNotSent(ConsultationConfirmationMail::class);
+
+        $this->postJson('/api/v1/consultation-participants/'.$participants[1]->id.'/free-intro-slot', [
+            'scheduling_token' => $participants[1]->scheduling_token,
+            'starts_at' => '2026-10-21T09:30:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'scheduled');
+
+        Mail::assertSent(ConsultationConfirmationMail::class, 3);
+
+        $this->assertDatabaseHas('consultation_participants', [
+            'id' => $participants[0]->id,
+            'scheduling_status' => 'scheduled',
+        ]);
+        $this->assertDatabaseHas('consultation_participants', [
+            'id' => $participants[1]->id,
+            'scheduling_status' => 'scheduled',
+        ]);
+    }
+
+    public function test_free_intro_participant_slot_rejects_invalid_token(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        $type = ConsultationType::where('slug', 'socal-free-intro-call')->firstOrFail();
+        $consultationId = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'phone',
+            'primary_client' => [
+                'first_name' => 'Primary',
+                'email' => 'primary.invalid@example.com',
+            ],
+            'participants' => [[
+                'first_name' => 'Other',
+                'email' => 'other.invalid@example.com',
+            ]],
+        ])->assertCreated()->json('data.uuid');
+
+        $this->postJson('/api/v1/consultations/'.$consultationId.'/complete', [
+            'starts_at' => '2026-10-22T09:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])->assertOk();
+
+        $participant = Consultation::findOrFail($consultationId)->participants()->where('is_primary', false)->firstOrFail();
+
+        $this->postJson('/api/v1/consultation-participants/'.$participant->id.'/free-intro-slot', [
+            'scheduling_token' => 'wrong-token',
+            'starts_at' => '2026-10-22T09:15:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'The participant scheduling token is invalid.');
+    }
+
+    public function test_free_intro_participant_schedule_email_uses_frontend_link(): void
+    {
+        $this->seed();
+        config([
+            'app.frontend_url' => 'https://booking-frontend.example.test',
+            'app.payment_redirect_urls.socal' => 'https://payment-result.example.test',
+        ]);
+
+        $type = ConsultationType::where('slug', 'socal-free-intro-call')->firstOrFail();
+        $consultationId = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'phone',
+            'primary_client' => [
+                'first_name' => 'Primary',
+                'email' => 'primary.link@example.com',
+            ],
+            'participants' => [[
+                'first_name' => 'Other',
+                'email' => 'other.link@example.com',
+            ]],
+        ])->assertCreated()->json('data.uuid');
+
+        $this->postJson('/api/v1/consultations/'.$consultationId.'/complete', [
+            'starts_at' => '2026-10-23T09:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])->assertOk();
+
+        $participant = Consultation::findOrFail($consultationId)->participants()->where('is_primary', false)->firstOrFail();
+        $html = (new FreeIntroParticipantScheduleMail($participant))->render();
+
+        $this->assertStringContainsString('https://booking-frontend.example.test/free-intro/participants/'.$participant->id.'/schedule?token='.$participant->scheduling_token, $html);
+        $this->assertStringNotContainsString('https://payment-result.example.test', $html);
     }
 
     public function test_split_payment_links_are_sent_only_to_selected_payment_participant_emails(): void

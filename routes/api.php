@@ -22,6 +22,7 @@ Route::prefix('v1')->group(function () {
     Route::get('consultations/{consultation}', [ConsultationController::class, 'show']);
     Route::post('consultations/{consultation}/complete', [ConsultationController::class, 'complete']);
     Route::post('consultations/{consultation}/reschedule', [ConsultationController::class, 'reschedule']);
+    Route::post('consultation-participants/{participant}/free-intro-slot', [ConsultationController::class, 'scheduleFreeIntroParticipantSlot']);
 
     Route::post('payments/converge/confirmation', [PaymentWebhookController::class, 'confirmation']);
     Route::post('payments/converge/webhook', [PaymentWebhookController::class, 'converge']);

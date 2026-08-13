@@ -32,7 +32,7 @@
         $consultationTypeIcon = $serviceIcon;
     }
     $timezone = $consultation?->timezone ?: config('app.booking_timezone', 'America/Los_Angeles');
-    $scheduledAt = $consultation?->starts_at?->timezone($timezone);
+    $scheduledAt = ($scheduledAt ?? $consultation?->starts_at)?->timezone($timezone);
     $professional = $consultation?->professional?->name ?: 'Not assigned yet';
     $mode = match ($consultation?->consultation_mode) {
         'online' => 'Video Consultation'.($zoomUrl ? ' (Zoom)' : ''),
@@ -63,7 +63,7 @@
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f5fb;margin:0;padding:0;">
         <tr>
             <td style="background:#ffffff;padding:14px 32px;border-bottom:1px solid #e5e7eb;">
-                <img src="{{ asset('admin-icons/logo.png') }}" width="190" alt="SoCal Mediation Center" style="display:block;max-width:190px;height:auto;  margin: 0 auto;">
+                <img src="{{ asset('admin-icons/'.$consultation->application.'.png') }}" width="190" alt="SoCal Mediation Center" style="display:block;max-width:190px;height:auto;  margin: 0 auto;">
             </td>
         </tr>
         <tr>
@@ -154,7 +154,8 @@
                                             <div style="font-size:12px;color:#374151;margin-bottom:7px;">Zoom Meeting</div>
                                             <a href="{{ $zoomUrl }}" style="color:{{ $brandColor }};font-size:14px;font-weight:700;text-decoration:none;">
                                                 <img src="{{ asset('admin-icons/video.svg') }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
-                                                Join Zoom Meeting
+                                                Click here to join zoom meeting
+                                                <p style="font-size:8px">{{ $zoomUrl }}</p>
                                             </a>
                                         @endif
                                     </td>

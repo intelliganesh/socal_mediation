@@ -16,6 +16,7 @@ class ConsultationCompletionService
         private readonly AdminPaymentNotificationService $notifications,
         private readonly PaymentSimulationService $simulation,
         private readonly OutlookCalendarClient $outlook,
+        private readonly FreeIntroCallWorkflowService $freeIntroCalls,
     ) {}
 
     public function complete(Consultation $consultation, array $data): Consultation
@@ -40,28 +41,35 @@ class ConsultationCompletionService
                 'status' => 'payment_pending',
             ]);
 
+            $paymentMode = $data['payment_mode'] ?? 'full';
+            if ($type->price_cents > 0 && blank($data['payment_mode'] ?? null)) {
+                throw new \DomainException('Payment mode is required before completing a paid consultation.');
+            }
+
             $participantIds = $this->participantIdsForPayment(
                 $consultation->refresh()->load(['type', 'participants']),
-                $data['payment_mode'],
+                $paymentMode,
                 $data['payment_participant_emails'] ?? []
             );
 
             return $this->payments->createRequests(
                 $consultation,
-                $data['payment_mode'],
+                $paymentMode,
                 $participantIds,
                 $data['payment_method'] ?? null
             )->load(['type', 'professional', 'participants', 'paymentRequests']);
         });
 
-        if ($this->simulation->isActive()) {
+        $freeIntroHandled = $this->freeIntroCalls->afterCompletion($consultation);
+
+        if (! $freeIntroHandled && $this->simulation->isActive()) {
             $consultation->integrationLogs()->create([
                 'provider' => 'simulation',
                 'action' => 'automatic_payment_link',
                 'status' => 'skipped',
                 'message' => 'Payment-link email skipped because payment simulation is enabled.',
             ]);
-        } else {
+        } elseif (! $freeIntroHandled) {
             $this->notifications->sendPaymentLinks($consultation, 'automatic_payment_link');
         }
 
@@ -107,6 +115,7 @@ class ConsultationCompletionService
             'consultation_mode' => $consultation->consultation_mode,
             'description' => $consultation->description,
             'referral_source' => $consultation->referral_source,
+            'referral_source_others' => $consultation->referral_source_others,
             'primary_client' => [
                 'first_name' => $consultation->primary_first_name ?? $primary?->first_name,
                 'last_name' => $consultation->primary_last_name ?? $primary?->last_name,

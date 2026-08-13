@@ -62,6 +62,7 @@ return new class extends Migration
             $table->dateTime('ends_at')->nullable()->index();
             $table->text('description')->nullable();
             $table->string('referral_source')->nullable();
+            $table->string('referral_source_others')->nullable();
             $table->string('primary_first_name')->nullable();
             $table->string('primary_last_name')->nullable();
             $table->string('primary_email')->nullable()->index();

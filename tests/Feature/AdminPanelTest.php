@@ -115,6 +115,25 @@ class AdminPanelTest extends TestCase
         }
     }
 
+    public function test_admin_consultation_detail_shows_other_referral_source_text(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-03')->firstOrFail();
+        $consultation->update([
+            'referral_source' => 'Other Referral',
+            'referral_source_others' => 'Local chamber referral',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $consultation))
+            ->assertOk()
+            ->assertSee('Referral Source')
+            ->assertSee('Local chamber referral')
+            ->assertSee('Other Referral');
+    }
+
     public function test_calendar_can_be_filtered_by_application(): void
     {
         $this->seed();

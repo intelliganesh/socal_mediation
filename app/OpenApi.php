@@ -75,6 +75,8 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'legal_service_name', type: 'string', nullable: true, example: 'Business, Payment & Contract Disputes'),
         new OA\Property(property: 'description', type: 'string', nullable: true, example: 'Need help reviewing a dispute before mediation.'),
         new OA\Property(property: 'referral_source', type: 'string', nullable: true, example: 'Google'),
+        new OA\Property(property: 'referral_source_others', type: 'string', nullable: true, example: 'Friend at local business group'),
+        new OA\Property(property: 'referral_source_display', type: 'string', nullable: true, example: 'Friend at local business group'),
         new OA\Property(property: 'total_amount_cents', type: 'integer', example: 520000),
         new OA\Property(property: 'currency', type: 'string', example: 'USD'),
         new OA\Property(property: 'payment_mode', type: 'string', nullable: true, enum: ['full', 'split']),
@@ -94,6 +96,4 @@ use OpenApi\Attributes as OA;
         ])),
     ]
 )]
-class OpenApi
-{
-}
+class OpenApi {}
