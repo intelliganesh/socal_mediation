@@ -15,6 +15,13 @@ class DashboardController extends Controller
         $paymentRequests = PaymentRequest::query()
             ->where('status', 'paid')
             ->whereHas('consultation', fn ($query) => $user->applyApplicationScope($query));
+        $paymentStatuses = ['paid', 'pending', 'partially_paid'];
+        $paymentStatusCounts = (clone $consultations)
+            ->whereIn('payment_status', $paymentStatuses)
+            ->selectRaw('payment_status, count(*) as aggregate')
+            ->groupBy('payment_status')
+            ->pluck('aggregate', 'payment_status');
+        $paymentMixTotal = collect($paymentStatuses)->sum(fn ($status) => (int) ($paymentStatusCounts[$status] ?? 0));
 
         return view('admin.dashboard', [
             'totals' => [
@@ -40,6 +47,15 @@ class DashboardController extends Controller
                 ->latest()
                 ->limit(8)
                 ->get(),
+            'paymentMix' => collect($paymentStatuses)
+                ->mapWithKeys(fn ($status) => [
+                    $status => [
+                        'count' => (int) ($paymentStatusCounts[$status] ?? 0),
+                        'percent' => $paymentMixTotal > 0 ? round(((int) ($paymentStatusCounts[$status] ?? 0) / $paymentMixTotal) * 100) : 0,
+                    ],
+                ])
+                ->all(),
+            'paymentMixTotal' => $paymentMixTotal,
         ]);
     }
 }

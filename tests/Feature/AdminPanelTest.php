@@ -108,6 +108,31 @@ class AdminPanelTest extends TestCase
             ->assertDontSee('Professional Consultation');
     }
 
+    public function test_dashboard_payment_mix_uses_scoped_payment_status_counts(): void
+    {
+        $this->seed();
+
+        $user = User::create([
+            'name' => 'Legal Admin',
+            'email' => 'legal.mix@example.com',
+            'password' => 'password123',
+            'role' => 'admin',
+            'application' => 'legal',
+        ]);
+
+        Consultation::where('application', 'legal')->update(['payment_status' => 'pending']);
+        Consultation::where('booking_number', 'SAMPLE-08')->update(['payment_status' => 'partially_paid']);
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Payment Mix')
+            ->assertSee('0% (0)')
+            ->assertSee('67% (2)')
+            ->assertSee('33% (1)')
+            ->assertDontSee('55% (0)');
+    }
+
     public function test_scoped_admin_cannot_open_or_update_other_application_consultation(): void
     {
         $this->seed();

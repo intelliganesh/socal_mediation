@@ -23,6 +23,9 @@
         --status-pending-bg: #FEF3C7;
         --status-pending-text: #B45309;
         --status-pending-border: #FCD34D;
+        --status-partial-bg: #DBEAFF;
+        --status-partial-text: #1D4ED8;
+        --status-partial-border: #93C5FD;
         --status-paid-bg: #DCFCE7;
         --status-paid-text: #15803D;
         --status-paid-border: #86EFAC;
@@ -121,11 +124,16 @@
     }
 
     .status-badge-pending,
-    .status-badge-payment-pending,
-    .status-badge-partially-paid {
+    .status-badge-payment-pending {
         background: var(--status-pending-bg);
         border-color: var(--status-pending-border);
         color: var(--status-pending-text);
+    }
+
+    .status-badge-partially-paid {
+        background: var(--status-partial-bg);
+        border-color: var(--status-partial-border);
+        color: var(--status-partial-text);
     }
 
     .status-badge-paid {
@@ -187,9 +195,12 @@
     }
 
     .progress-fill-pending,
-    .progress-fill-payment-pending,
-    .progress-fill-partially-paid {
+    .progress-fill-payment-pending {
         background: var(--status-pending-border);
+    }
+
+    .progress-fill-partially-paid {
+        background: var(--status-partial-text);
     }
 
     .progress-fill-paid,
@@ -240,7 +251,7 @@
         background: conic-gradient(
             var(--status-paid-text) 0 55%,
             var(--status-pending-border) 55% 75%,
-            var(--admin-primary) 75% 90%,
+            var(--status-partial-text) 75% 90%,
             var(--status-draft-text) 90% 100%
         );
     }

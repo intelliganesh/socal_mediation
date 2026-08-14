@@ -26,10 +26,16 @@
             ['label' => 'Revenue', 'value' => '$'.number_format($totals['revenue_cents'] / 100, 2), 'icon' => 'circle-dollar-sign', 'class' => 'app-theme-legal', 'trend' => '11%'],
         ];
         $paymentRows = [
-            'paid' => ['label' => 'Paid', 'percent' => 55],
-            'pending' => ['label' => 'Pending', 'percent' => 25],
-            'partially_paid' => ['label' => 'Partial', 'percent' => 20],
+            'paid' => ['label' => 'Paid', ...($paymentMix['paid'] ?? ['count' => 0, 'percent' => 0])],
+            'pending' => ['label' => 'Pending', ...($paymentMix['pending'] ?? ['count' => 0, 'percent' => 0])],
+            'partially_paid' => ['label' => 'Partial', ...($paymentMix['partially_paid'] ?? ['count' => 0, 'percent' => 0])],
         ];
+        $paidEnd = $paymentRows['paid']['percent'];
+        $pendingEnd = $paidEnd + $paymentRows['pending']['percent'];
+        $partialEnd = min(100, $pendingEnd + $paymentRows['partially_paid']['percent']);
+        $paymentMixStyle = $paymentMixTotal > 0
+            ? "background: conic-gradient(var(--status-paid-text) 0 {$paidEnd}%, var(--status-pending-border) {$paidEnd}% {$pendingEnd}%, var(--status-partial-text) {$pendingEnd}% {$partialEnd}%, var(--admin-muted-bg) {$partialEnd}% 100%)"
+            : 'background: var(--admin-muted-bg)';
     @endphp
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -93,12 +99,11 @@
             <div class="grid items-center gap-6 md:grid-cols-[1fr_180px]">
                 <div class="space-y-4">
                     @foreach($paymentRows as $status => $row)
-                        @php($count = $recent->where('payment_status', $status)->count())
                         @php($theme = $statusTheme($status))
                         <div>
                             <div class="mb-2 flex items-center justify-between gap-3 text-sm font-bold">
                                 <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full {{ $theme['progress'] }}"></span>{{ $row['label'] }}</span>
-                                <span>{{ $row['percent'] }}% ({{ $count }})</span>
+                                <span>{{ $row['percent'] }}% ({{ $row['count'] }})</span>
                             </div>
                             <div class="h-2 rounded-full bg-[#EEF2F7]">
                                 <div class="progress-fill {{ $theme['progress'] }}" style="width: {{ $row['percent'] }}%"></div>
@@ -106,9 +111,9 @@
                         </div>
                     @endforeach
                 </div>
-                <div class="payment-mix-chart mx-auto grid h-40 w-40 place-items-center rounded-full">
+                <div class="payment-mix-chart mx-auto grid h-40 w-40 place-items-center rounded-full" style="{{ $paymentMixStyle }}">
                     <div class="grid h-24 w-24 place-items-center rounded-full bg-white text-center">
-                        <div class="text-3xl font-bold text-[#111827]">{{ $recent->count() }}</div>
+                        <div class="text-3xl font-bold text-[#111827]">{{ $paymentMixTotal }}</div>
                         <div class="-mt-5 text-xs font-bold text-gray-500">Total</div>
                     </div>
                 </div>
