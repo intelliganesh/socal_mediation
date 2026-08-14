@@ -34,20 +34,20 @@
     @endphp
 
     <div class="min-h-screen lg:flex">
-        <aside class="admin-nav hidden w-[268px] shrink-0 border-r border-[#E5E7EB] lg:fixed lg:inset-y-0 lg:flex lg:flex-col">
-            <div class="flex h-20 items-center gap-3 border-b border-[#E5E7EB] px-6">
+        <aside class="admin-nav hidden w-[268px] shrink-0 border-r border-[#E5E7EB] shadow-[12px_0_30px_rgba(17,24,39,0.03)] lg:fixed lg:inset-y-0 lg:flex lg:flex-col">
+            <div class="flex h-20 items-center gap-3 border-b border-[#E5E7EB] bg-white px-6">
                 {{-- <div class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#F1F6FE] text-sm font-bold text-[#082BC3]">SM</div>
                 <div class="min-w-0">
                     <div class="truncate text-base font-bold leading-5 text-[#111827]">SoCal</div>
                     <div class="truncate text-base font-bold leading-5 text-[#111827]">Mediation</div>
                 </div> --}}
-                <img class="mx-auto h-16 w-full rounded-2xl object-contain" src="{{ asset('admin-icons/'.$brand['logo']) }}" alt="{{ $brand['name'] }}">
+                <img class="mx-auto h-14 w-full object-contain" src="{{ asset('admin-icons/'.$brand['logo']) }}" alt="{{ $brand['name'] }}">
             </div>
 
-            <nav class="flex-1 space-y-1 px-3 py-8 text-sm font-bold">
+            <nav class="flex-1 space-y-1 px-4 py-8 text-sm font-bold">
                 @foreach($navItems as $item)
                     <a
-                        class="admin-nav-item flex h-12 items-center gap-3 rounded-lg px-4 transition {{ $item['active'] ? 'admin-nav-item-active' : '' }}"
+                        class="admin-nav-item flex h-12 items-center gap-3 rounded-r-lg px-4 transition {{ $item['active'] ? 'admin-nav-item-active' : '' }}"
                         href="{{ $item['href'] }}"
                         aria-label="{{ $item['aria'] ?? $item['label'] }}"
                         @if($item['external'] ?? false) target="_blank" rel="noopener" @endif
@@ -75,7 +75,7 @@
                             <nav class="admin-nav absolute left-4 right-4 z-30 mt-3 grid gap-1 rounded-xl border border-[#E5E7EB] p-3 text-sm font-bold shadow-lg">
                                 @foreach($navItems as $item)
                                     <a
-                                        class="admin-nav-item flex items-center gap-3 rounded-lg px-4 py-3 {{ $item['active'] ? 'admin-nav-item-active' : '' }}"
+                                        class="admin-nav-item flex items-center gap-3 rounded-r-lg px-4 py-3 {{ $item['active'] ? 'admin-nav-item-active' : '' }}"
                                         href="{{ $item['href'] }}"
                                         aria-label="{{ $item['aria'] ?? $item['label'] }}"
                                         @if($item['external'] ?? false) target="_blank" rel="noopener" @endif

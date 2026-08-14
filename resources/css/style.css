@@ -15,8 +15,8 @@
         --admin-legal-soft: #E8DDE1;
         --admin-brand: #082BC3;
         --admin-brand-soft: #F1F6FE;
-        --admin-nav-bg: #26294e;
-        --admin-nav-text: #fff;
+        --admin-nav-bg: #ffffff;
+        --admin-nav-text: #374151;
         --status-draft-bg: #F3F4F6;
         --status-draft-text: #4B5563;
         --status-draft-border: #D1D5DB;
@@ -49,13 +49,13 @@
     .admin-theme-socal {
         --admin-brand: var(--admin-primary);
         --admin-brand-soft: var(--admin-primary-soft);
-        --admin-nav-bg: #26294e;
+        --admin-nav-bg: #ffffff;
     }
 
     .admin-theme-legal {
         --admin-brand: var(--admin-legal);
         --admin-brand-soft: var(--admin-legal-soft);
-        --admin-nav-bg: #75172E;
+        --admin-nav-bg: #ffffff;
     }
 
     .status-badge {
@@ -77,13 +77,19 @@
     }
 
     .admin-nav-item {
+        border-left: 4px solid transparent;
         color: var(--admin-nav-text);
     }
 
-    .admin-nav-item-active,
     .admin-nav-item:hover {
-        background: rgb(255 255 255 / 0.12);
-        color: var(--admin-nav-text);
+        background: #F7F8FC;
+        color: var(--admin-brand);
+    }
+
+    .admin-nav-item-active {
+        background: var(--admin-brand-soft);
+        border-left-color: var(--admin-brand);
+        color: var(--admin-brand);
     }
 
     .admin-brand-button {
