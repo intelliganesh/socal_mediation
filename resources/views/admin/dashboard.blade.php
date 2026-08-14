@@ -1,4 +1,4 @@
-<x-admin.layout heading="Dashboard" subheading="Overview of your mediation center operations and performance.">
+<x-admin.layout heading="Dashboard" subheading="Overview of your mediation center operations and performance." :application="auth()->user()?->application">
     @php
         $applicationTheme = fn (string $application) => $application === 'legal'
             ? ['label' => 'Legal Consultation', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']

@@ -1,4 +1,4 @@
-<x-admin.layout heading="Consultations" subheading="Filter and review bookings from both application flows.">
+<x-admin.layout heading="Consultations" subheading="Filter and review bookings from both application flows." :application="$selectedApplication">
     @php
         $applicationTheme = fn (string $application) => $application === 'legal'
             ? ['label' => 'Legal Consultation', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']
@@ -52,7 +52,7 @@
                 <input class="h-11 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#111827]" type="date" name="date_to" value="{{ request('date_to') }}">
             </label>
             <a class="flex h-11 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.consultations.index') }}">Reset</a>
-            <button class="h-11 rounded-lg bg-[#082BC3] px-5 text-sm font-bold text-white hover:bg-[#111827]" type="submit">Apply</button>
+            <button class="admin-brand-button h-11 rounded-lg px-5 text-sm font-bold" type="submit">Apply</button>
             <a class="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.consultations.index', array_merge(request()->query(), ['export' => 1])) }}">
                 <i data-lucide="download" class="h-4 w-4"></i>
                 Export

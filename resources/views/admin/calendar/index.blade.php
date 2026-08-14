@@ -1,4 +1,4 @@
-<x-admin.layout heading="Booking Calendar" subheading="Current month plus next 3 months, with manual Outlook sync.">
+<x-admin.layout heading="Booking Calendar" subheading="Current month plus next 3 months, with manual Outlook sync." :application="$selectedApplication">
     @php
         $applicationTheme = fn (string $application) => $application === 'legal'
             ? 'app-theme-legal'
@@ -32,7 +32,7 @@
                 @endforeach
             </select>
             <a class="flex h-10 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.calendar.index') }}">Reset</a>
-            <button class="h-10 rounded-lg bg-[#082BC3] px-5 text-sm font-bold text-white hover:bg-[#111827]" type="submit">Apply</button>
+            <button class="admin-brand-button h-10 rounded-lg px-5 text-sm font-bold" type="submit">Apply</button>
         </form>
         <form method="post" action="{{ route('admin.calendar.sync') }}">
             @csrf

@@ -9,7 +9,7 @@
 
     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div class="text-sm font-semibold text-gray-500">{{ $users->total() }} admin {{ Str::plural('user', $users->total()) }}</div>
-        <a class="inline-flex h-11 items-center gap-2 rounded-lg bg-[#082BC3] px-4 text-sm font-bold text-white hover:bg-[#111827]" href="{{ route('admin.users.create') }}">
+        <a class="admin-brand-button inline-flex h-11 items-center gap-2 rounded-lg px-4 text-sm font-bold" href="{{ route('admin.users.create') }}">
             <i data-lucide="user-plus" class="h-4 w-4"></i>
             Add User
         </a>

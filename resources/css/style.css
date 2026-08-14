@@ -13,6 +13,8 @@
         --admin-primary-soft: #F1F6FE;
         --admin-legal: #75172E;
         --admin-legal-soft: #E8DDE1;
+        --admin-brand: #082BC3;
+        --admin-brand-soft: #F1F6FE;
         --admin-nav-bg: #26294e;
         --admin-nav-text: #fff;
         --status-draft-bg: #F3F4F6;
@@ -44,6 +46,18 @@
         --status-overdue-border: #F87171;
     }
 
+    .admin-theme-socal {
+        --admin-brand: var(--admin-primary);
+        --admin-brand-soft: var(--admin-primary-soft);
+        --admin-nav-bg: #26294e;
+    }
+
+    .admin-theme-legal {
+        --admin-brand: var(--admin-legal);
+        --admin-brand-soft: var(--admin-legal-soft);
+        --admin-nav-bg: #75172E;
+    }
+
     .status-badge {
         border: 1px solid currentColor;
         border-radius: 9999px;
@@ -70,6 +84,28 @@
     .admin-nav-item:hover {
         background: rgb(255 255 255 / 0.12);
         color: var(--admin-nav-text);
+    }
+
+    .admin-brand-button {
+        background: var(--admin-brand);
+        color: var(--admin-surface);
+    }
+
+    .admin-brand-button:hover {
+        background: #111827;
+    }
+
+    .admin-brand-text {
+        color: var(--admin-brand);
+    }
+
+    .admin-brand-link {
+        color: var(--admin-brand);
+    }
+
+    .admin-brand-soft {
+        background: var(--admin-brand-soft);
+        color: var(--admin-brand);
     }
 
     .status-badge-draft {
@@ -204,15 +240,15 @@
     }
 
     .action-card-primary {
-        color: var(--admin-primary);
+        color: var(--admin-brand);
     }
 
     .action-card-primary .action-card-icon {
-        background: var(--admin-primary-soft);
+        background: var(--admin-brand-soft);
     }
 
     .action-card-primary .action-card-button {
-        background: var(--admin-primary);
+        background: var(--admin-brand);
         color: var(--admin-surface);
     }
 

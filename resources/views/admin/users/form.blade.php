@@ -43,7 +43,7 @@
         </div>
 
         <div class="mt-6 flex flex-wrap items-center gap-3">
-            <button class="inline-flex h-11 items-center justify-center rounded-lg bg-[#082BC3] px-5 text-sm font-bold text-white hover:bg-[#111827]" type="submit">
+            <button class="admin-brand-button inline-flex h-11 items-center justify-center rounded-lg px-5 text-sm font-bold" type="submit">
                 {{ $mode === 'create' ? 'Create User' : 'Update User' }}
             </button>
             <a class="inline-flex h-11 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white px-5 text-sm font-bold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.users.index') }}">Cancel</a>

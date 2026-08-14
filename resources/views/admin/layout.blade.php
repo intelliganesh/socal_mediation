@@ -10,9 +10,18 @@
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-screen bg-[#f3f4f7] text-[#1F2937]">
+@php
+    $currentUser = auth()->user();
+    $activeApplication = in_array($application, ['socal', 'legal'], true)
+        ? $application
+        : (in_array($currentUser?->application, ['socal', 'legal'], true) ? $currentUser->application : 'socal');
+    $isLegalTheme = $activeApplication === 'legal';
+    $brand = $isLegalTheme
+        ? ['name' => 'Legal Consultation', 'logo' => 'legal.png', 'color' => '#75172E', 'soft' => '#E8DDE1', 'profileName' => 'Steve Lopez']
+        : ['name' => 'SoCal Mediation Center', 'logo' => 'socal.png', 'color' => '#082BC3', 'soft' => '#F1F6FE', 'profileName' => null];
+@endphp
+<body class="admin-theme-{{ $activeApplication }} min-h-screen bg-[#f3f4f7] text-[#1F2937]">
     @php
-        $currentUser = auth()->user();
         $navItems = [
             ['label' => 'Dashboard', 'icon' => 'layout-dashboard', 'href' => route('admin.dashboard'), 'active' => request()->routeIs('admin.dashboard')],
             ['label' => 'Consultations', 'icon' => 'calendar-days', 'href' => route('admin.consultations.index'), 'active' => request()->routeIs('admin.consultations.*')],
@@ -20,7 +29,7 @@
             ...($currentUser?->isGlobalAdmin() ? [['label' => 'Users', 'icon' => 'users', 'href' => route('admin.users.index'), 'active' => request()->routeIs('admin.users.*')]] : []),
             ['label' => 'API Documentation', 'icon' => 'clipboard-list', 'href' => url('/api/documentation'), 'active' => false, 'external' => true, 'aria' => 'API Documentation'],
         ];
-        $userName = $currentUser?->name ?: 'John Davis';
+        $userName = $brand['profileName'] ?: ($currentUser?->name ?: 'John Davis');
         $initials = collect(explode(' ', $userName))->filter()->map(fn ($part) => Str::substr($part, 0, 1))->take(2)->implode('') ?: 'JD';
     @endphp
 
@@ -32,7 +41,7 @@
                     <div class="truncate text-base font-bold leading-5 text-[#111827]">SoCal</div>
                     <div class="truncate text-base font-bold leading-5 text-[#111827]">Mediation</div>
                 </div> --}}
-                <img class="mx-auto h-16 w-full rounded-2xl object-contain" src="{{ asset('admin-icons/logo.png') }}" alt="SoCal Mediation">
+                <img class="mx-auto h-16 w-full rounded-2xl object-contain" src="{{ asset('admin-icons/'.$brand['logo']) }}" alt="{{ $brand['name'] }}">
             </div>
 
             <nav class="flex-1 space-y-1 px-3 py-8 text-sm font-bold">
@@ -89,7 +98,7 @@
                     </div>
 
                     <div class="flex shrink-0 items-center gap-3">
-                        <div class="grid h-10 w-10 place-items-center rounded-full bg-[#082BC3] text-sm font-bold text-white">{{ $initials }}</div>
+                        <div class="grid h-10 w-10 place-items-center rounded-full text-sm font-bold text-white" style="background: {{ $brand['color'] }}">{{ $initials }}</div>
                         <div class="hidden text-sm font-bold text-[#111827] sm:block">{{ $userName }}</div>
                         @auth
                             <form method="post" action="{{ route('admin.logout') }}">

@@ -1,4 +1,4 @@
-<x-admin.layout heading="" subheading="">
+<x-admin.layout heading="" subheading="" :application="$consultation->application">
     @php
     $app = $consultation->application === 'legal'
     ? ['label' => 'Legal Consultation', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']
@@ -89,7 +89,7 @@
             <div class="mt-5 grid gap-2">
                 <button class="action-card-button h-10 w-full rounded-lg text-sm font-bold">Send Zoom Link</button>
                 @if(filled($consultation->zoom_join_url))
-                <a class="flex h-10 items-center justify-center gap-2 rounded-lg border border-[#E5E7EB] bg-white text-sm font-bold text-[#082BC3]" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener">
+                <a class="admin-brand-link flex h-10 items-center justify-center gap-2 rounded-lg border border-[#E5E7EB] bg-white text-sm font-bold" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener">
                     Open Zoom Meeting Link
                     <i data-lucide="external-link" class="h-4 w-4"></i>
                 </a>
@@ -126,13 +126,13 @@
     <section class="mb-5 grid gap-5 xl:grid-cols-3">
         <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
             <div class="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
-                <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="circle-user-round" class="h-5 w-5 text-[#082BC3]"></i>Primary Client Information</h3>
+                <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="circle-user-round" class="admin-brand-text h-5 w-5"></i>Primary Client Information</h3>
             </div>
             <div class="flex items-center gap-5 p-5">
                 <div class="grid h-24 w-24 shrink-0 place-items-center rounded-full text-4xl font-semibold {{ $app['iconClass'] }}">{{ Str::upper(Str::substr($primaryName, 0, 2)) }}</div>
                 <div class="min-w-0 text-sm">
                     <div class="text-xl font-bold text-[#111827]">{{ $primaryName }}</div>
-                    <div class="mt-2 truncate font-semibold text-[#082BC3]">{{ $consultation->primary_email ?: 'No email yet' }}</div>
+                    <div class="admin-brand-text mt-2 truncate font-semibold">{{ $consultation->primary_email ?: 'No email yet' }}</div>
                     <div class="mt-3 text-[#111827]">{{ trim(($consultation->primary_phone_country ?? '').' '.($consultation->primary_phone ?? '')) ?: 'No phone yet' }}</div>
                     {{-- <span class="mt-4 inline-flex rounded-lg bg-[#F3F4F6] px-3 py-2 text-sm font-semibold text-gray-500">Client</span> --}}
                 </div>
@@ -140,7 +140,7 @@
         </article>
         <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
             <div class="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
-                <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="info" class="h-5 w-5 text-[#082BC3]"></i>Consultation Information</h3>
+                <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="info" class="admin-brand-text h-5 w-5"></i>Consultation Information</h3>
             </div>
             <dl class="grid gap-5 p-5 text-sm sm:grid-cols-2">
                 <div class="flex gap-3"><i data-lucide="calendar-days" class="h-5 w-5 text-gray-500"></i>
@@ -151,7 +151,7 @@
                 <div class="flex gap-3"><i data-lucide="video" class="h-5 w-5 text-gray-500"></i>
                     <div>
                         <dt class="text-gray-500">Zoom Meeting</dt>
-                        <dd class="mt-1 flex font-semibold text-[#111827]">{{ $zoomStatus }} @if(filled($consultation->zoom_join_url)) <a class="font-bold text-[#082BC3] ml-2" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener"><i data-lucide="external-link" class="h-4 w-4"></i></a> @endif</dd>
+                        <dd class="mt-1 flex font-semibold text-[#111827]">{{ $zoomStatus }} @if(filled($consultation->zoom_join_url)) <a class="admin-brand-link ml-2 font-bold" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener"><i data-lucide="external-link" class="h-4 w-4"></i></a> @endif</dd>
                     </div>
                 </div>
                 <div class="flex gap-3"><i data-lucide="clock" class="h-5 w-5 text-gray-500"></i>
@@ -161,7 +161,7 @@
                 </div>
                 <div class="flex gap-3"><i data-lucide="calendar-check" class="h-5 w-5 text-gray-500"></i>
                     <div><dt class="text-gray-500">Outlook Event</dt>
-                        <dd class="mt-1 font-semibold text-[#082BC3]">{{ $outlookStatus }}</dd>
+                        <dd class="admin-brand-text mt-1 font-semibold">{{ $outlookStatus }}</dd>
                     </div>
                 </div>
                 <div class="flex gap-3"><i data-lucide="scale" class="h-5 w-5 text-gray-500"></i>
@@ -194,7 +194,7 @@
         </article>
         <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
             <div class="border-b border-[#E5E7EB] px-5 py-4">
-                <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="sliders-horizontal" class="h-5 w-5 text-[#082BC3]"></i>Status Controls</h3>
+                <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="sliders-horizontal" class="admin-brand-text h-5 w-5"></i>Status Controls</h3>
             </div>
             <form class="action-card-primary grid gap-4 p-5 text-sm" method="post" action="{{ route('admin.consultations.statuses', $consultation) }}">
                 @csrf
@@ -229,7 +229,7 @@
                     @php($participantStatus = $statusTheme($participantPayment?->status))
                     <article class="rounded-lg border border-[#E5E7EB] p-3 text-sm">
                         <div class="flex items-start gap-3">
-                            <div class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#ECEDF9] text-xs font-bold text-[#082BC3]">{{ Str::upper(Str::substr($participantName, 0, 2)) }}</div>
+                            <div class="admin-brand-soft grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold">{{ Str::upper(Str::substr($participantName, 0, 2)) }}</div>
                             <div class="min-w-0">
                                 <div class="truncate font-bold text-[#111827]">{{ $participantName }}</div>
                                 <div class="truncate text-xs text-gray-500">{{ $participant->email ?: 'Not provided' }}</div>
@@ -281,7 +281,7 @@
                     @php($activityStatus = $statusTheme($activity->status))
                     @php($activityMeta = $emailActivityMeta($activity->action))
                     <article class="flex items-center gap-3 text-sm">
-                        <div class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#082BC3] text-white"><i data-lucide="{{ $activityMeta['icon'] }}" class="h-5 w-5"></i></div>
+                        <div class="admin-brand-button grid h-9 w-9 shrink-0 place-items-center rounded-full"><i data-lucide="{{ $activityMeta['icon'] }}" class="h-5 w-5"></i></div>
                         <div class="min-w-0 flex-1">
                             <div class="font-bold text-[#111827]">{{ $activityMeta['label'] }}</div>
                             <div class="truncate text-xs text-gray-500">To: {{ data_get($activity->request_payload, 'recipient', 'Not recorded') }}</div>
@@ -313,14 +313,14 @@
                     @php($payer = trim(($payment->participant?->first_name ?? 'Client').' '.($payment->participant?->last_name ?? '')))
                     <div class="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-5 py-4 text-sm">
                         <div class="flex min-w-0 items-center gap-3">
-                            <div class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#ECEDF9] text-xs font-bold text-[#082BC3]">{{ Str::upper(Str::substr($payer, 0, 2)) }}</div>
+                            <div class="admin-brand-soft grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold">{{ Str::upper(Str::substr($payer, 0, 2)) }}</div>
                             <div class="truncate font-semibold text-[#111827]">{{ $payer }}</div>
                         </div>
                         <div class="font-bold">${{ number_format($payment->amount_cents / 100, 2) }}</div>
                         <div class="flex items-center gap-2">
                             <span class="status-badge {{ $status['badge'] }}">{{ $status['label'] }}</span>
                             @if(filled($payment->payment_url) && $payment->status !== 'paid')
-                            <a href="{{ $payment->payment_url }}" target="_blank" rel="noopener" aria-label="View Payment Link"><i data-lucide="link" class="h-4 w-4 text-[#082BC3]"></i><span class="sr-only">View Payment Link</span></a>
+                            <a href="{{ $payment->payment_url }}" target="_blank" rel="noopener" aria-label="View Payment Link"><i data-lucide="link" class="admin-brand-text h-4 w-4"></i><span class="sr-only">View Payment Link</span></a>
                             @endif
                         </div>
                     </div>
@@ -333,7 +333,7 @@
     </div>
     <section class="mt-5 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
         <div class="border-b border-[#E5E7EB] px-5 py-4">
-            <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="activity" class="h-5 w-5 text-[#082BC3]"></i>Payment Gateway Activity</h3>
+            <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="activity" class="admin-brand-text h-5 w-5"></i>Payment Gateway Activity</h3>
         </div>
         <div class="divide-y divide-[#E5E7EB]">
             @forelse($paymentGatewayActivities as $activity)
