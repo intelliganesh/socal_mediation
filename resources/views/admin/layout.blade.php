@@ -12,13 +12,14 @@
 </head>
 <body class="min-h-screen bg-[#f3f4f7] text-[#1F2937]">
     @php
+        $currentUser = auth()->user();
         $navItems = [
             ['label' => 'Dashboard', 'icon' => 'layout-dashboard', 'href' => route('admin.dashboard'), 'active' => request()->routeIs('admin.dashboard')],
             ['label' => 'Consultations', 'icon' => 'calendar-days', 'href' => route('admin.consultations.index'), 'active' => request()->routeIs('admin.consultations.*')],
             ['label' => 'Calendar', 'icon' => 'calendar', 'href' => route('admin.calendar.index'), 'active' => request()->routeIs('admin.calendar.*')],
+            ...($currentUser?->isGlobalAdmin() ? [['label' => 'Users', 'icon' => 'users', 'href' => route('admin.users.index'), 'active' => request()->routeIs('admin.users.*')]] : []),
             ['label' => 'API Documentation', 'icon' => 'clipboard-list', 'href' => url('/api/documentation'), 'active' => false, 'external' => true, 'aria' => 'API Documentation'],
         ];
-        $currentUser = auth()->user();
         $userName = $currentUser?->name ?: 'John Davis';
         $initials = collect(explode(' ', $userName))->filter()->map(fn ($part) => Str::substr($part, 0, 1))->take(2)->implode('') ?: 'JD';
     @endphp

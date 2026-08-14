@@ -14,15 +14,19 @@ class CalendarController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
         $month = $request->query('month', now()->format('Y-m'));
         $start = CarbonImmutable::parse($month.'-01')->startOfMonth();
         $allowedUntil = CarbonImmutable::now()->startOfMonth()->addMonths(3);
+        $selectedApplication = $user->isGlobalAdmin()
+            ? $request->query('application')
+            : $user->application;
 
         abort_if($start->greaterThan($allowedUntil), 422, 'Calendar can only show up to the next 3 months.');
 
         $consultations = Consultation::with('type')
             ->whereBetween('starts_at', [$start, $start->endOfMonth()])
-            ->when($request->query('application'), fn ($query, $application) => $query->where('application', $application))
+            ->when($selectedApplication, fn ($query, $application) => $query->where('application', $application))
             ->when($request->query('consultation_type_id'), fn ($query, $typeId) => $query->where('consultation_type_id', $typeId))
             ->orderBy('starts_at')
             ->get();
@@ -30,10 +34,10 @@ class CalendarController extends Controller
         return view('admin.calendar.index', [
             'consultations' => $consultations,
             'selectedMonth' => $start,
-            'selectedApplication' => $request->query('application'),
+            'selectedApplication' => $selectedApplication,
             'selectedConsultationTypeId' => $request->query('consultation_type_id'),
             'consultationTypes' => ConsultationType::query()
-                ->when($request->query('application'), fn ($query, $application) => $query->where('application', $application))
+                ->when($selectedApplication, fn ($query, $application) => $query->where('application', $application))
                 ->orderBy('application')
                 ->orderBy('name')
                 ->get(),

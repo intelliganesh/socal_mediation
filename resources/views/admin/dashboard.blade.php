@@ -58,7 +58,7 @@
                 <h2 class="text-lg font-bold text-[#111827]">Applications</h2>
             </div>
             <div class="grid gap-4 md:grid-cols-2">
-                @foreach(['socal', 'legal'] as $application)
+                @foreach($applications as $application)
                     @php($theme = $applicationTheme($application))
                     @php($capacity = $totals['consultations'] ? round(($applicationCounts[$application] / max(1, $totals['consultations'])) * 100) : 0)
                     <article class="rounded-lg border border-[#E5E7EB] p-4 {{ $theme['theme'] }}">

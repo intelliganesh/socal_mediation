@@ -3,6 +3,7 @@
         $applicationTheme = fn (string $application) => $application === 'legal'
             ? ['label' => 'Legal Consultation', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']
             : ['label' => 'SoCal Mediation Center', 'icon' => 'landmark', 'theme' => 'app-theme-socal', 'iconClass' => 'app-icon-socal', 'textClass' => 'app-text-socal', 'progress' => 'app-progress-socal'];
+        $currentUser = auth()->user();
 
         $statusTheme = function (?string $status) {
             return match ($status) {
@@ -26,11 +27,16 @@
                 <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500"></i>
                 <input class="h-11 w-full rounded-lg border border-[#E5E7EB] bg-white pl-10 pr-3 text-sm font-semibold text-[#111827] placeholder:text-gray-500" type="search" name="q" value="{{ request('q') }}" placeholder="Search consultation...">
             </label>
-            <select class="h-11 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#111827]" name="application">
-                <option value="">All Applications</option>
-                <option value="socal" @selected(request('application') === 'socal')>SoCal Mediation Center</option>
-                <option value="legal" @selected(request('application') === 'legal')>Legal Consultation</option>
-            </select>
+            @if($currentUser?->isGlobalAdmin())
+                <select class="h-11 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#111827]" name="application">
+                    <option value="">All Applications</option>
+                    <option value="socal" @selected($selectedApplication === 'socal')>SoCal Mediation Center</option>
+                    <option value="legal" @selected($selectedApplication === 'legal')>Legal Consultation</option>
+                </select>
+            @else
+                @php($assignedTheme = $applicationTheme($selectedApplication))
+                <div class="flex h-11 items-center rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-bold {{ $assignedTheme['textClass'] }}">{{ $assignedTheme['label'] }}</div>
+            @endif
             <select class="h-11 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#111827]" name="status">
                 <option value="">All Statuses</option>
                 @foreach(['draft', 'payment_pending', 'paid', 'scheduled', 'cancelled'] as $status)

@@ -31,6 +31,108 @@ class AdminPanelTest extends TestCase
             ->assertSee('/api/documentation');
     }
 
+    public function test_global_admin_can_manage_application_scoped_users(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get(route('admin.users.index'))
+            ->assertOk()
+            ->assertSee('Users')
+            ->assertSee('All Applications');
+
+        $this->actingAs($admin)
+            ->post(route('admin.users.store'), [
+                'name' => 'Legal Admin',
+                'email' => 'legal.admin@example.com',
+                'password' => 'password123',
+                'application' => 'legal',
+            ])
+            ->assertRedirect(route('admin.users.index'));
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'legal.admin@example.com',
+            'role' => 'admin',
+            'application' => 'legal',
+        ]);
+    }
+
+    public function test_scoped_admin_cannot_access_user_management(): void
+    {
+        $this->seed();
+
+        $user = User::create([
+            'name' => 'SoCal Admin',
+            'email' => 'socal.admin@example.com',
+            'password' => 'password123',
+            'role' => 'admin',
+            'application' => 'socal',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.users.index'))
+            ->assertForbidden();
+    }
+
+    public function test_scoped_admin_only_sees_assigned_application_data(): void
+    {
+        $this->seed();
+
+        $user = User::create([
+            'name' => 'SoCal Admin',
+            'email' => 'socal.scope@example.com',
+            'password' => 'password123',
+            'role' => 'admin',
+            'application' => 'socal',
+        ]);
+        $month = Consultation::where('booking_number', 'SAMPLE-02')->firstOrFail()->starts_at->format('Y-m');
+
+        $this->actingAs($user)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('SoCal Mediation Center')
+            ->assertDontSee('Legal Consultation');
+
+        $this->actingAs($user)
+            ->get(route('admin.consultations.index', ['application' => 'legal']))
+            ->assertOk()
+            ->assertSee('SAMPLE-02')
+            ->assertDontSee('SAMPLE-07');
+
+        $this->actingAs($user)
+            ->get(route('admin.calendar.index', ['application' => 'legal', 'month' => $month]))
+            ->assertOk()
+            ->assertSee('1/2 Day Mediation')
+            ->assertDontSee('Professional Consultation');
+    }
+
+    public function test_scoped_admin_cannot_open_or_update_other_application_consultation(): void
+    {
+        $this->seed();
+
+        $user = User::create([
+            'name' => 'SoCal Admin',
+            'email' => 'socal.direct@example.com',
+            'password' => 'password123',
+            'role' => 'admin',
+            'application' => 'socal',
+        ]);
+        $legalConsultation = Consultation::where('booking_number', 'SAMPLE-07')->firstOrFail();
+
+        $this->actingAs($user)
+            ->get(route('admin.consultations.show', $legalConsultation))
+            ->assertForbidden();
+
+        $this->actingAs($user)
+            ->post(route('admin.consultations.statuses', $legalConsultation), [
+                'status' => 'scheduled',
+                'payment_status' => 'paid',
+            ])
+            ->assertForbidden();
+    }
+
     public function test_consultation_detail_actions_follow_payment_state(): void
     {
         $this->seed();

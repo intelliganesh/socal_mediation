@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Socal Admin',
             'password' => Hash::make('password'),
             'role' => 'admin',
+            'application' => null,
         ]);
 
         $types = [

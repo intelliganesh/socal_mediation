@@ -17,9 +17,14 @@ class ConsultationAdminController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+        $selectedApplication = $user->isGlobalAdmin()
+            ? $request->query('application')
+            : $user->application;
+
         $query = Consultation::query()
             ->with(['type', 'participants', 'paymentRequests'])
-            ->when($request->query('application'), fn ($query, $application) => $query->where('application', $application))
+            ->when($selectedApplication, fn ($query, $application) => $query->where('application', $application))
             ->when($request->query('status'), fn ($query, $status) => $query->where('status', $status))
             ->when($request->query('q'), function ($query, $search) {
                 $query->where(function ($query) use ($search) {
@@ -61,11 +66,12 @@ class ConsultationAdminController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        return view('admin.consultations.index', compact('consultations'));
+        return view('admin.consultations.index', compact('consultations', 'selectedApplication'));
     }
 
     public function show(Consultation $consultation, PaymentReconciliationService $payments)
     {
+        $this->authorizeConsultation($consultation);
         $payments->syncConsultation($consultation);
 
         return view('admin.consultations.show', [
@@ -82,6 +88,7 @@ class ConsultationAdminController extends Controller
 
     public function sendReminder(Consultation $consultation, AdminPaymentNotificationService $notifications, PaymentReconciliationService $payments)
     {
+        $this->authorizeConsultation($consultation);
         $payments->syncConsultation($consultation);
         $sent = $notifications->sendPaymentReminders($consultation);
 
@@ -93,6 +100,7 @@ class ConsultationAdminController extends Controller
 
     public function sendPaymentLinks(Consultation $consultation, AdminPaymentNotificationService $notifications, PaymentReconciliationService $payments)
     {
+        $this->authorizeConsultation($consultation);
         $payments->syncConsultation($consultation);
         $sent = $notifications->sendPaymentLinks($consultation);
 
@@ -104,6 +112,7 @@ class ConsultationAdminController extends Controller
 
     public function resendZoomLink(Consultation $consultation, AdminZoomNotificationService $notifications)
     {
+        $this->authorizeConsultation($consultation);
         $sent = $notifications->resendZoomLink($consultation);
 
         return back()->with('status', $sent > 0
@@ -114,6 +123,7 @@ class ConsultationAdminController extends Controller
 
     public function regenerateZoomLink(Consultation $consultation, ZoomClient $zoom)
     {
+        $this->authorizeConsultation($consultation);
         if ($consultation->consultation_mode !== 'online') {
             return back()->with('status', 'Zoom meeting links are only available for online consultations.');
         }
@@ -143,6 +153,7 @@ class ConsultationAdminController extends Controller
 
     public function cancel(Consultation $consultation, OutlookCalendarClient $outlook)
     {
+        $this->authorizeConsultation($consultation);
         $consultation->update([
             'status' => 'cancelled',
         ]);
@@ -181,6 +192,7 @@ class ConsultationAdminController extends Controller
         ZoomClient $zoom,
         AdminZoomNotificationService $zoomNotifications
     ) {
+        $this->authorizeConsultation($consultation);
         $data = $request->validate([
             'starts_at' => ['required', 'date_format:Y-m-d\TH:i'],
         ]);
@@ -264,6 +276,7 @@ class ConsultationAdminController extends Controller
 
     public function syncOutlook(Consultation $consultation, OutlookCalendarClient $outlook, PaymentReconciliationService $payments)
     {
+        $this->authorizeConsultation($consultation);
         $payments->syncConsultation($consultation);
 
         if ($consultation->starts_at === null || $consultation->ends_at === null) {
@@ -304,6 +317,7 @@ class ConsultationAdminController extends Controller
 
     public function updateStatuses(Request $request, Consultation $consultation, OutlookCalendarClient $outlook)
     {
+        $this->authorizeConsultation($consultation);
         $data = $request->validate([
             'status' => ['required', 'string', 'in:draft,pending,payment_pending,paid,scheduled,rescheduled,in_progress,completed,cancelled,overdue'],
             'payment_status' => ['required', 'string', 'in:pending,partially_paid,paid,failed,refunded'],
@@ -365,5 +379,10 @@ class ConsultationAdminController extends Controller
         }
 
         return 'payment_pending';
+    }
+
+    private function authorizeConsultation(Consultation $consultation): void
+    {
+        abort_unless(auth()->user()?->canAccessApplication($consultation->application), 403);
     }
 }
