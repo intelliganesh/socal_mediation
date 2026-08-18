@@ -914,11 +914,11 @@ class ConsultationApiTest extends TestCase
             ->assertNotFound();
 
         $this->postJson('/api/v1/questionnaires/socal-party-mediation/'.$submission->token, [
-            'answers' => ['relationship_summary' => 'Wrong endpoint for this token.'],
+            'answers' => ['full_name' => 'Wrong endpoint for this token.'],
         ])->assertStatus(409);
 
         $this->postJson('/api/v1/questionnaires/socal-divorce-intake/'.$submission->token, [
-            'answers' => ['relationship_summary' => 'We need help resolving divorce terms.'],
+            'answers' => ['full_name' => 'Alex Morgan'],
         ])
             ->assertOk()
             ->assertJsonPath('data.questionnaire_progress.complete', false)

@@ -808,6 +808,30 @@
                                 "properties": {
                                     "answers": {
                                         "properties": {
+                                            "full_name": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "spouse_partner_name": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "phone": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "email": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "spouse_phone": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "spouse_email": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
                                             "preferred_language": {
                                                 "type": "string",
                                                 "nullable": true
@@ -816,7 +840,15 @@
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "relationship_summary": {
+                                            "referral_source": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "date_of_marriage": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "date_of_separation": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
@@ -824,7 +856,15 @@
                                                 "type": "boolean",
                                                 "nullable": true
                                             },
+                                            "moved_out_party": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
                                             "domestic_violence_history": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "domestic_violence_explanation": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
@@ -832,15 +872,49 @@
                                                 "type": "boolean",
                                                 "nullable": true
                                             },
-                                            "children_details": {
+                                            "children": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "custody_concerns": {
+                                            "current_parenting_schedule": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "child_support_status": {
+                                            "proposed_parenting_schedule": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "education_decision_maker": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "medical_decision_maker": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "child_related_concerns": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "child_related_concern_other": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "child_support_discussed_or_ordered": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "fair_monthly_child_support_amount": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "monthly_income_you": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "monthly_income_other_parent": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
@@ -848,19 +922,103 @@
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "asset_summary": {
+                                            "spousal_support_duration": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "debt_summary": {
+                                            "spousal_monthly_income_you": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "case_filed_status": {
+                                            "spousal_monthly_income_spouse": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "attorney_involvement": {
+                                            "real_estate_types": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "real_estate_addresses": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "real_estate_estimated_values": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "mortgage_balances": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "bank_account_types": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "bank_accounts_estimated_total": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "retirement_account_types": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "retirement_estimated_total": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "vehicles": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "other_asset_types": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "other_assets_description": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "debts_credit_cards": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "debts_loans": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "debts_other": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "property_division_goals": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "divorce_case_filed": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "case_number": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "attorneys_involved": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "mediation_priorities": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "mediation_concerns": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
@@ -869,10 +1027,6 @@
                                                 "nullable": true
                                             },
                                             "same_room_comfort": {
-                                                "type": "string",
-                                                "nullable": true
-                                            },
-                                            "goals_for_mediation": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
@@ -973,11 +1127,7 @@
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "acceptable_solution": {
-                                                "type": "string",
-                                                "nullable": true
-                                            },
-                                            "unacceptable_result": {
+                                            "good_outcome": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
@@ -991,7 +1141,19 @@
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "important_information": {
+                                            "fairness_requirement": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "flexible_about": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "non_negotiables": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "mediator_notes": {
                                                 "type": "string",
                                                 "nullable": true
                                             }
