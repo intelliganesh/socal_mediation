@@ -854,15 +854,20 @@ class ConsultationApiTest extends TestCase
         $submissions = QuestionnaireSubmission::where('consultation_id', $consultationUuid)->get();
         $this->assertGreaterThan(0, $submissions->count());
         $this->assertSame('socal_party_mediation', $submissions->first()->template_key);
-        $this->assertStringContainsString('/questionnaire?token='.$submissions->first()->token, (new ConsultationQuestionnaireMail($submissions->first()))->render());
+        $questionnaireMailHtml = (new ConsultationQuestionnaireMail($submissions->first()))->render();
+        $this->assertStringContainsString('/questionnaire?token='.$submissions->first()->token, $questionnaireMailHtml);
+        $this->assertStringContainsString('/agreement?token='.$submissions->first()->token, $questionnaireMailHtml);
 
         foreach ($submissions as $index => $submission) {
+            $this->postJson('/api/v1/agreements/'.$submission->token, [
+                'accepted' => true,
+            ])->assertOk();
+
             $response = $this->postJson('/api/v1/questionnaires/'.$submission->token, [
                 'answers' => [
                     'dispute_summary' => 'Contract payment dispute.',
                     'desired_result' => 'A practical settlement.',
                 ],
-                'agreement_accepted' => true,
             ])->assertOk();
 
             if ($index < $submissions->count() - 1) {
@@ -911,12 +916,17 @@ class ConsultationApiTest extends TestCase
         $this->postJson('/api/v1/questionnaires/'.$submission->token, [
             'answers' => ['relationship_summary' => 'We need help resolving divorce terms.'],
         ])
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'Agreement acceptance is required before submitting this questionnaire.');
+            ->assertOk()
+            ->assertJsonPath('data.questionnaire_progress.complete', false)
+            ->assertJsonPath('data.questionnaire_progress.agreement_accepted', 0);
 
-        $this->postJson('/api/v1/questionnaires/'.$submission->token, [
-            'answers' => ['relationship_summary' => 'We need help resolving divorce terms.'],
-            'agreement_accepted' => true,
+        $this->getJson('/api/v1/agreements/'.$submission->token)
+            ->assertOk()
+            ->assertJsonPath('data.required', true)
+            ->assertJsonPath('data.accepted', false);
+
+        $this->postJson('/api/v1/agreements/'.$submission->token, [
+            'accepted' => true,
         ])
             ->assertOk()
             ->assertJsonPath('data.questionnaire_progress.complete', true);

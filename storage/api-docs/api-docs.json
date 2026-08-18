@@ -833,10 +833,6 @@
                                 "properties": {
                                     "answers": {
                                         "type": "object"
-                                    },
-                                    "agreement_accepted": {
-                                        "type": "boolean",
-                                        "nullable": true
                                     }
                                 },
                                 "type": "object"
@@ -853,6 +849,80 @@
                     },
                     "409": {
                         "description": "Questionnaire already submitted"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                }
+            }
+        },
+        "/v1/agreements/{token}": {
+            "get": {
+                "tags": [
+                    "Agreements"
+                ],
+                "summary": "Get agreement details by secure token",
+                "operationId": "ceb67b38898abb55227142755f29d9f6",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Agreement detail"
+                    },
+                    "404": {
+                        "description": "Agreement token not found"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Agreements"
+                ],
+                "summary": "Accept agreement by secure token",
+                "operationId": "f7dee03a7a7ee93763a2db97f98ef405",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "accepted"
+                                ],
+                                "properties": {
+                                    "accepted": {
+                                        "type": "boolean",
+                                        "example": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Agreement accepted"
+                    },
+                    "404": {
+                        "description": "Agreement token not found"
                     },
                     "422": {
                         "description": "Validation failed"
@@ -1283,6 +1353,10 @@
         {
             "name": "Questionnaires",
             "description": "Questionnaires"
+        },
+        {
+            "name": "Agreements",
+            "description": "Agreements"
         }
     ]
 }

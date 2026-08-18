@@ -20,7 +20,10 @@
             ->first()
         : null;
     $questionnaireUrl = $questionnaireSubmission
-        ? app(\App\Services\QuestionnaireWorkflowService::class)->frontendUrl($questionnaireSubmission)
+        ? app(\App\Services\QuestionnaireWorkflowService::class)->questionnaireUrl($questionnaireSubmission)
+        : null;
+    $agreementUrl = $questionnaireSubmission && config('questionnaires.templates.'.$questionnaireSubmission->template_key.'.requires_agreement')
+        ? app(\App\Services\QuestionnaireWorkflowService::class)->agreementUrl($questionnaireSubmission)
         : null;
 @endphp
 <!DOCTYPE html>
@@ -43,7 +46,10 @@
                 @endif
                 <p style="margin:22px 0 0;font-size:20px;font-weight:700;">${{ number_format($paymentRequest->amount_cents / 100, 2) }} {{ $paymentRequest->currency }}</p>
                 @if($questionnaireSubmission && $questionnaireSubmission->status === 'pending' && filled($questionnaireUrl))
-                    <a href="{{ $questionnaireUrl }}" style="display:inline-block;margin-top:24px;border-radius:6px;background:{{ $brand }};color:#fff;font-weight:700;padding:13px 22px;text-decoration:none;">Proceed to Questionnaire</a>
+                    @if(filled($agreementUrl) && ! $questionnaireSubmission->agreement_accepted)
+                        <a href="{{ $agreementUrl }}" style="display:inline-block;margin-top:24px;border-radius:6px;background:{{ $brand }};color:#fff;font-weight:700;padding:13px 22px;text-decoration:none;">Proceed to Agreement</a>
+                    @endif
+                    <a href="{{ $questionnaireUrl }}" style="display:inline-block;margin-top:{{ filled($agreementUrl) && ! $questionnaireSubmission->agreement_accepted ? '12px' : '24px' }};border-radius:6px;background:{{ filled($agreementUrl) && ! $questionnaireSubmission->agreement_accepted ? '#fff' : $brand }};color:{{ filled($agreementUrl) && ! $questionnaireSubmission->agreement_accepted ? $brand : '#fff' }};border:1px solid {{ $brand }};font-weight:700;padding:13px 22px;text-decoration:none;">Proceed to Questionnaire</a>
                 @elseif($questionnaireSubmission && $questionnaireSubmission->status === 'submitted')
                     <p style="margin:18px 0 0;color:#64748b;font-size:14px;">Your questionnaire has already been submitted. Meeting details will be shared after all required questionnaires are complete.</p>
                     @if(filled($redirectUrl))

@@ -66,13 +66,17 @@ class ConsultationResource extends JsonResource
 
         $total = $this->questionnaireSubmissions->count();
         $submitted = $this->questionnaireSubmissions->where('status', 'submitted')->count();
+        $agreementRequired = $this->questionnaireSubmissions->contains(fn ($submission) => (bool) config('questionnaires.templates.'.$submission->template_key.'.requires_agreement', false));
+        $agreementAccepted = $this->questionnaireSubmissions->where('agreement_accepted', true)->count();
 
         return [
             'required' => $total > 0,
             'total' => $total,
             'submitted' => $submitted,
             'pending' => max(0, $total - $submitted),
-            'complete' => $total > 0 && $submitted === $total,
+            'complete' => $total > 0 && $submitted === $total && (! $agreementRequired || $agreementAccepted === $total),
+            'agreement_required' => $agreementRequired,
+            'agreement_accepted' => $agreementAccepted,
         ];
     }
 }

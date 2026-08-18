@@ -27,6 +27,8 @@ Route::prefix('v1')->group(function () {
 
     Route::get('questionnaires/{token}', [QuestionnaireController::class, 'show']);
     Route::post('questionnaires/{token}', [QuestionnaireController::class, 'store']);
+    Route::get('agreements/{token}', [QuestionnaireController::class, 'showAgreement']);
+    Route::post('agreements/{token}', [QuestionnaireController::class, 'acceptAgreement']);
 
     Route::post('payments/converge/confirmation', [PaymentWebhookController::class, 'confirmation']);
     Route::post('payments/converge/webhook', [PaymentWebhookController::class, 'converge']);

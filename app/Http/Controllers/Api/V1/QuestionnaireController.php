@@ -53,7 +53,8 @@ class QuestionnaireController extends Controller
             ],
             'consultation' => new ConsultationResource($submission->consultation),
             'answers' => $submission->answers ?? [],
-            'questionnaire_url' => $workflow->frontendUrl($submission),
+            'questionnaire_url' => $workflow->questionnaireUrl($submission),
+            'agreement_url' => ($template['requires_agreement'] ?? false) ? $workflow->agreementUrl($submission) : null,
         ]);
     }
 
@@ -66,7 +67,6 @@ class QuestionnaireController extends Controller
         ],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['answers'], properties: [
             new OA\Property(property: 'answers', type: 'object'),
-            new OA\Property(property: 'agreement_accepted', type: 'boolean', nullable: true),
         ])),
         responses: [
             new OA\Response(response: 200, description: 'Questionnaire submitted'),
@@ -80,17 +80,10 @@ class QuestionnaireController extends Controller
         $submission = $this->submission($token);
         $data = $request->validate([
             'answers' => ['required', 'array'],
-            'agreement_accepted' => ['nullable', 'boolean'],
         ]);
 
         try {
-            $consultation = $workflow->submit(
-                $submission,
-                $data['answers'],
-                (bool) ($data['agreement_accepted'] ?? false),
-                $request->ip(),
-                $request->userAgent(),
-            );
+            $consultation = $workflow->submitQuestionnaire($submission, $data['answers']);
         } catch (\DomainException $exception) {
             $status = str_contains($exception->getMessage(), 'already been submitted') ? 409 : 422;
 
@@ -98,6 +91,73 @@ class QuestionnaireController extends Controller
         }
 
         return ApiResponse::success(new ConsultationResource($consultation), 'Questionnaire submitted.');
+    }
+
+    #[OA\Get(
+        path: '/v1/agreements/{token}',
+        tags: ['Agreements'],
+        summary: 'Get agreement details by secure token',
+        parameters: [
+            new OA\Parameter(name: 'token', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Agreement detail'),
+            new OA\Response(response: 404, description: 'Agreement token not found'),
+        ]
+    )]
+    public function showAgreement(string $token, QuestionnaireTemplateService $templates, QuestionnaireWorkflowService $workflow)
+    {
+        $submission = $this->submission($token);
+        $template = $templates->templateForConsultation($submission->consultation);
+
+        return ApiResponse::success([
+            'token' => $submission->token,
+            'required' => (bool) ($template['requires_agreement'] ?? false),
+            'accepted' => $submission->agreement_accepted,
+            'accepted_at' => $submission->agreement_accepted_at?->toIso8601String(),
+            'version' => config('questionnaires.agreement_version'),
+            'participant' => [
+                'first_name' => $submission->participant->first_name,
+                'last_name' => $submission->participant->last_name,
+                'email' => $submission->participant->email,
+                'is_primary' => $submission->participant->is_primary,
+            ],
+            'consultation' => new ConsultationResource($submission->consultation),
+            'agreement_url' => ($template['requires_agreement'] ?? false) ? $workflow->agreementUrl($submission) : null,
+            'questionnaire_url' => $workflow->questionnaireUrl($submission),
+        ]);
+    }
+
+    #[OA\Post(
+        path: '/v1/agreements/{token}',
+        tags: ['Agreements'],
+        summary: 'Accept agreement by secure token',
+        parameters: [
+            new OA\Parameter(name: 'token', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
+        ],
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['accepted'], properties: [
+            new OA\Property(property: 'accepted', type: 'boolean', example: true),
+        ])),
+        responses: [
+            new OA\Response(response: 200, description: 'Agreement accepted'),
+            new OA\Response(response: 404, description: 'Agreement token not found'),
+            new OA\Response(response: 422, description: 'Validation failed'),
+        ]
+    )]
+    public function acceptAgreement(string $token, Request $request, QuestionnaireWorkflowService $workflow)
+    {
+        $submission = $this->submission($token);
+        $request->validate([
+            'accepted' => ['required', 'accepted'],
+        ]);
+
+        try {
+            $consultation = $workflow->acceptAgreement($submission, $request->ip(), $request->userAgent());
+        } catch (\DomainException $exception) {
+            return ApiResponse::error($exception->getMessage(), 422);
+        }
+
+        return ApiResponse::success(new ConsultationResource($consultation), 'Agreement accepted.');
     }
 
     private function submission(string $token): QuestionnaireSubmission

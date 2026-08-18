@@ -16,10 +16,16 @@ class ConsultationQuestionnaireMail extends Mailable
 
     public string $questionnaireUrl;
 
+    public ?string $agreementUrl;
+
     public function __construct(public QuestionnaireSubmission $submission)
     {
         $this->submission->loadMissing(['consultation.type', 'consultation.professional', 'participant']);
-        $this->questionnaireUrl = app(QuestionnaireWorkflowService::class)->frontendUrl($this->submission) ?? '#';
+        $workflow = app(QuestionnaireWorkflowService::class);
+        $this->questionnaireUrl = $workflow->questionnaireUrl($this->submission) ?? '#';
+        $this->agreementUrl = config('questionnaires.templates.'.$this->submission->template_key.'.requires_agreement')
+            ? $workflow->agreementUrl($this->submission)
+            : null;
     }
 
     public function envelope(): Envelope

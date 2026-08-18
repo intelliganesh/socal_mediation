@@ -106,26 +106,16 @@ class QuestionnaireWorkflowService
         return $sent;
     }
 
-    public function submit(QuestionnaireSubmission $submission, array $answers, bool $agreementAccepted, ?string $ipAddress, ?string $userAgent): Consultation
+    public function submitQuestionnaire(QuestionnaireSubmission $submission, array $answers): Consultation
     {
         if ($submission->status === 'submitted') {
             throw new \DomainException('This questionnaire has already been submitted.');
         }
 
         $submission->loadMissing(['consultation.type', 'consultation.professional', 'participant']);
-        $template = $this->templates->templateForConsultation($submission->consultation);
-
-        if (($template['requires_agreement'] ?? false) && ! $agreementAccepted) {
-            throw new \DomainException('Agreement acceptance is required before submitting this questionnaire.');
-        }
 
         $submission->update([
             'answers' => $this->templates->normalizeAnswers($submission->template_key, $answers),
-            'agreement_accepted' => $agreementAccepted,
-            'agreement_accepted_at' => $agreementAccepted ? now() : null,
-            'agreement_version' => $agreementAccepted ? config('questionnaires.agreement_version') : null,
-            'ip_address' => $ipAddress,
-            'user_agent' => $userAgent,
             'status' => 'submitted',
             'submitted_at' => now(),
         ]);
@@ -146,6 +136,42 @@ class QuestionnaireWorkflowService
         return $submission->consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests', 'questionnaireSubmissions']);
     }
 
+    public function acceptAgreement(QuestionnaireSubmission $submission, ?string $ipAddress, ?string $userAgent): Consultation
+    {
+        $submission->loadMissing(['consultation.type', 'consultation.professional', 'participant']);
+        $template = $this->templates->templateForConsultation($submission->consultation);
+
+        if (! ($template['requires_agreement'] ?? false)) {
+            throw new \DomainException('Agreement acceptance is not required for this questionnaire.');
+        }
+
+        if (! $submission->agreement_accepted) {
+            $submission->update([
+                'agreement_accepted' => true,
+                'agreement_accepted_at' => now(),
+                'agreement_version' => config('questionnaires.agreement_version'),
+                'ip_address' => $ipAddress,
+                'user_agent' => $userAgent,
+            ]);
+
+            $submission->consultation->integrationLogs()->create([
+                'provider' => 'questionnaire',
+                'action' => 'agreement_acceptance',
+                'status' => 'accepted',
+                'request_payload' => [
+                    'participant_id' => $submission->participant_id,
+                    'template_key' => $submission->template_key,
+                    'agreement_version' => config('questionnaires.agreement_version'),
+                ],
+                'message' => 'Participant agreement accepted.',
+            ]);
+        }
+
+        $this->releaseIfComplete($submission->consultation->refresh());
+
+        return $submission->consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests', 'questionnaireSubmissions']);
+    }
+
     public function releaseIfComplete(Consultation $consultation): void
     {
         if (! $this->templates->requiresQuestionnaire($consultation)) {
@@ -160,7 +186,12 @@ class QuestionnaireWorkflowService
 
         $submissions = $this->ensureSubmissions($consultation);
 
-        if ($submissions->isEmpty() || $submissions->contains(fn (QuestionnaireSubmission $submission) => $submission->status !== 'submitted')) {
+        if ($submissions->isEmpty() || $submissions->contains(function (QuestionnaireSubmission $submission) {
+            $template = config('questionnaires.templates.'.$submission->template_key, []);
+
+            return $submission->status !== 'submitted'
+                || (($template['requires_agreement'] ?? false) && ! $submission->agreement_accepted);
+        })) {
             return;
         }
 
@@ -175,17 +206,21 @@ class QuestionnaireWorkflowService
 
         $total = $submissions->count();
         $submitted = $submissions->where('status', 'submitted')->count();
+        $agreementRequired = $submissions->contains(fn (QuestionnaireSubmission $submission) => (bool) config('questionnaires.templates.'.$submission->template_key.'.requires_agreement', false));
+        $agreementAccepted = $submissions->where('agreement_accepted', true)->count();
 
         return [
             'required' => $this->templates->requiresQuestionnaire($consultation),
             'total' => $total,
             'submitted' => $submitted,
             'pending' => max(0, $total - $submitted),
-            'complete' => $total > 0 && $submitted === $total,
+            'complete' => $total > 0 && $submitted === $total && (! $agreementRequired || $agreementAccepted === $total),
+            'agreement_required' => $agreementRequired,
+            'agreement_accepted' => $agreementAccepted,
         ];
     }
 
-    public function frontendUrl(QuestionnaireSubmission $submission): ?string
+    public function questionnaireUrl(QuestionnaireSubmission $submission): ?string
     {
         $application = $submission->consultation?->application;
         $baseUrl = config('app.payment_redirect_urls.'.$application);
@@ -195,6 +230,23 @@ class QuestionnaireWorkflowService
         }
 
         return rtrim($baseUrl, '/').'/questionnaire?token='.$submission->token;
+    }
+
+    public function agreementUrl(QuestionnaireSubmission $submission): ?string
+    {
+        $application = $submission->consultation?->application;
+        $baseUrl = config('app.payment_redirect_urls.'.$application);
+
+        if (! is_string($baseUrl) || trim($baseUrl) === '') {
+            return null;
+        }
+
+        return rtrim($baseUrl, '/').'/agreement?token='.$submission->token;
+    }
+
+    public function frontendUrl(QuestionnaireSubmission $submission): ?string
+    {
+        return $this->questionnaireUrl($submission);
     }
 
     private function releaseConsultation(Consultation $consultation): void
