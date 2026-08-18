@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Services;
 
 use App\Models\Consultation;
@@ -9,74 +8,74 @@ class QuestionnaireTemplateService
     public const AGREEMENT_VERSION = '2026-08-18';
 
     public const TEMPLATES = [
-        'socal_divorce_intake' => [
-            'label' => 'Divorce Mediation Intake Questionnaire',
-            'version' => 1,
-            'frontend_path' => 'divorce-intake',
-            'source_pdf' => 'questionnaires/DIVORCE MEDIATION INTAKE QUESTIONNAIRE.pdf',
+        'socal_divorce_intake'  => [
+            'label'              => 'Divorce Mediation Intake Questionnaire',
+            'version'            => 1,
+            'frontend_path'      => 'divorce-mediation',
+            'source_pdf'         => 'questionnaires/DIVORCE MEDIATION INTAKE QUESTIONNAIRE.pdf',
             'requires_agreement' => true,
-            'answer_payload' => [
-                'preferred_language' => null,
-                'other_language' => null,
-                'relationship_summary' => null,
-                'currently_living_together' => null,
-                'domestic_violence_history' => null,
-                'children_together' => null,
-                'children_details' => null,
-                'custody_concerns' => null,
-                'child_support_status' => null,
+            'answer_payload'     => [
+                'preferred_language'          => null,
+                'other_language'              => null,
+                'relationship_summary'        => null,
+                'currently_living_together'   => null,
+                'domestic_violence_history'   => null,
+                'children_together'           => null,
+                'children_details'            => null,
+                'custody_concerns'            => null,
+                'child_support_status'        => null,
                 'spousal_support_expectation' => null,
-                'asset_summary' => null,
-                'debt_summary' => null,
-                'case_filed_status' => null,
-                'attorney_involvement' => null,
-                'preferred_session_format' => null,
-                'same_room_comfort' => null,
-                'goals_for_mediation' => null,
-                'additional_information' => null,
+                'asset_summary'               => null,
+                'debt_summary'                => null,
+                'case_filed_status'           => null,
+                'attorney_involvement'        => null,
+                'preferred_session_format'    => null,
+                'same_room_comfort'           => null,
+                'goals_for_mediation'         => null,
+                'additional_information'      => null,
             ],
         ],
         'socal_party_mediation' => [
-            'label' => 'Party Mediation Questionnaire',
-            'version' => 1,
-            'frontend_path' => 'party-mediation-questionnaire',
-            'source_pdf' => 'questionnaires/PARTY MEDIATION QUESTIONNAIRE.pdf',
+            'label'              => 'Party Mediation Questionnaire',
+            'version'            => 1,
+            'frontend_path'      => 'party-mediation',
+            'source_pdf'         => 'questionnaires/PARTY MEDIATION QUESTIONNAIRE.pdf',
             'requires_agreement' => true,
-            'answer_payload' => [
-                'name' => null,
-                'date' => null,
-                'other_party_name' => null,
-                'case_or_matter' => null,
-                'dispute_summary' => null,
-                'problem_started_at' => null,
-                'main_concern' => null,
+            'answer_payload'     => [
+                'name'                  => null,
+                'date'                  => null,
+                'other_party_name'      => null,
+                'case_or_matter'        => null,
+                'dispute_summary'       => null,
+                'problem_started_at'    => null,
+                'main_concern'          => null,
                 'personal_contribution' => null,
-                'impact' => null,
-                'desired_result' => null,
-                'acceptable_solution' => null,
-                'unacceptable_result' => null,
-                'mediation_goals' => [],
-                'other_goal' => null,
+                'impact'                => null,
+                'desired_result'        => null,
+                'acceptable_solution'   => null,
+                'unacceptable_result'   => null,
+                'mediation_goals'       => [],
+                'other_goal'            => null,
                 'important_information' => null,
             ],
         ],
-        'legal_initial_intake' => [
-            'label' => 'Initial Intake Questionnaire',
-            'version' => 1,
-            'frontend_path' => 'initial-intake',
-            'source_pdf' => 'questionnaires/Initial Intake [Filllable].pdf',
+        'legal_initial_intake'  => [
+            'label'              => 'Initial Intake Questionnaire',
+            'version'            => 1,
+            'frontend_path'      => 'initial-intake',
+            'source_pdf'         => 'questionnaires/Initial Intake [Filllable].pdf',
             'requires_agreement' => false,
-            'answer_payload' => [
-                'name' => null,
-                'address' => null,
-                'home_phone' => null,
-                'cell_phone' => null,
-                'email' => null,
-                'alternate_email' => null,
+            'answer_payload'     => [
+                'name'                        => null,
+                'address'                     => null,
+                'home_phone'                  => null,
+                'cell_phone'                  => null,
+                'email'                       => null,
+                'alternate_email'             => null,
                 'advice_or_assistance_needed' => null,
-                'referral_source' => null,
-                'referral_source_other' => null,
-                'paid' => null,
+                'referral_source'             => null,
+                'referral_source_other'       => null,
+                'paid'                        => null,
             ],
         ],
     ];
@@ -84,8 +83,8 @@ class QuestionnaireTemplateService
     public function requiresQuestionnaire(Consultation $consultation): bool
     {
         return $consultation->total_amount_cents > 0
-            && $consultation->application !== null
-            && ! in_array($consultation->status, ['draft', 'cancelled'], true);
+        && $consultation->application !== null
+        && ! in_array($consultation->status, ['draft', 'cancelled'], true);
     }
 
     public function templateForConsultation(Consultation $consultation): array
@@ -120,7 +119,7 @@ class QuestionnaireTemplateService
     public function normalizeAnswers(array $answers): array
     {
         return collect($answers)
-            ->map(fn ($value) => $this->normalizeValue($value))
+            ->map(fn($value) => $this->normalizeValue($value))
             ->all();
     }
 
@@ -143,7 +142,7 @@ class QuestionnaireTemplateService
     {
         if (is_array($value)) {
             return collect($value)
-                ->map(fn ($item) => $this->normalizeValue($item))
+                ->map(fn($item) => $this->normalizeValue($item))
                 ->values()
                 ->all();
         }

@@ -103,7 +103,7 @@
                                         <div style="font-size:12px;color:#374151;margin-bottom:7px;">Service Type</div>
                                         <div style="font-size:14px;line-height:1.4;">
                                             <img src="{{ asset($serviceIcon) }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
-                                            {{ $consultation?->legal_service_name ?: '-' }}
+                                            {{ $consultation?->legal_service_name ?: 'Legal Consultation' }}
                                         </div>
                                     </td>
                                     <td width="50%" valign="top" style="padding:0 0 22px 18px;">

@@ -33,8 +33,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex,nofollow">
     <title>Payment Status</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
 </head>
-<body style="margin:0;background:#f3f4f7;color:#111827;font-family:Arial,sans-serif;">
+<body style="margin:0;background:#f3f4f7;color:#111827;font-family:Inter, sans-serif;">
     <main style="display:grid;min-height:100vh;place-items:center;padding:24px;">
         <section style="width:100%;max-width:620px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;overflow:hidden;">
             <div style="background:{{ $brand }};color:#fff;padding:18px 24px;font-weight:700;">{{ $consultation?->booking_number }}</div>
