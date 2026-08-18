@@ -12,15 +12,21 @@
 </head>
 @php
     $currentUser = auth()->user();
-    $activeApplication = in_array($application, ['socal', 'legal'], true)
-        ? $application
-        : (in_array($currentUser?->application, ['socal', 'legal'], true) ? $currentUser->application : 'socal');
-    $isLegalTheme = $activeApplication === 'legal';
+    $scopedApplication = in_array($currentUser?->application, ['socal', 'legal'], true)
+        ? $currentUser->application
+        : null;
+    $themeApplication = $scopedApplication ?: 'socal';
+    $isLegalTheme = $themeApplication === 'legal';
+    $commonLogo = collect(['common_logo.png', 'common_logo.svg'])
+        ->first(fn ($logo) => file_exists(public_path('admin-icons/'.$logo)));
+    $logo = $scopedApplication === null
+        ? ($commonLogo ?: 'common_logo.svg')
+        : ($isLegalTheme ? 'legal.png' : 'socal.png');
     $brand = $isLegalTheme
-        ? ['name' => 'Legal Consultation', 'logo' => 'legal.png', 'color' => '#75172E', 'soft' => '#E8DDE1', 'profileName' => 'Steve Lopez']
-        : ['name' => 'SoCal Mediation Center', 'logo' => 'socal.png', 'color' => '#082BC3', 'soft' => '#F1F6FE', 'profileName' => null];
+        ? ['name' => 'Legal Consultation', 'logo' => $logo, 'color' => '#75172E', 'soft' => '#E8DDE1', 'profileName' => 'Steve Lopez']
+        : ['name' => $scopedApplication === null ? 'Admin' : 'SoCal Mediation Center', 'logo' => $logo, 'color' => '#082BC3', 'soft' => '#F1F6FE', 'profileName' => null];
 @endphp
-<body class="admin-theme-{{ $activeApplication }} min-h-screen bg-[#f3f4f7] text-[#1F2937]">
+<body class="admin-theme-{{ $themeApplication }} min-h-screen bg-[#f3f4f7] text-[#1F2937]">
     @php
         $navItems = [
             ['label' => 'Dashboard', 'icon' => 'layout-dashboard', 'href' => route('admin.dashboard'), 'active' => request()->routeIs('admin.dashboard')],
