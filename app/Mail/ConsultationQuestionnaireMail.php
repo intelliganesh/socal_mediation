@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\QuestionnaireSubmission;
+use App\Services\QuestionnaireTemplateService;
 use App\Services\QuestionnaireWorkflowService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -23,7 +24,7 @@ class ConsultationQuestionnaireMail extends Mailable
         $this->submission->loadMissing(['consultation.type', 'consultation.professional', 'participant']);
         $workflow = app(QuestionnaireWorkflowService::class);
         $this->questionnaireUrl = $workflow->questionnaireUrl($this->submission) ?? '#';
-        $this->agreementUrl = config('questionnaires.templates.'.$this->submission->template_key.'.requires_agreement')
+        $this->agreementUrl = app(QuestionnaireTemplateService::class)->requiresAgreement($this->submission->template_key)
             ? $workflow->agreementUrl($this->submission)
             : null;
     }

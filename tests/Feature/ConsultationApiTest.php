@@ -863,7 +863,7 @@ class ConsultationApiTest extends TestCase
                 'accepted' => true,
             ])->assertOk();
 
-            $response = $this->postJson('/api/v1/questionnaires/'.$submission->token, [
+            $response = $this->postJson('/api/v1/questionnaires/socal-party-mediation/'.$submission->token, [
                 'answers' => [
                     'dispute_summary' => 'Contract payment dispute.',
                     'desired_result' => 'A practical settlement.',
@@ -911,15 +911,13 @@ class ConsultationApiTest extends TestCase
         $submission = app(QuestionnaireWorkflowService::class)->ensureSubmission($consultation, $participant);
 
         $this->getJson('/api/v1/questionnaires/'.$submission->token)
-            ->assertOk()
-            ->assertJsonPath('data.template.key', 'socal_divorce_intake')
-            ->assertJsonPath('data.questionnaire_url', 'https://payment-result.example.test/divorce-intake?token='.$submission->token)
-            ->assertJsonPath('data.answer_payload.relationship_summary', null)
-            ->assertJsonPath('data.answer_payload.children_details', null)
-            ->assertJsonPath('data.agreement.required', true)
-            ->assertJsonPath('data.status', 'pending');
+            ->assertNotFound();
 
-        $this->postJson('/api/v1/questionnaires/'.$submission->token, [
+        $this->postJson('/api/v1/questionnaires/socal-party-mediation/'.$submission->token, [
+            'answers' => ['relationship_summary' => 'Wrong endpoint for this token.'],
+        ])->assertStatus(409);
+
+        $this->postJson('/api/v1/questionnaires/socal-divorce-intake/'.$submission->token, [
             'answers' => ['relationship_summary' => 'We need help resolving divorce terms.'],
         ])
             ->assertOk()

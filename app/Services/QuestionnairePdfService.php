@@ -12,7 +12,7 @@ class QuestionnairePdfService
     public function download(QuestionnaireSubmission $submission): Response
     {
         $submission->loadMissing(['consultation.type', 'consultation.professional', 'participant']);
-        $template = config('questionnaires.templates.'.$submission->template_key, []);
+        $template = app(QuestionnaireTemplateService::class)->template($submission->template_key);
         $filename = Str::slug($submission->consultation->booking_number.'-'.$submission->participant->first_name.'-'.$submission->participant->last_name.'-questionnaire').'.pdf';
 
         return Pdf::loadView('pdf.questionnaire-summary', [

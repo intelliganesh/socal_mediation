@@ -285,7 +285,7 @@
         </div>
         <div class="divide-y divide-[#E5E7EB]">
             @forelse($questionnaireSubmissions as $submission)
-            @php($submissionTemplate = config('questionnaires.templates.'.$submission->template_key, []))
+            @php($submissionTemplate = app(\App\Services\QuestionnaireTemplateService::class)->template($submission->template_key))
             @php($submissionStatus = $statusTheme($submission->status))
             @php($submissionParticipant = $submission->participant)
             @php($submissionName = trim(($submissionParticipant?->first_name ?? '').' '.($submissionParticipant?->last_name ?? '')) ?: 'Participant')

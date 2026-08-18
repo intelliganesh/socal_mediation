@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\QuestionnaireTemplateService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -66,7 +67,8 @@ class ConsultationResource extends JsonResource
 
         $total = $this->questionnaireSubmissions->count();
         $submitted = $this->questionnaireSubmissions->where('status', 'submitted')->count();
-        $agreementRequired = $this->questionnaireSubmissions->contains(fn ($submission) => (bool) config('questionnaires.templates.'.$submission->template_key.'.requires_agreement', false));
+        $templates = app(QuestionnaireTemplateService::class);
+        $agreementRequired = $this->questionnaireSubmissions->contains(fn ($submission) => $templates->requiresAgreement($submission->template_key));
         $agreementAccepted = $this->questionnaireSubmissions->where('agreement_accepted', true)->count();
 
         return [

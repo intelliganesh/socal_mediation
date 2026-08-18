@@ -149,7 +149,7 @@ class QuestionnaireWorkflowService
             $submission->update([
                 'agreement_accepted' => true,
                 'agreement_accepted_at' => now(),
-                'agreement_version' => config('questionnaires.agreement_version'),
+                'agreement_version' => QuestionnaireTemplateService::AGREEMENT_VERSION,
                 'ip_address' => $ipAddress,
                 'user_agent' => $userAgent,
             ]);
@@ -161,7 +161,7 @@ class QuestionnaireWorkflowService
                 'request_payload' => [
                     'participant_id' => $submission->participant_id,
                     'template_key' => $submission->template_key,
-                    'agreement_version' => config('questionnaires.agreement_version'),
+                    'agreement_version' => QuestionnaireTemplateService::AGREEMENT_VERSION,
                 ],
                 'message' => 'Participant agreement accepted.',
             ]);
@@ -187,10 +187,8 @@ class QuestionnaireWorkflowService
         $submissions = $this->ensureSubmissions($consultation);
 
         if ($submissions->isEmpty() || $submissions->contains(function (QuestionnaireSubmission $submission) {
-            $template = config('questionnaires.templates.'.$submission->template_key, []);
-
             return $submission->status !== 'submitted'
-                || (($template['requires_agreement'] ?? false) && ! $submission->agreement_accepted);
+                || ($this->templates->requiresAgreement($submission->template_key) && ! $submission->agreement_accepted);
         })) {
             return;
         }
@@ -206,7 +204,7 @@ class QuestionnaireWorkflowService
 
         $total = $submissions->count();
         $submitted = $submissions->where('status', 'submitted')->count();
-        $agreementRequired = $submissions->contains(fn (QuestionnaireSubmission $submission) => (bool) config('questionnaires.templates.'.$submission->template_key.'.requires_agreement', false));
+        $agreementRequired = $submissions->contains(fn (QuestionnaireSubmission $submission) => $this->templates->requiresAgreement($submission->template_key));
         $agreementAccepted = $submissions->where('agreement_accepted', true)->count();
 
         return [
@@ -229,7 +227,7 @@ class QuestionnaireWorkflowService
             return null;
         }
 
-        $path = config('questionnaires.templates.'.$submission->template_key.'.frontend_path', 'questionnaire');
+        $path = $this->templates->frontendPath($submission->template_key);
 
         return rtrim($baseUrl, '/').'/'.trim($path, '/').'?token='.$submission->token;
     }

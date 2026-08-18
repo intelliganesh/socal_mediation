@@ -2,7 +2,7 @@
     $consultation = $submission->consultation;
     $participant = $submission->participant;
     $clientName = trim($participant->first_name.' '.($participant->last_name ?? '')) ?: 'Client';
-    $template = config('questionnaires.templates.'.$submission->template_key);
+    $template = app(\App\Services\QuestionnaireTemplateService::class)->template($submission->template_key);
 @endphp
 
 @include('emails.partials.consultation-card', [

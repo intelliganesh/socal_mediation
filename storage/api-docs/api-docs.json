@@ -780,38 +780,13 @@
                 }
             }
         },
-        "/v1/questionnaires/{token}": {
-            "get": {
-                "tags": [
-                    "Questionnaires"
-                ],
-                "summary": "Get questionnaire details by secure token",
-                "operationId": "a82534c2b3e4c7bd28997dc106eed46d",
-                "parameters": [
-                    {
-                        "name": "token",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Questionnaire detail"
-                    },
-                    "404": {
-                        "description": "Questionnaire token not found"
-                    }
-                }
-            },
+        "/v1/questionnaires/socal-divorce-intake/{token}": {
             "post": {
                 "tags": [
                     "Questionnaires"
                 ],
-                "summary": "Submit questionnaire answers by secure token",
-                "operationId": "201f9e92e720c7ab7baef4afcfc1b52c",
+                "summary": "Submit SoCal divorce intake answers",
+                "operationId": "eaac9ff2f4776414cee246a302577f05",
                 "parameters": [
                     {
                         "name": "token",
@@ -832,6 +807,80 @@
                                 ],
                                 "properties": {
                                     "answers": {
+                                        "properties": {
+                                            "preferred_language": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "other_language": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "relationship_summary": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "currently_living_together": {
+                                                "type": "boolean",
+                                                "nullable": true
+                                            },
+                                            "domestic_violence_history": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "children_together": {
+                                                "type": "boolean",
+                                                "nullable": true
+                                            },
+                                            "children_details": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "custody_concerns": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "child_support_status": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "spousal_support_expectation": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "asset_summary": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "debt_summary": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "case_filed_status": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "attorney_involvement": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "preferred_session_format": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "same_room_comfort": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "goals_for_mediation": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "additional_information": {
+                                                "type": "string",
+                                                "nullable": true
+                                            }
+                                        },
                                         "type": "object"
                                     }
                                 },
@@ -849,6 +898,228 @@
                     },
                     "409": {
                         "description": "Questionnaire already submitted"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                }
+            }
+        },
+        "/v1/questionnaires/socal-party-mediation/{token}": {
+            "post": {
+                "tags": [
+                    "Questionnaires"
+                ],
+                "summary": "Submit SoCal party mediation answers",
+                "operationId": "79dfa7b2dad30e74a1f538dc29f2c567",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "answers"
+                                ],
+                                "properties": {
+                                    "answers": {
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "date": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "other_party_name": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "case_or_matter": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "dispute_summary": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "problem_started_at": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "main_concern": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "personal_contribution": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "impact": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "desired_result": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "acceptable_solution": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "unacceptable_result": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "mediation_goals": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "other_goal": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "important_information": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "signature_name": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "signature_date": {
+                                                "type": "string",
+                                                "nullable": true
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Questionnaire submitted"
+                    },
+                    "404": {
+                        "description": "Questionnaire token not found"
+                    },
+                    "409": {
+                        "description": "Questionnaire already submitted or wrong template"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                }
+            }
+        },
+        "/v1/questionnaires/legal-initial-intake/{token}": {
+            "post": {
+                "tags": [
+                    "Questionnaires"
+                ],
+                "summary": "Submit legal initial intake answers",
+                "operationId": "973645a357238958d8439030deb84034",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "answers"
+                                ],
+                                "properties": {
+                                    "answers": {
+                                        "properties": {
+                                            "previous_consultation": {
+                                                "type": "boolean",
+                                                "nullable": true
+                                            },
+                                            "name": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "address": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "email": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "alternate_email": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "phone": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "matter_type": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "other_matter_type": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "reason_for_visit": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "desired_outcome": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "additional_information": {
+                                                "type": "string",
+                                                "nullable": true
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Questionnaire submitted"
+                    },
+                    "404": {
+                        "description": "Questionnaire token not found"
+                    },
+                    "409": {
+                        "description": "Questionnaire already submitted or wrong template"
                     },
                     "422": {
                         "description": "Validation failed"

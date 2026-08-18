@@ -22,7 +22,7 @@
     $questionnaireUrl = $questionnaireSubmission
         ? app(\App\Services\QuestionnaireWorkflowService::class)->questionnaireUrl($questionnaireSubmission)
         : null;
-    $agreementUrl = $questionnaireSubmission && config('questionnaires.templates.'.$questionnaireSubmission->template_key.'.requires_agreement')
+    $agreementUrl = $questionnaireSubmission && app(\App\Services\QuestionnaireTemplateService::class)->requiresAgreement($questionnaireSubmission->template_key)
         ? app(\App\Services\QuestionnaireWorkflowService::class)->agreementUrl($questionnaireSubmission)
         : null;
 @endphp

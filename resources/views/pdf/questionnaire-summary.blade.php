@@ -66,7 +66,7 @@
             <table class="grid">
                 <tr><th>Accepted</th><td>{{ $submission->agreement_accepted ? 'Yes' : 'No' }}</td></tr>
                 <tr><th>Accepted At</th><td>{{ $submission->agreement_accepted_at?->format('M d, Y g:i A') ?? 'Not accepted' }}</td></tr>
-                <tr><th>Agreement Version</th><td>{{ $submission->agreement_version ?: config('questionnaires.agreement_version') }}</td></tr>
+                <tr><th>Agreement Version</th><td>{{ $submission->agreement_version ?: \App\Services\QuestionnaireTemplateService::AGREEMENT_VERSION }}</td></tr>
                 <tr><th>IP Address</th><td>{{ $submission->ip_address ?: 'Not recorded' }}</td></tr>
                 <tr><th>User Agent</th><td>{{ $submission->user_agent ?: 'Not recorded' }}</td></tr>
             </table>

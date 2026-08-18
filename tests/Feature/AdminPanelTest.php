@@ -10,6 +10,7 @@ use App\Models\PaymentRequest;
 use App\Models\QuestionnaireSubmission;
 use App\Models\User;
 use App\Services\Integrations\OutlookCalendarClient;
+use App\Services\QuestionnaireTemplateService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -282,7 +283,7 @@ class AdminPanelTest extends TestCase
             ],
             'agreement_accepted' => true,
             'agreement_accepted_at' => now(),
-            'agreement_version' => config('questionnaires.agreement_version'),
+            'agreement_version' => QuestionnaireTemplateService::AGREEMENT_VERSION,
             'submitted_at' => now(),
         ]);
 
