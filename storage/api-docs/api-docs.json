@@ -994,14 +994,6 @@
                                             "important_information": {
                                                 "type": "string",
                                                 "nullable": true
-                                            },
-                                            "signature_name": {
-                                                "type": "string",
-                                                "nullable": true
-                                            },
-                                            "signature_date": {
-                                                "type": "string",
-                                                "nullable": true
                                             }
                                         },
                                         "type": "object"
@@ -1056,15 +1048,19 @@
                                 "properties": {
                                     "answers": {
                                         "properties": {
-                                            "previous_consultation": {
-                                                "type": "boolean",
-                                                "nullable": true
-                                            },
                                             "name": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
                                             "address": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "home_phone": {
+                                                "type": "string",
+                                                "nullable": true
+                                            },
+                                            "cell_phone": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
@@ -1076,30 +1072,20 @@
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "phone": {
+                                            "advice_or_assistance_needed": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "matter_type": {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "other_matter_type": {
+                                            "referral_source": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "reason_for_visit": {
+                                            "referral_source_other": {
                                                 "type": "string",
                                                 "nullable": true
                                             },
-                                            "desired_outcome": {
-                                                "type": "string",
-                                                "nullable": true
-                                            },
-                                            "additional_information": {
-                                                "type": "string",
+                                            "paid": {
+                                                "type": "boolean",
                                                 "nullable": true
                                             }
                                         },

@@ -78,8 +78,6 @@ class QuestionnaireController extends Controller
                 new OA\Property(property: 'mediation_goals', type: 'array', items: new OA\Items(type: 'string')),
                 new OA\Property(property: 'other_goal', type: 'string', nullable: true),
                 new OA\Property(property: 'important_information', type: 'string', nullable: true),
-                new OA\Property(property: 'signature_name', type: 'string', nullable: true),
-                new OA\Property(property: 'signature_date', type: 'string', nullable: true),
             ]),
         ])),
         responses: [
@@ -103,17 +101,16 @@ class QuestionnaireController extends Controller
         ],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['answers'], properties: [
             new OA\Property(property: 'answers', type: 'object', properties: [
-                new OA\Property(property: 'previous_consultation', type: 'boolean', nullable: true),
                 new OA\Property(property: 'name', type: 'string', nullable: true),
                 new OA\Property(property: 'address', type: 'string', nullable: true),
+                new OA\Property(property: 'home_phone', type: 'string', nullable: true),
+                new OA\Property(property: 'cell_phone', type: 'string', nullable: true),
                 new OA\Property(property: 'email', type: 'string', nullable: true),
                 new OA\Property(property: 'alternate_email', type: 'string', nullable: true),
-                new OA\Property(property: 'phone', type: 'string', nullable: true),
-                new OA\Property(property: 'matter_type', type: 'array', items: new OA\Items(type: 'string')),
-                new OA\Property(property: 'other_matter_type', type: 'string', nullable: true),
-                new OA\Property(property: 'reason_for_visit', type: 'string', nullable: true),
-                new OA\Property(property: 'desired_outcome', type: 'string', nullable: true),
-                new OA\Property(property: 'additional_information', type: 'string', nullable: true),
+                new OA\Property(property: 'advice_or_assistance_needed', type: 'string', nullable: true),
+                new OA\Property(property: 'referral_source', type: 'string', nullable: true),
+                new OA\Property(property: 'referral_source_other', type: 'string', nullable: true),
+                new OA\Property(property: 'paid', type: 'boolean', nullable: true),
             ]),
         ])),
         responses: [
