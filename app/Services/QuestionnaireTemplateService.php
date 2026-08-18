@@ -38,25 +38,16 @@ class QuestionnaireTemplateService
             : 'socal_party_mediation';
     }
 
-    public function allowedAnswerKeys(string $templateKey): array
+    public function normalizeAnswers(array $answers): array
     {
-        return collect(config("questionnaires.templates.{$templateKey}.fields", []))
-            ->pluck('name')
-            ->all();
-    }
-
-    public function normalizeAnswers(string $templateKey, array $answers): array
-    {
-        $allowed = array_flip($this->allowedAnswerKeys($templateKey));
-        $unknown = array_diff(array_keys($answers), array_keys($allowed));
-
-        if ($unknown !== []) {
-            throw new \DomainException('Unknown questionnaire answer field(s): '.implode(', ', $unknown));
-        }
-
         return collect($answers)
             ->map(fn ($value) => $this->normalizeValue($value))
             ->all();
+    }
+
+    public function answerPayload(string $templateKey): array
+    {
+        return config("questionnaires.templates.{$templateKey}.answer_payload", []);
     }
 
     private function normalizeValue(mixed $value): mixed

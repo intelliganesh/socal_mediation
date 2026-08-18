@@ -115,7 +115,7 @@ class QuestionnaireWorkflowService
         $submission->loadMissing(['consultation.type', 'consultation.professional', 'participant']);
 
         $submission->update([
-            'answers' => $this->templates->normalizeAnswers($submission->template_key, $answers),
+            'answers' => $this->templates->normalizeAnswers($answers),
             'status' => 'submitted',
             'submitted_at' => now(),
         ]);
@@ -229,7 +229,9 @@ class QuestionnaireWorkflowService
             return null;
         }
 
-        return rtrim($baseUrl, '/').'/questionnaire?token='.$submission->token;
+        $path = config('questionnaires.templates.'.$submission->template_key.'.frontend_path', 'questionnaire');
+
+        return rtrim($baseUrl, '/').'/'.trim($path, '/').'?token='.$submission->token;
     }
 
     public function agreementUrl(QuestionnaireSubmission $submission): ?string

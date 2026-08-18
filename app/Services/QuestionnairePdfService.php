@@ -20,7 +20,7 @@ class QuestionnairePdfService
             'consultation' => $submission->consultation,
             'participant' => $submission->participant,
             'template' => $template,
-            'fields' => collect($template['fields'] ?? []),
+            'answers' => collect($submission->answers ?? []),
         ])->download($filename);
     }
 }

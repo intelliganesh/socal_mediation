@@ -38,8 +38,8 @@ class QuestionnaireController extends Controller
                 'label' => $template['label'],
                 'version' => $template['version'],
                 'requires_agreement' => (bool) ($template['requires_agreement'] ?? false),
-                'fields' => $template['fields'],
             ],
+            'answer_payload' => $templates->answerPayload($template['key']),
             'agreement' => [
                 'required' => (bool) ($template['requires_agreement'] ?? false),
                 'accepted' => $submission->agreement_accepted,

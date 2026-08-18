@@ -310,10 +310,9 @@
                 <div class="min-w-0">
                     @if($submission->status === 'submitted')
                     <dl class="grid gap-3 text-sm md:grid-cols-2">
-                        @foreach(($submissionTemplate['fields'] ?? []) as $field)
-                        @php($answer = data_get($submission->answers ?? [], $field['name']))
+                        @forelse(($submission->answers ?? []) as $answerKey => $answer)
                         <div class="rounded-lg bg-[#F7F8FC] p-3">
-                            <dt class="text-xs font-bold uppercase text-gray-500">{{ $field['label'] }}</dt>
+                            <dt class="text-xs font-bold uppercase text-gray-500">{{ Str::headline((string) $answerKey) }}</dt>
                             <dd class="mt-1 break-words font-semibold text-[#111827]">
                                 @if(is_array($answer))
                                     {{ implode(', ', $answer) ?: 'Not answered' }}
@@ -324,7 +323,9 @@
                                 @endif
                             </dd>
                         </div>
-                        @endforeach
+                        @empty
+                        <div class="rounded-lg bg-[#F7F8FC] p-3 text-sm font-semibold text-gray-500">No answers submitted.</div>
+                        @endforelse
                     </dl>
                     @else
                     <div class="rounded-lg bg-[#F7F8FC] p-4 text-sm font-semibold text-gray-500">

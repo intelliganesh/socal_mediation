@@ -41,10 +41,9 @@
 
         <h2>Answers</h2>
         <table class="grid">
-            @foreach($fields as $field)
-                @php($value = data_get($submission->answers ?? [], $field['name']))
+            @forelse($answers as $key => $value)
                 <tr>
-                    <th>{{ $field['label'] }}</th>
+                    <th>{{ Str::headline((string) $key) }}</th>
                     <td class="answer">
                         @if(is_array($value))
                             {{ implode(', ', $value) }}
@@ -57,7 +56,9 @@
                         @endif
                     </td>
                 </tr>
-            @endforeach
+            @empty
+                <tr><td colspan="2" class="muted">No answers submitted.</td></tr>
+            @endforelse
         </table>
 
         @if($template['requires_agreement'] ?? false)

@@ -855,7 +855,7 @@ class ConsultationApiTest extends TestCase
         $this->assertGreaterThan(0, $submissions->count());
         $this->assertSame('socal_party_mediation', $submissions->first()->template_key);
         $questionnaireMailHtml = (new ConsultationQuestionnaireMail($submissions->first()))->render();
-        $this->assertStringContainsString('/questionnaire?token='.$submissions->first()->token, $questionnaireMailHtml);
+        $this->assertStringContainsString('/party-mediation-questionnaire?token='.$submissions->first()->token, $questionnaireMailHtml);
         $this->assertStringContainsString('/agreement?token='.$submissions->first()->token, $questionnaireMailHtml);
 
         foreach ($submissions as $index => $submission) {
@@ -895,7 +895,10 @@ class ConsultationApiTest extends TestCase
     {
         $this->seed();
         Mail::fake();
-        config(['services.outlook.enabled' => false]);
+        config([
+            'services.outlook.enabled' => false,
+            'app.payment_redirect_urls.socal' => 'https://payment-result.example.test',
+        ]);
 
         $consultation = Consultation::where('application', 'socal')->firstOrFail();
         $consultation->update([
@@ -910,6 +913,9 @@ class ConsultationApiTest extends TestCase
         $this->getJson('/api/v1/questionnaires/'.$submission->token)
             ->assertOk()
             ->assertJsonPath('data.template.key', 'socal_divorce_intake')
+            ->assertJsonPath('data.questionnaire_url', 'https://payment-result.example.test/divorce-intake?token='.$submission->token)
+            ->assertJsonPath('data.answer_payload.relationship_summary', null)
+            ->assertJsonPath('data.answer_payload.children_details', null)
             ->assertJsonPath('data.agreement.required', true)
             ->assertJsonPath('data.status', 'pending');
 
