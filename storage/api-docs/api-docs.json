@@ -780,6 +780,86 @@
                 }
             }
         },
+        "/v1/questionnaires/{token}": {
+            "get": {
+                "tags": [
+                    "Questionnaires"
+                ],
+                "summary": "Get questionnaire details by secure token",
+                "operationId": "a82534c2b3e4c7bd28997dc106eed46d",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Questionnaire detail"
+                    },
+                    "404": {
+                        "description": "Questionnaire token not found"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Questionnaires"
+                ],
+                "summary": "Submit questionnaire answers by secure token",
+                "operationId": "201f9e92e720c7ab7baef4afcfc1b52c",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "answers"
+                                ],
+                                "properties": {
+                                    "answers": {
+                                        "type": "object"
+                                    },
+                                    "agreement_accepted": {
+                                        "type": "boolean",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Questionnaire submitted"
+                    },
+                    "404": {
+                        "description": "Questionnaire token not found"
+                    },
+                    "409": {
+                        "description": "Questionnaire already submitted"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                }
+            }
+        },
         "/v1/testing/payments/{payment_request_uuid}/complete": {
             "post": {
                 "tags": [
@@ -1199,6 +1279,10 @@
         {
             "name": "Consultation Type Catalog",
             "description": "Consultation Type Catalog"
+        },
+        {
+            "name": "Questionnaires",
+            "description": "Questionnaires"
         }
     ]
 }

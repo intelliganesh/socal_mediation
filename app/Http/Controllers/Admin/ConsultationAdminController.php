@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Consultation;
+use App\Models\QuestionnaireSubmission;
 use App\Services\AdminPaymentNotificationService;
 use App\Services\AdminZoomNotificationService;
 use App\Services\AvailabilityService;
 use App\Services\Integrations\OutlookCalendarClient;
 use App\Services\Integrations\ZoomClient;
 use App\Services\PaymentReconciliationService;
+use App\Services\QuestionnairePdfService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
@@ -82,8 +84,17 @@ class ConsultationAdminController extends Controller
                 'paymentRequests.participant',
                 'paymentRequests.integrationLogs',
                 'integrationLogs',
+                'questionnaireSubmissions.participant',
             ]),
         ]);
+    }
+
+    public function downloadQuestionnairePdf(Consultation $consultation, QuestionnaireSubmission $submission, QuestionnairePdfService $pdf)
+    {
+        $this->authorizeConsultation($consultation);
+        abort_unless($submission->consultation_id === $consultation->id, 404);
+
+        return $pdf->download($submission);
     }
 
     public function sendReminder(Consultation $consultation, AdminPaymentNotificationService $notifications, PaymentReconciliationService $payments)

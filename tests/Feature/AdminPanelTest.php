@@ -7,6 +7,7 @@ use App\Mail\ConsultationZoomLinkMail;
 use App\Models\Consultation;
 use App\Models\ExternalCalendarEvent;
 use App\Models\PaymentRequest;
+use App\Models\QuestionnaireSubmission;
 use App\Models\User;
 use App\Services\Integrations\OutlookCalendarClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -259,6 +260,44 @@ class AdminPanelTest extends TestCase
             ->assertSee('Referral Source')
             ->assertSee('Local chamber referral')
             ->assertSee('Other Referral');
+    }
+
+    public function test_admin_can_view_questionnaire_answers_and_download_summary_pdf(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+        $participant = $consultation->participants()->firstOrFail();
+        $submission = QuestionnaireSubmission::create([
+            'consultation_id' => $consultation->id,
+            'participant_id' => $participant->id,
+            'template_key' => 'socal_party_mediation',
+            'template_version' => 1,
+            'token' => 'admin-questionnaire-token',
+            'status' => 'submitted',
+            'answers' => [
+                'dispute_summary' => 'Payment disagreement over a contract.',
+                'desired_result' => 'Settlement terms everyone can accept.',
+            ],
+            'agreement_accepted' => true,
+            'agreement_accepted_at' => now(),
+            'agreement_version' => config('questionnaires.agreement_version'),
+            'submitted_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $consultation))
+            ->assertOk()
+            ->assertSee('Questionnaires')
+            ->assertSee('Party Mediation Questionnaire')
+            ->assertSee('Payment disagreement over a contract.')
+            ->assertSee('Agreement Accepted');
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.questionnaires.pdf', [$consultation, $submission]))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
     }
 
     public function test_calendar_can_be_filtered_by_application(): void

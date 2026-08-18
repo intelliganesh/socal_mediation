@@ -4,13 +4,16 @@ namespace Tests\Feature;
 
 use App\Mail\ConsultationConfirmationMail;
 use App\Mail\ConsultationPaymentLinkMail;
+use App\Mail\ConsultationQuestionnaireMail;
 use App\Mail\ConsultationZoomLinkMail;
 use App\Mail\FreeIntroParticipantScheduleMail;
 use App\Models\Consultation;
 use App\Models\ConsultationType;
 use App\Models\ExternalCalendarEvent;
 use App\Models\PaymentRequest;
+use App\Models\QuestionnaireSubmission;
 use App\Services\Integrations\ConvergeClient;
+use App\Services\QuestionnaireWorkflowService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -767,6 +770,7 @@ class ConsultationApiTest extends TestCase
     public function test_converge_confirmation_marks_full_payment_paid_and_finalizes_consultation(): void
     {
         $this->seed();
+        Mail::fake();
         config([
             'services.converge.mode' => 'sandbox',
             'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
@@ -774,12 +778,25 @@ class ConsultationApiTest extends TestCase
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
             'services.converge.return_url' => 'http://localhost/api/v1/payments/converge/return',
+            'services.zoom.enabled' => true,
+            'services.zoom.oauth_base_url' => 'https://zoom.test',
+            'services.zoom.base_url' => 'https://api.zoom.test/v2',
+            'services.zoom.account_id' => 'account-id',
+            'services.zoom.client_id' => 'client-id',
+            'services.zoom.client_secret' => 'client-secret',
+            'app.payment_redirect_urls.socal' => 'https://socal.example.test',
         ]);
         Http::fake([
             'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
                 '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>converge-txn-100</ssl_txn_id><ssl_approval_code>916299</ssl_approval_code></txn>',
                 200
             ),
+            'zoom.test/oauth/token' => Http::response(['access_token' => 'zoom-token'], 200),
+            'api.zoom.test/v2/users/me/meetings' => Http::response([
+                'id' => 'questionnaire-zoom-meeting',
+                'join_url' => 'https://zoom.test/j/questionnaire-zoom-meeting',
+                'start_url' => 'https://zoom.test/s/questionnaire-zoom-meeting',
+            ], 201),
         ]);
 
         $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
@@ -795,7 +812,7 @@ class ConsultationApiTest extends TestCase
         ])->json('data.uuid');
 
         $complete = $this->postJson("/api/v1/consultations/{$consultationUuid}/complete", [
-            'starts_at' => '2026-08-07T09:00:00-07:00',
+            'starts_at' => '2026-10-27T09:00:00-07:00',
             'timezone' => 'America/Los_Angeles',
             'payment_mode' => 'full',
             'payment_method' => 'card',
@@ -814,8 +831,10 @@ class ConsultationApiTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('message', 'Payment verification completed.')
-            ->assertJsonPath('data.status', 'scheduled')
-            ->assertJsonPath('data.payment_status', 'paid');
+            ->assertJsonPath('data.status', 'paid')
+            ->assertJsonPath('data.payment_status', 'paid')
+            ->assertJsonPath('data.zoom_join_url', null)
+            ->assertJsonPath('data.questionnaire_progress.pending', 1);
 
         $this->assertDatabaseHas('payment_requests', [
             'id' => $paymentRequestId,
@@ -828,6 +847,85 @@ class ConsultationApiTest extends TestCase
             'provider' => 'converge',
             'action' => 'payment_confirmation',
             'status' => 'paid',
+        ]);
+        Mail::assertSent(ConsultationQuestionnaireMail::class);
+        Mail::assertNotSent(ConsultationZoomLinkMail::class);
+
+        $submissions = QuestionnaireSubmission::where('consultation_id', $consultationUuid)->get();
+        $this->assertGreaterThan(0, $submissions->count());
+        $this->assertSame('socal_party_mediation', $submissions->first()->template_key);
+        $this->assertStringContainsString('/questionnaire?token='.$submissions->first()->token, (new ConsultationQuestionnaireMail($submissions->first()))->render());
+
+        foreach ($submissions as $index => $submission) {
+            $response = $this->postJson('/api/v1/questionnaires/'.$submission->token, [
+                'answers' => [
+                    'dispute_summary' => 'Contract payment dispute.',
+                    'desired_result' => 'A practical settlement.',
+                ],
+                'agreement_accepted' => true,
+            ])->assertOk();
+
+            if ($index < $submissions->count() - 1) {
+                $response
+                    ->assertJsonPath('data.status', 'paid')
+                    ->assertJsonPath('data.zoom_join_url', null);
+            } else {
+                $response
+                    ->assertJsonPath('data.status', 'scheduled')
+                    ->assertJsonPath('data.payment_status', 'paid')
+                    ->assertJsonPath('data.questionnaire_progress.complete', true)
+                    ->assertJsonPath('data.zoom_join_url', 'https://zoom.test/j/questionnaire-zoom-meeting');
+            }
+        }
+
+        Mail::assertSent(ConsultationZoomLinkMail::class);
+        $this->assertDatabaseHas('questionnaire_submissions', [
+            'id' => $submissions->first()->id,
+            'status' => 'submitted',
+            'agreement_accepted' => true,
+        ]);
+    }
+
+    public function test_questionnaire_api_selects_divorce_template_and_requires_socal_agreement(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config(['services.outlook.enabled' => false]);
+
+        $consultation = Consultation::where('application', 'socal')->firstOrFail();
+        $consultation->update([
+            'status' => 'paid',
+            'payment_status' => 'paid',
+            'legal_service_name' => 'Divorce & Family Matters',
+            'total_amount_cents' => 260000,
+        ]);
+        $participant = $consultation->participants()->firstOrFail();
+        $submission = app(QuestionnaireWorkflowService::class)->ensureSubmission($consultation, $participant);
+
+        $this->getJson('/api/v1/questionnaires/'.$submission->token)
+            ->assertOk()
+            ->assertJsonPath('data.template.key', 'socal_divorce_intake')
+            ->assertJsonPath('data.agreement.required', true)
+            ->assertJsonPath('data.status', 'pending');
+
+        $this->postJson('/api/v1/questionnaires/'.$submission->token, [
+            'answers' => ['relationship_summary' => 'We need help resolving divorce terms.'],
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Agreement acceptance is required before submitting this questionnaire.');
+
+        $this->postJson('/api/v1/questionnaires/'.$submission->token, [
+            'answers' => ['relationship_summary' => 'We need help resolving divorce terms.'],
+            'agreement_accepted' => true,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.questionnaire_progress.complete', true);
+
+        $this->assertDatabaseHas('questionnaire_submissions', [
+            'id' => $submission->id,
+            'template_key' => 'socal_divorce_intake',
+            'status' => 'submitted',
+            'agreement_accepted' => true,
         ]);
     }
 

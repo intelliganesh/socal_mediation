@@ -40,6 +40,9 @@
     'automatic_payment_link' => ['label' => 'Payment Link', 'icon' => 'credit-card'],
     'manual_zoom_link' => ['label' => 'Zoom Link', 'icon' => 'video'],
     'manual_reschedule_zoom_link' => ['label' => 'Reschedule Zoom Link', 'icon' => 'refresh-cw'],
+    'automatic_zoom_link' => ['label' => 'Zoom Link', 'icon' => 'video'],
+    'automatic_confirmation' => ['label' => 'Confirmation', 'icon' => 'check-circle'],
+    'questionnaire_link' => ['label' => 'Questionnaire Link', 'icon' => 'clipboard-list'],
     'free_intro_schedule_invite' => ['label' => 'Free Intro Slot Invite', 'icon' => 'calendar-plus'],
     'free_intro_confirmation' => ['label' => 'Free Intro Confirmation', 'icon' => 'calendar-check'],
     default => ['label' => Str::headline($action), 'icon' => 'mail'],
@@ -51,6 +54,7 @@
     $primaryName = trim($consultation->primary_first_name.' '.$consultation->primary_last_name) ?: 'No name yet';
     $consultationStatusOptions = ['draft', 'pending', 'payment_pending', 'paid', 'scheduled', 'rescheduled', 'in_progress', 'completed', 'cancelled', 'overdue'];
     $paymentStatusOptions = ['pending', 'partially_paid', 'paid', 'failed', 'refunded'];
+    $questionnaireSubmissions = $consultation->questionnaireSubmissions;
     @endphp
     <div class="-mt-1 mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -272,6 +276,74 @@
             </article>
         </section>
     </div>
+    <section class="mb-5 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#E5E7EB] px-5 py-4">
+            <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="clipboard-list" class="admin-brand-text h-5 w-5"></i>Questionnaires</h3>
+            @if($questionnaireSubmissions->isNotEmpty())
+            <span class="text-sm font-bold text-gray-500">{{ $questionnaireSubmissions->where('status', 'submitted')->count() }} of {{ $questionnaireSubmissions->count() }} submitted</span>
+            @endif
+        </div>
+        <div class="divide-y divide-[#E5E7EB]">
+            @forelse($questionnaireSubmissions as $submission)
+            @php($submissionTemplate = config('questionnaires.templates.'.$submission->template_key, []))
+            @php($submissionStatus = $statusTheme($submission->status))
+            @php($submissionParticipant = $submission->participant)
+            @php($submissionName = trim(($submissionParticipant?->first_name ?? '').' '.($submissionParticipant?->last_name ?? '')) ?: 'Participant')
+            <article class="grid gap-5 px-5 py-5 lg:grid-cols-[280px_minmax(0,1fr)_auto]">
+                <div class="min-w-0 text-sm">
+                    <div class="font-bold text-[#111827]">{{ $submissionName }}</div>
+                    <div class="mt-1 truncate text-gray-500">{{ $submissionParticipant?->email ?: 'No email recorded' }}</div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <span class="status-badge {{ $submissionStatus['badge'] }}">{{ $submissionStatus['label'] }}</span>
+                        @if($submissionTemplate['requires_agreement'] ?? false)
+                        <span class="status-badge {{ $submission->agreement_accepted ? 'status-badge-paid' : 'status-badge-pending' }}">
+                            {{ $submission->agreement_accepted ? 'Agreement Accepted' : 'Agreement Pending' }}
+                        </span>
+                        @endif
+                    </div>
+                    <div class="mt-3 text-xs font-semibold text-gray-500">
+                        {{ $submissionTemplate['label'] ?? Str::headline($submission->template_key) }}
+                        <br>
+                        Submitted: {{ $submission->submitted_at?->format('M d, Y g:i A') ?? 'Pending' }}
+                    </div>
+                </div>
+                <div class="min-w-0">
+                    @if($submission->status === 'submitted')
+                    <dl class="grid gap-3 text-sm md:grid-cols-2">
+                        @foreach(($submissionTemplate['fields'] ?? []) as $field)
+                        @php($answer = data_get($submission->answers ?? [], $field['name']))
+                        <div class="rounded-lg bg-[#F7F8FC] p-3">
+                            <dt class="text-xs font-bold uppercase text-gray-500">{{ $field['label'] }}</dt>
+                            <dd class="mt-1 break-words font-semibold text-[#111827]">
+                                @if(is_array($answer))
+                                    {{ implode(', ', $answer) ?: 'Not answered' }}
+                                @elseif(is_bool($answer))
+                                    {{ $answer ? 'Yes' : 'No' }}
+                                @else
+                                    {{ filled($answer) ? $answer : 'Not answered' }}
+                                @endif
+                            </dd>
+                        </div>
+                        @endforeach
+                    </dl>
+                    @else
+                    <div class="rounded-lg bg-[#F7F8FC] p-4 text-sm font-semibold text-gray-500">
+                        The questionnaire has not been submitted yet.
+                    </div>
+                    @endif
+                </div>
+                <div class="flex items-start justify-end">
+                    <a class="inline-flex h-10 items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.consultations.questionnaires.pdf', [$consultation, $submission]) }}">
+                        <i data-lucide="download" class="h-4 w-4"></i>
+                        PDF
+                    </a>
+                </div>
+            </article>
+            @empty
+            <div class="px-5 py-8 text-center text-sm font-semibold text-gray-500">No questionnaire is required yet. Questionnaires are created after payment is received.</div>
+            @endforelse
+        </div>
+    </section>
     <div class="grid gap-5 xl:grid-cols-3 ">
         <div class="space-y-5 xl:col-span-2">
             <section class="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.04)]">

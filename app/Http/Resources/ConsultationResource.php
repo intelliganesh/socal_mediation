@@ -48,6 +48,31 @@ class ConsultationResource extends JsonResource
                 'paid' => $paidCount,
                 'pending' => max(0, $paymentCount - $paidCount),
             ],
+            'questionnaire_progress' => $this->questionnaireProgress(),
+        ];
+    }
+
+    private function questionnaireProgress(): array
+    {
+        if (! $this->relationLoaded('questionnaireSubmissions')) {
+            return [
+                'required' => false,
+                'total' => 0,
+                'submitted' => 0,
+                'pending' => 0,
+                'complete' => false,
+            ];
+        }
+
+        $total = $this->questionnaireSubmissions->count();
+        $submitted = $this->questionnaireSubmissions->where('status', 'submitted')->count();
+
+        return [
+            'required' => $total > 0,
+            'total' => $total,
+            'submitted' => $submitted,
+            'pending' => max(0, $total - $submitted),
+            'complete' => $total > 0 && $submitted === $total,
         ];
     }
 }

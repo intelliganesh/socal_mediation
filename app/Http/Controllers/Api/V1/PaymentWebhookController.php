@@ -57,7 +57,7 @@ class PaymentWebhookController extends Controller
         }
 
         return ApiResponse::success(
-            new ConsultationResource($consultation->load(['type', 'professional', 'participants', 'paymentRequests'])),
+            new ConsultationResource($consultation->load(['type', 'professional', 'participants', 'paymentRequests', 'questionnaireSubmissions'])),
             'Payment verification completed.'
         );
     }

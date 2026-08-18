@@ -13,6 +13,15 @@
             ? $redirectUrl
             : null;
     $redirectLabel = $isLegal ? 'Continue to Legal Consultation' : 'Continue to SoCal Mediation Center';
+    $questionnaireSubmission = $success && $paymentRequest->participant
+        ? $paymentRequest->participant
+            ->questionnaireSubmissions()
+            ->where('consultation_id', $consultation?->id)
+            ->first()
+        : null;
+    $questionnaireUrl = $questionnaireSubmission
+        ? app(\App\Services\QuestionnaireWorkflowService::class)->frontendUrl($questionnaireSubmission)
+        : null;
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -33,7 +42,14 @@
                     <p style="margin:10px 0 0;color:#64748b;font-size:13px;">Support reference: <strong style="color:#111827;">{{ $errorReference }}</strong></p>
                 @endif
                 <p style="margin:22px 0 0;font-size:20px;font-weight:700;">${{ number_format($paymentRequest->amount_cents / 100, 2) }} {{ $paymentRequest->currency }}</p>
-                @if(filled($redirectUrl))
+                @if($questionnaireSubmission && $questionnaireSubmission->status === 'pending' && filled($questionnaireUrl))
+                    <a href="{{ $questionnaireUrl }}" style="display:inline-block;margin-top:24px;border-radius:6px;background:{{ $brand }};color:#fff;font-weight:700;padding:13px 22px;text-decoration:none;">Proceed to Questionnaire</a>
+                @elseif($questionnaireSubmission && $questionnaireSubmission->status === 'submitted')
+                    <p style="margin:18px 0 0;color:#64748b;font-size:14px;">Your questionnaire has already been submitted. Meeting details will be shared after all required questionnaires are complete.</p>
+                    @if(filled($redirectUrl))
+                        <a href="{{ $redirectUrl }}" style="display:inline-block;margin-top:18px;border-radius:6px;background:{{ $brand }};color:#fff;font-weight:700;padding:13px 22px;text-decoration:none;">{{ $redirectLabel }}</a>
+                    @endif
+                @elseif(filled($redirectUrl))
                     <a href="{{ $redirectUrl }}" style="display:inline-block;margin-top:24px;border-radius:6px;background:{{ $brand }};color:#fff;font-weight:700;padding:13px 22px;text-decoration:none;">{{ $redirectLabel }}</a>
                 @endif
                 @if($canRetryPayment && filled($paymentRequest->payment_url) && !in_array($consultation?->status, ['draft', 'cancelled'], true))

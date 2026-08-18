@@ -74,7 +74,7 @@ class ConsultationController extends Controller
     public function show(Consultation $consultation)
     {
         return ApiResponse::success(new ConsultationResource(
-            $consultation->load(['type', 'professional', 'participants', 'paymentRequests'])
+            $consultation->load(['type', 'professional', 'participants', 'paymentRequests', 'questionnaireSubmissions'])
         ));
     }
 
@@ -126,7 +126,7 @@ class ConsultationController extends Controller
         }
 
         return ApiResponse::success(
-            new ConsultationResource($consultation),
+            new ConsultationResource($consultation->loadMissing(['type', 'professional', 'participants', 'paymentRequests', 'questionnaireSubmissions'])),
             'Consultation completed and payment links sent.'
         );
     }
@@ -168,7 +168,7 @@ class ConsultationController extends Controller
         }
 
         return ApiResponse::success(
-            new ConsultationResource($consultation),
+            new ConsultationResource($consultation->loadMissing(['type', 'professional', 'participants', 'paymentRequests', 'questionnaireSubmissions'])),
             'Consultation rescheduled.'
         );
     }
@@ -236,7 +236,7 @@ class ConsultationController extends Controller
         }
 
         return ApiResponse::success(
-            new ConsultationResource($consultation),
+            new ConsultationResource($consultation->loadMissing(['type', 'professional', 'participants', 'paymentRequests', 'questionnaireSubmissions'])),
             'Participant slot scheduled.'
         );
     }

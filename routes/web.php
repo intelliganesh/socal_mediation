@@ -43,6 +43,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/', DashboardController::class)->name('dashboard');
         Route::get('consultations', [ConsultationAdminController::class, 'index'])->name('consultations.index');
         Route::get('consultations/{consultation}', [ConsultationAdminController::class, 'show'])->name('consultations.show');
+        Route::get('consultations/{consultation}/questionnaires/{submission}/pdf', [ConsultationAdminController::class, 'downloadQuestionnairePdf'])->name('consultations.questionnaires.pdf');
         Route::post('consultations/{consultation}/payment-links', [ConsultationAdminController::class, 'sendPaymentLinks'])->name('consultations.payment-links');
         Route::post('consultations/{consultation}/reminder', [ConsultationAdminController::class, 'sendReminder'])->name('consultations.reminder');
         Route::post('consultations/{consultation}/zoom-link', [ConsultationAdminController::class, 'resendZoomLink'])->name('consultations.zoom-link');

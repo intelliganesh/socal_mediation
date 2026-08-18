@@ -36,4 +36,9 @@ class ConsultationParticipant extends Model
     {
         return $this->hasMany(PaymentRequest::class, 'participant_id');
     }
+
+    public function questionnaireSubmissions(): HasMany
+    {
+        return $this->hasMany(QuestionnaireSubmission::class, 'participant_id');
+    }
 }

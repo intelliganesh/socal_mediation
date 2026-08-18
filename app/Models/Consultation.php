@@ -71,6 +71,11 @@ class Consultation extends Model
         return $this->hasMany(PaymentRequest::class);
     }
 
+    public function questionnaireSubmissions(): HasMany
+    {
+        return $this->hasMany(QuestionnaireSubmission::class);
+    }
+
     public function integrationLogs(): MorphMany
     {
         return $this->morphMany(IntegrationLog::class, 'loggable');

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\ConsultationController;
 use App\Http\Controllers\Api\V1\PaymentWebhookController;
+use App\Http\Controllers\Api\V1\QuestionnaireController;
 use App\Http\Controllers\Api\V1\SimulatedPaymentController;
 use App\Http\Controllers\Payments\ConvergeCheckoutController;
 use Illuminate\Http\Request;
@@ -23,6 +24,9 @@ Route::prefix('v1')->group(function () {
     Route::post('consultations/{consultation}/complete', [ConsultationController::class, 'complete']);
     Route::post('consultations/{consultation}/reschedule', [ConsultationController::class, 'reschedule']);
     Route::post('free-intro-slots/{scheduling_token}', [ConsultationController::class, 'scheduleFreeIntroParticipantSlot']);
+
+    Route::get('questionnaires/{token}', [QuestionnaireController::class, 'show']);
+    Route::post('questionnaires/{token}', [QuestionnaireController::class, 'store']);
 
     Route::post('payments/converge/confirmation', [PaymentWebhookController::class, 'confirmation']);
     Route::post('payments/converge/webhook', [PaymentWebhookController::class, 'converge']);
