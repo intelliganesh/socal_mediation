@@ -7,6 +7,7 @@ use App\Models\Consultation;
 use App\Models\IntegrationLog;
 use App\Models\PaymentRequest;
 use App\Models\QuestionnaireSubmission;
+use App\Services\AdminConclusionNotificationService;
 use App\Services\AdminPaymentNotificationService;
 use App\Services\AdminZoomNotificationService;
 use App\Services\AvailabilityService;
@@ -344,7 +345,7 @@ class ConsultationAdminController extends Controller
         return back()->with('status', 'This booking was synced to Outlook.');
     }
 
-    public function updateStatuses(Request $request, Consultation $consultation, OutlookCalendarClient $outlook)
+    public function updateStatuses(Request $request, Consultation $consultation, OutlookCalendarClient $outlook, AdminConclusionNotificationService $conclusions)
     {
         $this->authorizeConsultation($consultation);
         $data = $request->validate([
@@ -392,6 +393,10 @@ class ConsultationAdminController extends Controller
             } catch (\DomainException|\RuntimeException $exception) {
                 return back()->with('error', 'Statuses updated, but Outlook sync failed: '.$exception->getMessage());
             }
+        }
+
+        if ($oldStatus !== 'completed' && $data['status'] === 'completed') {
+            $conclusions->sendConclusion($consultation->refresh());
         }
 
         return back()->with('status', 'Consultation statuses updated.');

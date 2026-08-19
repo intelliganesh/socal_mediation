@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\ConsultationConclusionMail;
 use App\Mail\ConsultationPaymentLinkMail;
 use App\Mail\ConsultationZoomLinkMail;
 use App\Models\Consultation;
@@ -445,6 +446,7 @@ class AdminPanelTest extends TestCase
 
         $admin = User::where('email', 'admin@socal.test')->firstOrFail();
         $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+        Mail::fake();
 
         $this->actingAs($admin)
             ->get(route('admin.consultations.show', $consultation))
@@ -471,6 +473,14 @@ class AdminPanelTest extends TestCase
             'provider' => 'admin',
             'action' => 'manual_status_update',
             'status' => 'updated',
+        ]);
+        Mail::assertSent(ConsultationConclusionMail::class, $consultation->participants()->whereNotNull('email')->count());
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'mail',
+            'action' => 'manual_conclusion',
+            'status' => 'sent',
         ]);
     }
 

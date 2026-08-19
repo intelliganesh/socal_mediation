@@ -35,6 +35,7 @@
     'manual_reschedule_zoom_link' => ['label' => 'Reschedule Zoom Link', 'icon' => 'refresh-cw'],
     'automatic_zoom_link' => ['label' => 'Zoom Link', 'icon' => 'video'],
     'automatic_confirmation' => ['label' => 'Confirmation', 'icon' => 'check-circle'],
+    'manual_conclusion' => ['label' => 'Conclusion', 'icon' => 'check-check'],
     'questionnaire_link' => ['label' => 'Questionnaire Link', 'icon' => 'clipboard-list'],
     'free_intro_schedule_invite' => ['label' => 'Free Intro Slot Invite', 'icon' => 'calendar-plus'],
     'free_intro_confirmation' => ['label' => 'Free Intro Confirmation', 'icon' => 'calendar-check'],
