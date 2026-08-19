@@ -48,8 +48,8 @@
         --status-overdue-text: #B91C1C;
         --status-overdue-border: #F87171;
         --send-zoom-meeting-bg: #844fc1;
-        --send-zoom-meeting-bg-soft: #844fc1;
-        --send-zoom-meeting-text: #f1e5ff;
+        --send-zoom-meeting-bg-soft: #f1e5ff;
+        --send-zoom-meeting-text: #844fc1;
     }
 
     .admin-theme-socal {
@@ -113,6 +113,11 @@
 
     .admin-brand-link {
         color: var(--admin-brand);
+    }
+
+
+    .admin-brand-zoom {
+        color: var(--send-zoom-meeting-text);
     }
 
     .admin-brand-soft {

@@ -95,7 +95,7 @@
             <button class="action-card-button mt-auto h-10 w-full rounded-lg text-sm font-bold">Reschedule</button>
         </form>
         @endif
-        <form class="action-card action-card-primary min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.zoom-link', $consultation) }}">
+        <form class="action-card action-card-zoom min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.zoom-link', $consultation) }}">
             @csrf
             <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="video" class="h-7 w-7"></i></div>
             <h3 class="mt-4 font-bold">Send Zoom Links</h3>
@@ -104,7 +104,7 @@
             <div class="mt-auto grid gap-2">
                 <button class="action-card-button h-10 w-full rounded-lg text-sm font-bold">Send Zoom Link</button>
                 @if(filled($consultation->zoom_join_url))
-                <a class="admin-brand-link flex h-10 items-center justify-center gap-2 rounded-lg border border-[#E5E7EB] bg-white text-sm font-bold" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener">
+                <a class="admin-brand-zoom flex h-10 items-center justify-center gap-2 rounded-lg border border-[#844fc1] bg-white text-sm font-bold" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener">
                     Open Zoom Meeting Link
                     <i data-lucide="external-link" class="h-4 w-4"></i>
                 </a>
