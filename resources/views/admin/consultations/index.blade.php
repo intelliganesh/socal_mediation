@@ -1,7 +1,7 @@
 <x-admin.layout heading="Consultations" subheading="Filter and review bookings from both application flows." :application="$selectedApplication">
     @php
         $applicationTheme = fn (string $application) => $application === 'legal'
-            ? ['label' => 'Legal Consultation', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']
+            ? ['label' => 'Law Office', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']
             : ['label' => 'SoCal Mediation Center', 'icon' => 'landmark', 'theme' => 'app-theme-socal', 'iconClass' => 'app-icon-socal', 'textClass' => 'app-text-socal', 'progress' => 'app-progress-socal'];
         $currentUser = auth()->user();
 
@@ -31,7 +31,7 @@
                 <select class="h-11 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#111827]" name="application">
                     <option value="">All Applications</option>
                     <option value="socal" @selected($selectedApplication === 'socal')>SoCal Mediation Center</option>
-                    <option value="legal" @selected($selectedApplication === 'legal')>Legal Consultation</option>
+                    <option value="legal" @selected($selectedApplication === 'legal')>Law Office</option>
                 </select>
             @else
                 @php($assignedTheme = $applicationTheme($selectedApplication))

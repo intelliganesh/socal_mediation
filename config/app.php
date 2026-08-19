@@ -80,6 +80,17 @@ return [
 
     'booking_day_end' => env('BOOKING_DAY_END', '17:00'),
 
+    'consultation_contact' => [
+        'phone' => [
+            'socal' => env('SOCAL_CONSULTATION_PHONE', env('CONSULTATION_PHONE')),
+            'legal' => env('LEGAL_CONSULTATION_PHONE', env('CONSULTATION_PHONE')),
+        ],
+        'location_address' => [
+            'socal' => env('SOCAL_CONSULTATION_LOCATION_ADDRESS', env('CONSULTATION_LOCATION_ADDRESS')),
+            'legal' => env('LEGAL_CONSULTATION_LOCATION_ADDRESS', env('CONSULTATION_LOCATION_ADDRESS')),
+        ],
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration

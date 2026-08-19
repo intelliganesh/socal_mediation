@@ -1,7 +1,7 @@
 <x-admin.layout heading="Users" subheading="Manage admin access by application.">
     @php
         $applicationTheme = fn (?string $application) => $application === 'legal'
-            ? ['label' => 'Legal Consultation', 'class' => 'app-theme-legal']
+            ? ['label' => 'Law Office', 'class' => 'app-theme-legal']
             : ($application === 'socal'
                 ? ['label' => 'SoCal Mediation Center', 'class' => 'app-theme-socal']
                 : ['label' => 'All Applications', 'class' => 'status-badge-paid']);

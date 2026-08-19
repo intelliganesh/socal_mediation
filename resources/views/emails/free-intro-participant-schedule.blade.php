@@ -11,6 +11,7 @@
     'intro' => 'Hello <strong>'.e($clientName).'</strong>, you have been added to a Free 15-Min Intro Call. Please choose your preferred available 15-minute slot using the secure link below.',
     'statusLabel' => 'Slot Pending',
     'amountCents' => 0,
+    'showSchedule' => false,
     'buttonUrl' => $scheduleUrl,
     'buttonLabel' => 'Select Preferred Slot',
 ])

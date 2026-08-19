@@ -1,7 +1,7 @@
 <x-admin.layout heading="Dashboard" subheading="Overview of your mediation center operations and performance." :application="auth()->user()?->application">
     @php
         $applicationTheme = fn (string $application) => $application === 'legal'
-            ? ['label' => 'Legal Consultation', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']
+            ? ['label' => 'Law Office', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']
             : ['label' => 'SoCal Mediation Center', 'icon' => 'landmark', 'theme' => 'app-theme-socal', 'iconClass' => 'app-icon-socal', 'textClass' => 'app-text-socal', 'progress' => 'app-progress-socal'];
 
         $statusTheme = function (?string $status) {

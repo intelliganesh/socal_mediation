@@ -8,6 +8,7 @@
     $rescheduleButtonUrl = $rescheduleButtonUrl ?? null;
     $rescheduleButtonLabel = $rescheduleButtonLabel ?? null;
     $zoomUrl = $zoomUrl ?? null;
+    $showSchedule = $showSchedule ?? true;
     $isLegalApplication = ($consultation?->application ?? null) === 'legal';
     $iconPrefix = $isLegalApplication ? 'legal' : 'socal';
     $brandColor = $isLegalApplication ? '#75172E' : '#082BC3';
@@ -34,7 +35,7 @@
         $consultationTypeIcon = $serviceIcon;
     }
     $timezone = $consultation?->timezone ?: config('app.booking_timezone', 'America/Los_Angeles');
-    $scheduledAt = ($scheduledAt ?? $consultation?->starts_at)?->timezone($timezone);
+    $scheduledAt = $showSchedule ? (($scheduledAt ?? $consultation?->starts_at)?->timezone($timezone)) : null;
     $professional = $consultation?->professional?->name ?: 'Not assigned yet';
     $mode = match ($consultation?->consultation_mode) {
         'online' => 'Video Consultation'.($zoomUrl ? ' (Zoom)' : ''),
@@ -52,6 +53,19 @@
     };
 
     $modeIcon=$iconPath([$iconPrefix.'_'.$modeIconSuffix, $iconPrefix, 'video']);
+    $modeDetail = match ($consultation?->consultation_mode) {
+        'phone' => [
+            'label' => 'Phone Number',
+            'value' => config('app.consultation_contact.phone.'.($consultation?->application ?? 'socal')),
+            'icon' => $iconPath([$iconPrefix.'_phone', 'phone']),
+        ],
+        'offline', 'in_person' => [
+            'label' => 'Location Address',
+            'value' => config('app.consultation_contact.location_address.'.($consultation?->application ?? 'socal')),
+            'icon' => $iconPath([$iconPrefix.'_inperson', 'inperson']),
+        ],
+        default => null,
+    };
 @endphp
 
 <!DOCTYPE html>
@@ -107,10 +121,10 @@
                                         </div>
                                     </td>
                                     <td width="50%" valign="top" style="padding:0 0 22px 18px;">
-                                        <div style="font-size:12px;color:#374151;margin-bottom:7px;">Time & Date</div>
+                                        <div style="font-size:12px;color:#374151;margin-bottom:7px;">{{ $showSchedule ? 'Time & Date' : 'Slot Selection' }}</div>
                                         <div style="font-size:14px;line-height:1.4;">
                                             <img src="{{ asset($calendarIcon) }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
-                                            {{ $scheduledAt ? $scheduledAt->format('M d, Y - g:i A').' '.$timezone : 'Not scheduled' }}
+                                            {{ $showSchedule ? ($scheduledAt ? $scheduledAt->format('M d, Y - g:i A').' '.$timezone : 'Not scheduled') : 'Please choose your preferred available slot.' }}
                                         </div>
                                     </td>
                                 </tr>
@@ -159,6 +173,12 @@
                                                 Click here to join zoom meeting
                                                 <p style="font-size:8px">{{ $zoomUrl }}</p>
                                             </a>
+                                        @elseif($modeDetail && filled($modeDetail['value']))
+                                            <div style="font-size:12px;color:#374151;margin-bottom:7px;">{{ $modeDetail['label'] }}</div>
+                                            <div style="font-size:14px;line-height:1.4;">
+                                                <img src="{{ asset($modeDetail['icon']) }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
+                                                {{ $modeDetail['value'] }}
+                                            </div>
                                         @endif
                                     </td>
                                 </tr>

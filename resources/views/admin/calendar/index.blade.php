@@ -4,7 +4,7 @@
             ? 'app-theme-legal'
             : 'app-theme-socal';
         $applicationLabel = fn (string $application) => $application === 'legal'
-            ? 'Legal Consultation'
+            ? 'Law Office'
             : 'SoCal Mediation Center';
         $currentUser = auth()->user();
     @endphp
@@ -15,7 +15,7 @@
                 <select class="w-full rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold sm:w-auto" name="application">
                     <option value="">All Applications</option>
                     <option value="socal" @selected($selectedApplication === 'socal')>SoCal Mediation Center</option>
-                    <option value="legal" @selected($selectedApplication === 'legal')>Legal Consultation</option>
+                    <option value="legal" @selected($selectedApplication === 'legal')>Law Office</option>
                 </select>
             @else
                 <div class="flex items-center rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-bold {{ $applicationTheme($selectedApplication) }}">{{ $applicationLabel($selectedApplication) }}</div>

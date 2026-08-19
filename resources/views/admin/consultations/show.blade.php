@@ -1,7 +1,7 @@
 <x-admin.layout heading="" subheading="" breadcrumb="Consultations" :application="$consultation->application">
     @php
     $app = $consultation->application === 'legal'
-    ? ['label' => 'Legal Consultation', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal', 'color' => '#75172E', 'soft' => '#E8DDE1']
+    ? ['label' => 'Law Office', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal', 'color' => '#75172E', 'soft' => '#E8DDE1']
     : ['label' => 'SoCal Mediation Center', 'icon' => 'landmark', 'theme' => 'app-theme-socal', 'iconClass' => 'app-icon-socal', 'textClass' => 'app-text-socal', 'progress' => 'app-progress-socal', 'color' => '#082BC3', 'soft' => '#F1F6FE'];
     $statusTheme = function (?string $status) {
     return match ($status) {

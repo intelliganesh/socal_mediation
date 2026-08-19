@@ -24,7 +24,7 @@
         ? ($commonLogo ?: 'common_logo.svg')
         : ($isLegalTheme ? 'legal.png' : 'socal.png');
     $brand = $isLegalTheme
-        ? ['name' => 'Legal Consultation', 'logo' => $logo, 'color' => '#75172E', 'soft' => '#E8DDE1', 'profileName' => 'Steve Lopez']
+        ? ['name' => 'Law Office', 'logo' => $logo, 'color' => '#75172E', 'soft' => '#E8DDE1', 'profileName' => 'Steve Lopez']
         : ['name' => $scopedApplication === null ? 'Admin' : 'SoCal Mediation Center', 'logo' => $logo, 'color' => '#082BC3', 'soft' => '#F1F6FE', 'profileName' => null];
 @endphp
 <body class="admin-theme-{{ $themeApplication }} min-h-screen bg-[#f3f4f7] text-[#1F2937]">

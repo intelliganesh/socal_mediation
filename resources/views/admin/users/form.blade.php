@@ -33,7 +33,7 @@
                 <select class="h-11 rounded-lg border border-[#E5E7EB] px-3 text-sm font-semibold text-[#111827]" name="application" @disabled($user->email === 'admin@socal.test')>
                     <option value="" @selected(old('application', $user->application) === null)>All Applications</option>
                     <option value="socal" @selected(old('application', $user->application) === 'socal')>SoCal Mediation Center</option>
-                    <option value="legal" @selected(old('application', $user->application) === 'legal')>Legal Consultation</option>
+                    <option value="legal" @selected(old('application', $user->application) === 'legal')>Law Office</option>
                 </select>
                 @if($user->email === 'admin@socal.test')
                     <input type="hidden" name="application" value="">

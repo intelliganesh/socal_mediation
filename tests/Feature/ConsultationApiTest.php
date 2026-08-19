@@ -511,7 +511,10 @@ class ConsultationApiTest extends TestCase
         $participant = Consultation::findOrFail($consultationId)->participants()->where('is_primary', false)->firstOrFail();
         $html = (new FreeIntroParticipantScheduleMail($participant))->render();
 
-        $this->assertStringContainsString('https://booking-frontend.example.test/free-intro/schedule?token='.$participant->scheduling_token, $html);
+        $this->assertStringContainsString('https://booking-frontend.example.test/free-intro-schedule?token='.$participant->scheduling_token, $html);
+        $this->assertStringContainsString('Slot Selection', $html);
+        $this->assertStringContainsString('Please choose your preferred available slot.', $html);
+        $this->assertStringNotContainsString('Oct 23, 2026 - 9:00 AM America/Los_Angeles', $html);
         $this->assertStringNotContainsString('https://payment-result.example.test', $html);
     }
 
@@ -673,6 +676,30 @@ class ConsultationApiTest extends TestCase
         $this->assertStringContainsString('admin-icons/legal_payment_check.svg', $html);
         $this->assertStringContainsString('admin-icons/legal.svg', $html);
         $this->assertStringContainsString('admin-icons/consultation_type'.$consultation->consultation_type_id.'.svg', $html);
+    }
+
+    public function test_email_shows_configured_phone_or_location_for_non_zoom_modes(): void
+    {
+        $this->seed();
+        config([
+            'app.consultation_contact.phone.socal' => '+1 (555) 222-3333',
+            'app.consultation_contact.location_address.socal' => '123 Mediation Way, Los Angeles, CA 90001',
+        ]);
+
+        $consultation = Consultation::where('booking_number', 'SAMPLE-03')->firstOrFail();
+        $participant = $consultation->participants()->whereNotNull('email')->firstOrFail();
+
+        $consultation->update(['consultation_mode' => 'phone']);
+        $phoneHtml = (new ConsultationConfirmationMail($consultation->refresh(), $participant))->render();
+        $this->assertStringContainsString('Phone Number', $phoneHtml);
+        $this->assertStringContainsString('+1 (555) 222-3333', $phoneHtml);
+        $this->assertStringNotContainsString('123 Mediation Way', $phoneHtml);
+
+        $consultation->update(['consultation_mode' => 'offline']);
+        $locationHtml = (new ConsultationConfirmationMail($consultation->refresh(), $participant))->render();
+        $this->assertStringContainsString('Location Address', $locationHtml);
+        $this->assertStringContainsString('123 Mediation Way, Los Angeles, CA 90001', $locationHtml);
+        $this->assertStringNotContainsString('+1 (555) 222-3333', $locationHtml);
     }
 
     public function test_it_completes_using_details_already_saved_on_draft(): void
