@@ -1,8 +1,8 @@
 <x-admin.layout heading="" subheading="" breadcrumb="Consultations" :application="$consultation->application">
     @php
     $app = $consultation->application === 'legal'
-    ? ['label' => 'Legal Consultation', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']
-    : ['label' => 'SoCal Mediation Center', 'icon' => 'landmark', 'theme' => 'app-theme-socal', 'iconClass' => 'app-icon-socal', 'textClass' => 'app-text-socal', 'progress' => 'app-progress-socal'];
+    ? ['label' => 'Legal Consultation', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal', 'color' => '#75172E', 'soft' => '#E8DDE1']
+    : ['label' => 'SoCal Mediation Center', 'icon' => 'landmark', 'theme' => 'app-theme-socal', 'iconClass' => 'app-icon-socal', 'textClass' => 'app-text-socal', 'progress' => 'app-progress-socal', 'color' => '#082BC3', 'soft' => '#F1F6FE'];
     $statusTheme = function (?string $status) {
     return match ($status) {
     'paid' => ['badge' => 'status-badge-paid', 'progress' => 'progress-fill-paid', 'label' => 'Paid'],
@@ -50,6 +50,7 @@
     $paymentStatusOptions = ['pending', 'partially_paid', 'paid', 'failed', 'refunded'];
     $questionnaireSubmissions = $consultation->questionnaireSubmissions;
     @endphp
+<div style="--admin-brand: {{ $app['color'] }}; --admin-brand-soft: {{ $app['soft'] }};">
     <div class="-mt-1 mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
             <h2 class="text-2xl font-bold text-[#111827]">Consultation {{ $consultation->booking_number }}</h2>
@@ -430,7 +431,7 @@
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="font-bold text-[#111827]">{{ Str::headline($log->action) }}</span>
                             <span class="status-badge {{ $gatewayStatus['badge'] }}">{{ Str::headline($log->status) }}</span>
-                            {{-- <span class="font-bold text-gray-500">PAY-{{ $log->id }}</span> --}}
+                            <span class="font-bold text-gray-500">PAY-{{ $log->id }}</span>
                         </div>
                         <div class="mt-1 text-xs text-gray-500">{{ $payerName ?: 'Unknown payer' }} · ${{ number_format($payment->amount_cents / 100, 2) }} {{ $payment->currency }}</div>
                         @if(filled($log->message))
@@ -445,4 +446,5 @@
             </div>
         </section>
     </div>
+</div>
 </x-admin.layout>
