@@ -14,7 +14,7 @@
         .grid { width: 100%; border-collapse: collapse; margin-top: 12px; }
         .grid th, .grid td { border: 1px solid #E5E7EB; padding: 9px; text-align: left; vertical-align: top; }
         .grid th { background: #F7F8FC; font-weight: 700; width: 34%; }
-        .answer { white-space: pre-wrap; }
+        {{-- .answer { white-space: pre-wrap; } --}}
     </style>
 </head>
 <body>

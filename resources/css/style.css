@@ -47,6 +47,9 @@
         --status-overdue-bg: #FEEACA;
         --status-overdue-text: #B91C1C;
         --status-overdue-border: #F87171;
+        --send-zoom-meeting-bg: #844fc1;
+        --send-zoom-meeting-bg-soft: #844fc1;
+        --send-zoom-meeting-text: #f1e5ff;
     }
 
     .admin-theme-socal {
@@ -256,6 +259,12 @@
         );
     }
 
+    .action-card{
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
     .action-card-primary {
         color: var(--admin-brand);
     }
@@ -264,8 +273,21 @@
         background: var(--admin-brand-soft);
     }
 
+    .action-card-zoom {
+        color: var(--send-zoom-meeting-text);
+    }
+
+    .action-card-zoom .action-card-icon {
+        background: var(--send-zoom-meeting-bg-soft);
+    }
+
     .action-card-primary .action-card-button {
         background: var(--admin-brand);
+        color: var(--admin-surface);
+    }
+
+    .action-card-zoom .action-card-button {
+        background: var(--send-zoom-meeting-bg);
         color: var(--admin-surface);
     }
 
@@ -278,7 +300,7 @@
     }
 
     .action-card-pending .action-card-button {
-        background: var(--status-pending-border);
+        background: var(--status-pending-text);
         color: var(--admin-surface);
     }
 
