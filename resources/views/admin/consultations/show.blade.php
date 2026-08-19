@@ -84,6 +84,17 @@
             <button class="action-card-button mt-auto h-10 w-full rounded-lg text-sm font-bold">Send Reminder</button>
         </form>
         @endif
+
+        @if($consultation->starts_at)
+        <form class="action-card action-card-pending min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.reschedule', $consultation) }}">
+            @csrf
+            <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="refresh-cw" class="h-7 w-7"></i></div>
+            <h3 class="mt-4 font-bold">Reschedule Meeting</h3>
+            <p class="mt-2 text-sm font-semibold text-gray-500">Reschedule meeting and send new meeting link to all participants.</p>
+            <input class="mt-3 h-9 w-full min-w-0 rounded-lg border border-[#E5E7EB] px-3 text-xs font-bold text-[#111827]" type="datetime-local" name="starts_at" value="{{ old('starts_at', $consultation->starts_at->format('Y-m-d\\TH:i')) }}" required>
+            <button class="action-card-button mt-auto h-10 w-full rounded-lg text-sm font-bold">Reschedule</button>
+        </form>
+        @endif
         <form class="action-card action-card-primary min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.zoom-link', $consultation) }}">
             @csrf
             <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="video" class="h-7 w-7"></i></div>
@@ -100,16 +111,7 @@
                 @endif
             </div>
         </form>
-        @if($consultation->starts_at)
-        <form class="action-card action-card-pending min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.reschedule', $consultation) }}">
-            @csrf
-            <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="refresh-cw" class="h-7 w-7"></i></div>
-            <h3 class="mt-4 font-bold">Reschedule Meeting</h3>
-            <p class="mt-2 text-sm font-semibold text-gray-500">Reschedule meeting and send new meeting link to all participants.</p>
-            <input class="mt-3 h-9 w-full min-w-0 rounded-lg border border-[#E5E7EB] px-3 text-xs font-bold text-[#111827]" type="datetime-local" name="starts_at" value="{{ old('starts_at', $consultation->starts_at->format('Y-m-d\\TH:i')) }}" required>
-            <button class="action-card-button mt-auto h-10 w-full rounded-lg text-sm font-bold">Reschedule</button>
-        </form>
-        @endif
+
         <form class="action-card action-card-paid min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.sync-outlook', $consultation) }}">
             @csrf
             <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="calendar-plus" class="h-7 w-7"></i></div>
