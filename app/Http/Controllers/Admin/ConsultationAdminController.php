@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Consultation;
+use App\Models\IntegrationLog;
+use App\Models\PaymentRequest;
 use App\Models\QuestionnaireSubmission;
 use App\Services\AdminPaymentNotificationService;
 use App\Services\AdminZoomNotificationService;
@@ -76,16 +78,32 @@ class ConsultationAdminController extends Controller
         $this->authorizeConsultation($consultation);
         $payments->syncConsultation($consultation);
 
+        $consultation->load([
+            'type',
+            'professional',
+            'participants',
+            'paymentRequests.participant',
+            'integrationLogs',
+            'questionnaireSubmissions.participant',
+        ]);
+
+        $paymentRequests = $consultation->paymentRequests;
+        $paymentGatewayActivities = IntegrationLog::query()
+            ->where('provider', 'converge')
+            ->where('loggable_type', PaymentRequest::class)
+            ->whereIn('loggable_id', $paymentRequests->pluck('id'))
+            ->latest()
+            ->get()
+            ->map(fn (IntegrationLog $log) => [
+                'log' => $log,
+                'payment' => $paymentRequests->firstWhere('id', $log->loggable_id),
+            ])
+            ->filter(fn (array $activity) => $activity['payment'] !== null)
+            ->values();
+
         return view('admin.consultations.show', [
-            'consultation' => $consultation->load([
-                'type',
-                'professional',
-                'participants',
-                'paymentRequests.participant',
-                'paymentRequests.integrationLogs',
-                'integrationLogs',
-                'questionnaireSubmissions.participant',
-            ]),
+            'consultation' => $consultation,
+            'paymentGatewayActivities' => $paymentGatewayActivities,
         ]);
     }
 

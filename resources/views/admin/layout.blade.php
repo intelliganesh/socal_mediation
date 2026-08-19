@@ -12,6 +12,7 @@
 </head>
 @php
     $currentUser = auth()->user();
+    $breadcrumbLabel = filled($breadcrumb) ? $breadcrumb : (filled($heading) ? $heading : 'Consultations');
     $scopedApplication = in_array($currentUser?->application, ['socal', 'legal'], true)
         ? $currentUser->application
         : null;
@@ -97,7 +98,7 @@
                                 <li><a class="text-gray-500 hover:text-[#111827]" href="{{ route('admin.dashboard') }}">Dashboard</a></li>
                                 @unless(request()->routeIs('admin.dashboard'))
                                     <li class="text-gray-400">/</li>
-                                    <li class="truncate text-[#111827]">{{ $heading ?? 'Consultations' }}</li>
+                                    <li class="truncate text-[#111827]">{{ $breadcrumbLabel }}</li>
                                 @endunless
                             </ol>
                         </nav>
@@ -122,10 +123,16 @@
 
             <main>
                 <section class="px-4 py-6 sm:px-6 lg:px-8">
+                    @if(filled($heading) || filled($subheading))
                     <div class="mb-5">
-                        <h1 class="text-2xl font-bold tracking-tight text-[#111827]">{{ $heading ?? 'Dashboard' }}</h1>
-                        <p class="mt-1 text-sm text-gray-500">{{ $subheading ?? 'Review bookings, payments, and calendar availability.' }}</p>
+                        @if(filled($heading))
+                            <h1 class="text-2xl font-bold tracking-tight text-[#111827]">{{ $heading }}</h1>
+                        @endif
+                        @if(filled($subheading))
+                            <p class="mt-1 text-sm text-gray-500">{{ $subheading }}</p>
+                        @endif
                     </div>
+                    @endif
                 @if(session('status'))
                     <div class="mb-4 rounded-lg border border-[#BBF7D0] bg-[#BBF7D0] px-4 py-3 text-sm font-bold text-[#166534]">{{ session('status') }}</div>
                 @endif

@@ -1,4 +1,4 @@
-<x-admin.layout heading="" subheading="" :application="$consultation->application">
+<x-admin.layout heading="" subheading="" breadcrumb="Consultations" :application="$consultation->application">
     @php
     $app = $consultation->application === 'legal'
     ? ['label' => 'Legal Consultation', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']
@@ -26,13 +26,6 @@
     $progressPercent = $totalPaymentCount ? round(($paidPaymentCount / $totalPaymentCount) * 100) : 0;
     $unpaidPaymentCount = $consultation->paymentRequests->filter(fn ($payment) => $payment->status !== 'paid')->count();
     $emailActivities = $consultation->integrationLogs->where('provider', 'mail')->sortByDesc('created_at')->values();
-    $paymentGatewayActivities = $consultation->paymentRequests
-    ->flatMap(fn ($payment) => $payment->integrationLogs->map(fn ($log) => [
-    'log' => $log,
-    'payment' => $payment,
-    ]))
-    ->sortByDesc(fn ($activity) => $activity['log']->created_at)
-    ->values();
     $emailActivityMeta = function (string $action) {
     return match ($action) {
     'manual_payment_reminder' => ['label' => 'Payment Reminder', 'icon' => 'bell'],
@@ -91,8 +84,10 @@
             <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="refresh-cw" class="h-7 w-7"></i></div>
             <h3 class="mt-4 font-bold">Reschedule Meeting</h3>
             <p class="mt-2 text-sm font-semibold text-gray-500">Reschedule meeting and send new meeting link to all participants.</p>
-            <input class="mt-3 h-9 w-full min-w-0 rounded-lg border border-[#E5E7EB] px-3 text-xs font-bold text-[#111827]" type="datetime-local" name="starts_at" value="{{ old('starts_at', $consultation->starts_at->format('Y-m-d\\TH:i')) }}" required>
-            <button class="action-card-button mt-auto h-10 w-full rounded-lg text-sm font-bold">Reschedule</button>
+            <div class="mt-auto">
+                <input class="mt-3 h-9 w-full min-w-0 rounded-lg border border-[#E5E7EB] px-3 text-xs font-bold text-[#111827]" type="datetime-local" name="starts_at" value="{{ old('starts_at', $consultation->starts_at->format('Y-m-d\\TH:i')) }}" required>
+                <button class="action-card-button mt-2 h-10 w-full rounded-lg text-sm font-bold">Reschedule</button>
+            </div>
         </form>
         @endif
         <form class="action-card action-card-zoom min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.zoom-link', $consultation) }}">
@@ -101,11 +96,11 @@
             <h3 class="mt-4 font-bold">Send Zoom Links</h3>
             <span class="sr-only">Resend Zoom Link</span>
             <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Send Zoom meeting links to all the participants.</p>
-            <div class="mt-auto grid gap-2">
+            <div class="mt-auto flex gap-2">
                 <button class="action-card-button h-10 w-full rounded-lg text-sm font-bold">Send Zoom Link</button>
                 @if(filled($consultation->zoom_join_url))
-                <a class="admin-brand-zoom flex h-10 items-center justify-center gap-2 rounded-lg border border-[#844fc1] bg-white text-sm font-bold" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener">
-                    Open Zoom Meeting Link
+                <a class="admin-brand-zoom p-4 flex h-10 items-center justify-center gap-2 rounded-lg border border-[#844fc1] bg-white text-sm font-bold" href="{{ $consultation->zoom_join_url }}" target="_blank" rel="noopener">
+
                     <i data-lucide="external-link" class="h-4 w-4"></i>
                 </a>
                 @endif
@@ -227,7 +222,10 @@
     <div class="grid gap-5 xl:grid-cols-3 mb-5">
         <div class="space-y-5 xl:col-span-2">
             <section class="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
-                <h3 class="mb-4 font-bold text-[#111827]">Participants</h3>
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <h3 class="font-bold text-[#111827]">Participants</h3>
+                    <span class="text-sm font-bold text-gray-500">Payment Shares</span>
+                </div>
                 <div class="grid gap-3 md:grid-cols-3">
                     @foreach($consultation->participants as $participant)
                     @php($participantName = trim($participant->first_name.' '.$participant->last_name))

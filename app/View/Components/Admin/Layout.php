@@ -12,6 +12,7 @@ class Layout extends Component
         public string $heading = 'Dashboard',
         public string $subheading = 'Review bookings, payments, and calendar availability.',
         public ?string $application = null,
+        public ?string $breadcrumb = null,
         public string $title = 'Socal Admin',
     ) {}
 
