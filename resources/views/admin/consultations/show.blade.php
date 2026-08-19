@@ -429,7 +429,7 @@
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="font-bold text-[#111827]">{{ Str::headline($log->action) }}</span>
                             <span class="status-badge {{ $gatewayStatus['badge'] }}">{{ Str::headline($log->status) }}</span>
-                            <span class="font-bold text-gray-500">PAY-{{ $log->id }}</span>
+                            {{-- <span class="font-bold text-gray-500">PAY-{{ $log->id }}</span> --}}
                         </div>
                         <div class="mt-1 text-xs text-gray-500">{{ $payerName ?: 'Unknown payer' }} · ${{ number_format($payment->amount_cents / 100, 2) }} {{ $payment->currency }}</div>
                         @if(filled($log->message))
