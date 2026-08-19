@@ -1033,6 +1033,11 @@
                                             "additional_information": {
                                                 "type": "string",
                                                 "nullable": true
+                                            },
+                                            "confirmation_accepted": {
+                                                "type": "boolean",
+                                                "example": true,
+                                                "nullable": true
                                             }
                                         },
                                         "type": "object"
@@ -1156,6 +1161,11 @@
                                             "mediator_notes": {
                                                 "type": "string",
                                                 "nullable": true
+                                            },
+                                            "confirmation_accepted": {
+                                                "type": "boolean",
+                                                "example": true,
+                                                "nullable": true
                                             }
                                         },
                                         "type": "object"
@@ -1248,6 +1258,11 @@
                                             },
                                             "paid": {
                                                 "type": "boolean",
+                                                "nullable": true
+                                            },
+                                            "confirmation_accepted": {
+                                                "type": "boolean",
+                                                "example": true,
                                                 "nullable": true
                                             }
                                         },

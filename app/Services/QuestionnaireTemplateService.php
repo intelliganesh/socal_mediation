@@ -70,6 +70,7 @@ class QuestionnaireTemplateService
                 'preferred_session_format' => null,
                 'same_room_comfort' => null,
                 'additional_information' => null,
+                'confirmation_accepted' => null,
             ],
         ],
         'socal_party_mediation' => [
@@ -96,6 +97,7 @@ class QuestionnaireTemplateService
                 'flexible_about' => null,
                 'non_negotiables' => null,
                 'mediator_notes' => null,
+                'confirmation_accepted' => null,
             ],
         ],
         'legal_initial_intake' => [
@@ -115,6 +117,7 @@ class QuestionnaireTemplateService
                 'referral_source' => null,
                 'referral_source_other' => null,
                 'paid' => null,
+                'confirmation_accepted' => null,
             ],
         ],
     ];

@@ -76,6 +76,7 @@ class QuestionnaireController extends Controller
                 new OA\Property(property: 'preferred_session_format', type: 'string', nullable: true),
                 new OA\Property(property: 'same_room_comfort', type: 'string', nullable: true),
                 new OA\Property(property: 'additional_information', type: 'string', nullable: true),
+                new OA\Property(property: 'confirmation_accepted', type: 'boolean', nullable: true, example: true),
             ]),
         ])),
         responses: [
@@ -116,6 +117,7 @@ class QuestionnaireController extends Controller
                 new OA\Property(property: 'flexible_about', type: 'string', nullable: true),
                 new OA\Property(property: 'non_negotiables', type: 'string', nullable: true),
                 new OA\Property(property: 'mediator_notes', type: 'string', nullable: true),
+                new OA\Property(property: 'confirmation_accepted', type: 'boolean', nullable: true, example: true),
             ]),
         ])),
         responses: [
@@ -149,6 +151,7 @@ class QuestionnaireController extends Controller
                 new OA\Property(property: 'referral_source', type: 'string', nullable: true),
                 new OA\Property(property: 'referral_source_other', type: 'string', nullable: true),
                 new OA\Property(property: 'paid', type: 'boolean', nullable: true),
+                new OA\Property(property: 'confirmation_accepted', type: 'boolean', nullable: true, example: true),
             ]),
         ])),
         responses: [
