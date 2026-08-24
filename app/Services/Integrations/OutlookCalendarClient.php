@@ -8,6 +8,7 @@ use App\Models\ExternalCalendarEvent;
 use App\Models\QuestionnaireSubmission;
 use App\Services\QuestionnaireTemplateService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -20,6 +21,16 @@ class OutlookCalendarClient
     private const CALENDAR_APPLICATIONS = ['socal', 'legal'];
 
     private const ACTIVE_CONSULTATION_STATUSES = ['scheduled'];
+
+    private const OUTLOOK_TIMEZONES = [
+        'UTC' => 'UTC',
+        'Asia/Kolkata' => 'India Standard Time',
+        'America/Los_Angeles' => 'Pacific Standard Time',
+        'America/New_York' => 'Eastern Standard Time',
+        'America/Chicago' => 'Central Standard Time',
+        'America/Denver' => 'Mountain Standard Time',
+        'America/Phoenix' => 'US Mountain Standard Time',
+    ];
 
     public function __construct(private readonly QuestionnaireTemplateService $questionnaireTemplates)
     {
@@ -319,11 +330,11 @@ class OutlookCalendarClient
             ],
             'start' => [
                 'dateTime' => $start->format('Y-m-d\TH:i:s'),
-                'timeZone' => config('app.booking_timezone'),
+                'timeZone' => $this->outlookTimezone(config('app.booking_timezone')),
             ],
             'end' => [
                 'dateTime' => $start->addMinutes(15)->format('Y-m-d\TH:i:s'),
-                'timeZone' => config('app.booking_timezone'),
+                'timeZone' => $this->outlookTimezone(config('app.booking_timezone')),
             ],
             'showAs' => 'busy',
         ]);
@@ -563,6 +574,7 @@ class OutlookCalendarClient
     {
         $timezone = $consultation->timezone ?: config('app.booking_timezone');
         $body = trim(($consultation->description ?: 'Consultation booking').' '.$consultation->primary_email);
+        $outlookTimezone = $this->outlookTimezone($timezone);
 
         return [
             'subject' => $consultation->booking_number.' - '.$consultation->type->name,
@@ -571,12 +583,12 @@ class OutlookCalendarClient
                 'content' => $body."\n\n".self::CONSULTATION_MARKER.$consultation->id,
             ],
             'start' => [
-                'dateTime' => $consultation->starts_at->format('Y-m-d\TH:i:s'),
-                'timeZone' => $timezone,
+                'dateTime' => $this->storedLocalDateTime($consultation, 'starts_at', $timezone),
+                'timeZone' => $outlookTimezone,
             ],
             'end' => [
-                'dateTime' => $consultation->ends_at->format('Y-m-d\TH:i:s'),
-                'timeZone' => $timezone,
+                'dateTime' => $this->storedLocalDateTime($consultation, 'ends_at', $timezone),
+                'timeZone' => $outlookTimezone,
             ],
             'showAs' => 'busy',
         ];
@@ -589,6 +601,7 @@ class OutlookCalendarClient
         $timezone = $participant->scheduled_timezone ?: $consultation->timezone ?: config('app.booking_timezone');
         $participantName = trim($participant->first_name.' '.$participant->last_name) ?: 'Participant';
         $body = trim(($consultation->description ?: 'Free intro call').' '.$participant->email);
+        $outlookTimezone = $this->outlookTimezone($timezone);
 
         return [
             'subject' => $consultation->booking_number.' - '.$participantName.' - '.$consultation->type->name,
@@ -597,15 +610,31 @@ class OutlookCalendarClient
                 'content' => $body."\n\n".self::PARTICIPANT_MARKER.$participant->id,
             ],
             'start' => [
-                'dateTime' => $participant->scheduled_starts_at->format('Y-m-d\TH:i:s'),
-                'timeZone' => $timezone,
+                'dateTime' => $this->storedLocalDateTime($participant, 'scheduled_starts_at', $timezone),
+                'timeZone' => $outlookTimezone,
             ],
             'end' => [
-                'dateTime' => $participant->scheduled_ends_at->format('Y-m-d\TH:i:s'),
-                'timeZone' => $timezone,
+                'dateTime' => $this->storedLocalDateTime($participant, 'scheduled_ends_at', $timezone),
+                'timeZone' => $outlookTimezone,
             ],
             'showAs' => 'busy',
         ];
+    }
+
+    private function storedLocalDateTime(Model $model, string $attribute, string $timezone): string
+    {
+        $rawValue = $model->getRawOriginal($attribute);
+
+        if (filled($rawValue)) {
+            return CarbonImmutable::parse($rawValue, config('app.booking_timezone'))->format('Y-m-d\TH:i:s');
+        }
+
+        return CarbonImmutable::parse($model->getAttribute($attribute), $timezone)->format('Y-m-d\TH:i:s');
+    }
+
+    private function outlookTimezone(string $timezone): string
+    {
+        return self::OUTLOOK_TIMEZONES[$timezone] ?? $timezone;
     }
 
     private function deleteParticipantSlotEvent(ConsultationParticipant $participant): void

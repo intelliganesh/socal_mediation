@@ -196,4 +196,82 @@ class IntegrationToggleTest extends TestCase
         Http::assertSent(fn ($request) => $request->method() === 'DELETE'
             && str_ends_with($request->url(), '/calendars/legal-calendar/events/legal-event-id'));
     }
+
+    public function test_outlook_sync_preserves_kolkata_wall_clock_time_for_consultations_and_participant_slots(): void
+    {
+        $this->seed();
+        config([
+            'app.timezone' => 'UTC',
+            'app.booking_timezone' => 'Asia/Kolkata',
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.socal_user_id' => 'socal@example.com',
+            'services.outlook.socal_calendar_id' => 'socal-calendar',
+            'services.outlook.legal_user_id' => 'legal@example.com',
+            'services.outlook.legal_calendar_id' => 'legal-calendar',
+        ]);
+
+        $eventPayloads = [];
+        Http::fake(function ($request) use (&$eventPayloads) {
+            if (str_contains($request->url(), 'login.microsoftonline.com')) {
+                return Http::response(['access_token' => 'graph-token']);
+            }
+
+            if ($request->method() === 'POST' && str_ends_with($request->url(), '/events')) {
+                $eventPayloads[] = json_decode($request->body(), true);
+
+                return Http::response([
+                    'id' => 'outlook-event-'.count($eventPayloads),
+                    'webLink' => 'https://outlook.office.com/event',
+                ], 201);
+            }
+
+            return Http::response(['value' => []]);
+        });
+
+        $consultation = Consultation::with(['type', 'professional', 'participants'])
+            ->where('booking_number', 'SAMPLE-04')
+            ->firstOrFail();
+        $consultation->update([
+            'status' => 'scheduled',
+            'payment_status' => 'paid',
+            'timezone' => 'Asia/Kolkata',
+            'starts_at' => '2026-08-28 12:45:00',
+            'ends_at' => '2026-08-28 13:00:00',
+        ]);
+        $consultation->participants()->get()->each(function ($participant) use ($consultation) {
+            app(\App\Services\QuestionnaireWorkflowService::class)
+                ->ensureSubmission($consultation, $participant)
+                ->update([
+                    'status' => 'submitted',
+                    'submitted_at' => now(),
+                    'agreement_accepted' => true,
+                    'agreement_accepted_at' => now(),
+                ]);
+        });
+
+        $participant = $consultation->participants()->where('is_primary', true)->firstOrFail();
+        $participant->update([
+            'scheduling_status' => 'scheduled',
+            'scheduled_starts_at' => '2026-08-28 12:45:00',
+            'scheduled_ends_at' => '2026-08-28 13:00:00',
+            'scheduled_timezone' => 'Asia/Kolkata',
+        ]);
+
+        $outlook = app(OutlookCalendarClient::class);
+        $outlook->syncConsultation($consultation->refresh()->load(['type', 'professional', 'questionnaireSubmissions']), 'timezone_consultation_sync');
+        $outlook->syncParticipantSlot($participant->refresh()->load(['consultation.type', 'consultation.professional']), 'timezone_participant_sync');
+
+        $this->assertNotEmpty($eventPayloads);
+        foreach ($eventPayloads as $payload) {
+            $this->assertSame('2026-08-28T12:45:00', $payload['start']['dateTime']);
+            $this->assertSame('2026-08-28T13:00:00', $payload['end']['dateTime']);
+            $this->assertSame('India Standard Time', $payload['start']['timeZone']);
+            $this->assertSame('India Standard Time', $payload['end']['timeZone']);
+        }
+    }
 }
