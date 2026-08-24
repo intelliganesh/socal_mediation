@@ -373,6 +373,71 @@ class ConsultationApiTest extends TestCase
         Mail::assertNotSent(ConsultationPaymentLinkMail::class);
     }
 
+    public function test_booking_uses_configured_timezone_when_frontend_sends_conflicting_timezone(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config([
+            'app.timezone' => 'Asia/Kolkata',
+            'app.booking_timezone' => 'Asia/Kolkata',
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant',
+            'services.outlook.client_id' => 'client',
+            'services.outlook.client_secret' => 'secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.socal_user_id' => 'socal-user',
+            'services.outlook.legal_user_id' => 'legal-user',
+        ]);
+
+        $eventPayloads = [];
+        Http::fake(function ($request) use (&$eventPayloads) {
+            if (str_contains($request->url(), 'login.microsoftonline.com')) {
+                return Http::response(['access_token' => 'outlook-token']);
+            }
+
+            if ($request->method() === 'POST' && str_ends_with($request->url(), '/events')) {
+                $eventPayloads[] = json_decode($request->body(), true);
+
+                return Http::response([
+                    'id' => (string) Str::uuid(),
+                    'webLink' => 'https://outlook.example.test/event',
+                    'showAs' => 'busy',
+                ], 201);
+            }
+
+            return Http::response(['value' => []]);
+        });
+
+        $type = ConsultationType::where('slug', 'socal-free-intro-call')->firstOrFail();
+        $consultationId = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'phone',
+            'primary_client' => [
+                'first_name' => 'Timezone',
+                'last_name' => 'Mismatch',
+                'email' => 'timezone.mismatch@example.com',
+            ],
+        ])->assertCreated()->json('data.uuid');
+
+        $this->postJson('/api/v1/consultations/'.$consultationId.'/complete', [
+            'starts_at' => '2026-08-26T10:45:00+05:30',
+            'timezone' => 'America/Los_Angeles',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.timezone', 'Asia/Kolkata');
+
+        $consultation = Consultation::findOrFail($consultationId);
+
+        $this->assertSame('Asia/Kolkata', $consultation->timezone);
+        $this->assertSame('2026-08-26 10:45:00', $consultation->getRawOriginal('starts_at'));
+        $this->assertNotEmpty($eventPayloads);
+        foreach ($eventPayloads as $payload) {
+            $this->assertSame('2026-08-26T10:45:00', $payload['start']['dateTime']);
+            $this->assertSame('India Standard Time', $payload['start']['timeZone']);
+        }
+    }
+
     public function test_free_intro_multiple_participants_invites_others_before_final_confirmation(): void
     {
         $this->seed();

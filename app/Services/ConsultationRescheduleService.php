@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Consultation;
 use App\Services\Integrations\OutlookCalendarClient;
 use App\Services\Integrations\ZoomClient;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 class ConsultationRescheduleService
@@ -16,6 +15,7 @@ class ConsultationRescheduleService
         private readonly AdminZoomNotificationService $zoomNotifications,
         private readonly OutlookCalendarClient $outlook,
         private readonly QuestionnaireWorkflowService $questionnaires,
+        private readonly BookingDateTimeService $bookingDateTimes,
     ) {
     }
 
@@ -25,8 +25,7 @@ class ConsultationRescheduleService
             throw new \DomainException('Only active bookings can be rescheduled.');
         }
 
-        $timezone = $data['timezone'] ?? $consultation->timezone ?: config('app.booking_timezone');
-        $startsAt = CarbonImmutable::parse($data['starts_at'], $timezone);
+        [$startsAt, $timezone] = $this->bookingDateTimes->startsAtFromRequest($data['starts_at']);
         $type = $consultation->type;
         $professionalId = $data['professional_id'] ?? $consultation->professional_id;
 

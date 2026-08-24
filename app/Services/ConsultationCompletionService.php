@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Consultation;
 use App\Services\Integrations\OutlookCalendarClient;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 class ConsultationCompletionService
@@ -17,6 +16,7 @@ class ConsultationCompletionService
         private readonly PaymentSimulationService $simulation,
         private readonly OutlookCalendarClient $outlook,
         private readonly FreeIntroCallWorkflowService $freeIntroCalls,
+        private readonly BookingDateTimeService $bookingDateTimes,
     ) {}
 
     public function complete(Consultation $consultation, array $data): Consultation
@@ -26,8 +26,7 @@ class ConsultationCompletionService
             $this->assertRequiredDetailsPresent($data);
 
             $consultation = $this->drafts->updateDetails($consultation, $data);
-            $timezone = $data['timezone'] ?? $consultation->timezone;
-            $startsAt = CarbonImmutable::parse($data['starts_at'], $timezone);
+            [$startsAt, $timezone] = $this->bookingDateTimes->startsAtFromRequest($data['starts_at']);
             $type = $consultation->type;
             $professionalId = $data['professional_id'] ?? $consultation->professional_id;
 

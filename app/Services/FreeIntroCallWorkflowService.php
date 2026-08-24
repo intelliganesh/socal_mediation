@@ -7,7 +7,6 @@ use App\Mail\FreeIntroParticipantScheduleMail;
 use App\Models\Consultation;
 use App\Models\ConsultationParticipant;
 use App\Services\Integrations\OutlookCalendarClient;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -17,6 +16,7 @@ class FreeIntroCallWorkflowService
     public function __construct(
         private readonly AvailabilityService $availability,
         private readonly OutlookCalendarClient $outlook,
+        private readonly BookingDateTimeService $bookingDateTimes,
     ) {}
 
     public function handles(Consultation $consultation): bool
@@ -97,8 +97,7 @@ class FreeIntroCallWorkflowService
             throw new \DomainException('The participant scheduling token is invalid.');
         }
 
-        $timezone = $data['timezone'] ?? $consultation->timezone ?: config('app.booking_timezone');
-        $startsAt = CarbonImmutable::parse($data['starts_at'], $timezone);
+        [$startsAt, $timezone] = $this->bookingDateTimes->startsAtFromRequest($data['starts_at']);
 
         $this->availability->assertAvailable(
             $consultation->type,
