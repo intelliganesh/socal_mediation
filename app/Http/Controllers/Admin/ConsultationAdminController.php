@@ -15,6 +15,7 @@ use App\Services\Integrations\OutlookCalendarClient;
 use App\Services\Integrations\ZoomClient;
 use App\Services\PaymentReconciliationService;
 use App\Services\QuestionnairePdfService;
+use App\Services\QuestionnaireWorkflowService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
@@ -93,6 +94,10 @@ class ConsultationAdminController extends Controller
             ->where('provider', 'converge')
             ->where('loggable_type', PaymentRequest::class)
             ->whereIn('loggable_id', $paymentRequests->pluck('id'))
+            ->where(function ($query) {
+                $query->where('action', '!=', 'payment_status_sync')
+                    ->orWhere('status', '!=', 'skipped');
+            })
             ->latest()
             ->get()
             ->map(fn (IntegrationLog $log) => [
@@ -112,6 +117,7 @@ class ConsultationAdminController extends Controller
     {
         $this->authorizeConsultation($consultation);
         abort_unless($submission->consultation_id === $consultation->id, 404);
+        abort_unless($submission->status === 'submitted', 404);
 
         return $pdf->download($submission);
     }
@@ -220,7 +226,8 @@ class ConsultationAdminController extends Controller
         AvailabilityService $availability,
         OutlookCalendarClient $outlook,
         ZoomClient $zoom,
-        AdminZoomNotificationService $zoomNotifications
+        AdminZoomNotificationService $zoomNotifications,
+        QuestionnaireWorkflowService $questionnaires
     ) {
         $this->authorizeConsultation($consultation);
         $data = $request->validate([
@@ -244,7 +251,7 @@ class ConsultationAdminController extends Controller
         $consultation->update([
             'starts_at' => $startsAt,
             'ends_at' => $startsAt->addMinutes($type->duration_minutes),
-            'status' => $this->statusAfterReschedule($consultation),
+            'status' => $this->statusAfterReschedule($consultation, $questionnaires),
         ]);
 
         $consultation->integrationLogs()->create([
@@ -255,7 +262,9 @@ class ConsultationAdminController extends Controller
             'message' => 'Consultation rescheduled from admin panel.',
         ]);
 
-        if ($consultation->consultation_mode === 'online') {
+        $isReadyForMeetingRelease = $questionnaires->isReadyForMeetingRelease($consultation->refresh()->load(['type', 'participants', 'questionnaireSubmissions']));
+
+        if ($consultation->consultation_mode === 'online' && $isReadyForMeetingRelease) {
             try {
                 $meeting = $zoom->createMeeting($consultation->refresh()->load(['type']));
 
@@ -281,9 +290,34 @@ class ConsultationAdminController extends Controller
             } catch (\RuntimeException $exception) {
                 return back()->with('error', 'Consultation rescheduled, but Zoom link update failed: '.$exception->getMessage());
             }
+        } elseif ($consultation->consultation_mode === 'online') {
+            if (filled($consultation->zoom_meeting_id)) {
+                try {
+                    $zoom->deleteMeeting($consultation->zoom_meeting_id);
+                } catch (\RuntimeException $exception) {
+                    $consultation->integrationLogs()->create([
+                        'provider' => 'zoom',
+                        'action' => 'manual_reschedule_delete_pending_meeting',
+                        'status' => 'failed',
+                        'message' => $exception->getMessage(),
+                    ]);
+                }
+            }
+
+            $consultation->update([
+                'zoom_meeting_id' => null,
+                'zoom_join_url' => null,
+            ]);
+
+            $consultation->integrationLogs()->create([
+                'provider' => 'zoom',
+                'action' => 'manual_reschedule_zoom_link',
+                'status' => 'skipped',
+                'message' => 'Zoom link regeneration was skipped because required questionnaire steps are not complete.',
+            ]);
         }
 
-        if (config('services.outlook.enabled')) {
+        if (config('services.outlook.enabled') && $isReadyForMeetingRelease) {
             try {
                 $syncedConsultation = $consultation->refresh()->load(['type', 'professional']);
                 $outlookEvent = $outlook->recreateConsultationEvent($syncedConsultation, 'automatic_reschedule_sync');
@@ -299,6 +333,13 @@ class ConsultationAdminController extends Controller
             } catch (\DomainException|\RuntimeException $exception) {
                 return back()->with('error', 'Consultation rescheduled, but Outlook sync failed: '.$exception->getMessage());
             }
+        } elseif (config('services.outlook.enabled')) {
+            $consultation->integrationLogs()->create([
+                'provider' => 'outlook',
+                'action' => 'automatic_reschedule_sync',
+                'status' => 'skipped',
+                'message' => 'Outlook sync was skipped because required questionnaire steps are not complete.',
+            ]);
         }
 
         return back()->with('status', 'Consultation rescheduled.'.($zoomMailWarning ?? ''));
@@ -402,9 +443,10 @@ class ConsultationAdminController extends Controller
         return back()->with('status', 'Consultation statuses updated.');
     }
 
-    private function statusAfterReschedule(Consultation $consultation): string
+    private function statusAfterReschedule(Consultation $consultation, QuestionnaireWorkflowService $questionnaires): string
     {
-        if ($consultation->status === 'scheduled' || filled($consultation->zoom_join_url)) {
+        if (($consultation->status === 'scheduled' || filled($consultation->zoom_join_url))
+            && $questionnaires->isReadyForMeetingRelease($consultation)) {
             return 'scheduled';
         }
 

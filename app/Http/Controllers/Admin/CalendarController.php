@@ -27,6 +27,7 @@ class CalendarController extends Controller
         $consultations = Consultation::with('type')
             ->whereBetween('starts_at', [$start, $start->endOfMonth()])
             ->when($selectedApplication, fn ($query, $application) => $query->where('application', $application))
+            ->when($request->query('status'), fn ($query, $status) => $query->where('status', $status))
             ->when($request->query('consultation_type_id'), fn ($query, $typeId) => $query->where('consultation_type_id', $typeId))
             ->orderBy('starts_at')
             ->get();
@@ -35,6 +36,7 @@ class CalendarController extends Controller
             'consultations' => $consultations,
             'selectedMonth' => $start,
             'selectedApplication' => $selectedApplication,
+            'selectedStatus' => $request->query('status'),
             'selectedConsultationTypeId' => $request->query('consultation_type_id'),
             'consultationTypes' => ConsultationType::query()
                 ->when($selectedApplication, fn ($query, $application) => $query->where('application', $application))

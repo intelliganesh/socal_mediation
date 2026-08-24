@@ -7,6 +7,7 @@
             ? 'Law Office'
             : 'SoCal Mediation Center';
         $currentUser = auth()->user();
+        $consultationStatusOptions = ['draft', 'pending', 'payment_pending', 'paid', 'scheduled', 'rescheduled', 'completed', 'cancelled', 'overdue'];
     @endphp
 
     <div class="mb-5 grid gap-3 rounded-xl border border-[#E5E7EB] bg-white p-4 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
@@ -24,6 +25,12 @@
                 <option value="">All Consultation Types</option>
                 @foreach($consultationTypes as $type)
                     <option value="{{ $type->id }}" @selected((string) $selectedConsultationTypeId === (string) $type->id)>{{ $type->name }}</option>
+                @endforeach
+            </select>
+            <select class="w-full rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold sm:w-auto" name="status">
+                <option value="">All Statuses</option>
+                @foreach($consultationStatusOptions as $status)
+                    <option value="{{ $status }}" @selected($selectedStatus === $status)>{{ Str::headline($status) }}</option>
                 @endforeach
             </select>
             <select class="w-full rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold sm:w-auto" name="month">

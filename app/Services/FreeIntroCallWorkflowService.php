@@ -6,6 +6,7 @@ use App\Mail\ConsultationConfirmationMail;
 use App\Mail\FreeIntroParticipantScheduleMail;
 use App\Models\Consultation;
 use App\Models\ConsultationParticipant;
+use App\Services\Integrations\OutlookCalendarClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -13,7 +14,10 @@ use Illuminate\Support\Str;
 
 class FreeIntroCallWorkflowService
 {
-    public function __construct(private readonly AvailabilityService $availability) {}
+    public function __construct(
+        private readonly AvailabilityService $availability,
+        private readonly OutlookCalendarClient $outlook,
+    ) {}
 
     public function handles(Consultation $consultation): bool
     {
@@ -58,6 +62,7 @@ class FreeIntroCallWorkflowService
         });
 
         $consultation = $consultation->refresh()->load(['type', 'professional', 'participants']);
+        $this->syncScheduledParticipantSlots($consultation, 'free_intro_primary_schedule_outlook_sync');
 
         if ($consultation->participants->where('is_primary', false)->isEmpty()) {
             $this->sendConfirmations($consultation);
@@ -121,6 +126,11 @@ class FreeIntroCallWorkflowService
             ],
             'message' => 'Free intro participant selected a preferred slot.',
         ]);
+
+        $this->syncParticipantToOutlook(
+            $participant->refresh()->load(['consultation.type', 'consultation.professional']),
+            'free_intro_participant_schedule_outlook_sync'
+        );
 
         $this->sendConfirmationsIfComplete($consultation->refresh()->load(['type', 'professional', 'participants']));
 
@@ -230,6 +240,55 @@ class FreeIntroCallWorkflowService
                     'participant_id' => $participant->id,
                 ],
                 'message' => 'Free intro confirmation email sent.',
+            ]);
+        }
+    }
+
+    private function syncScheduledParticipantSlots(Consultation $consultation, string $source): void
+    {
+        if (! config('services.outlook.enabled')) {
+            return;
+        }
+
+        foreach ($consultation->participants->where('scheduling_status', 'scheduled') as $participant) {
+            $this->syncParticipantToOutlook(
+                $participant->load(['consultation.type', 'consultation.professional']),
+                $source
+            );
+        }
+    }
+
+    private function syncParticipantToOutlook(ConsultationParticipant $participant, string $source): void
+    {
+        if (! config('services.outlook.enabled')) {
+            return;
+        }
+
+        $consultation = $participant->consultation;
+
+        try {
+            $outlookEvent = $this->outlook->syncParticipantSlot($participant, $source);
+
+            $consultation->integrationLogs()->create([
+                'provider' => 'outlook',
+                'action' => $source,
+                'status' => 'synced',
+                'request_payload' => $this->outlook->participantSlotEventPayload($participant),
+                'response_payload' => $outlookEvent?->metadata['outlook_response'] ?? $outlookEvent?->metadata,
+                'message' => 'Free intro participant slot synced to both Outlook calendars.',
+            ]);
+        } catch (\Throwable $exception) {
+            $consultation?->integrationLogs()->create([
+                'provider' => 'outlook',
+                'action' => $source,
+                'status' => 'failed',
+                'request_payload' => [
+                    'participant_id' => $participant->id,
+                    'scheduled_starts_at' => $participant->scheduled_starts_at?->toIso8601String(),
+                    'scheduled_ends_at' => $participant->scheduled_ends_at?->toIso8601String(),
+                    'scheduled_timezone' => $participant->scheduled_timezone,
+                ],
+                'message' => $exception->getMessage(),
             ]);
         }
     }

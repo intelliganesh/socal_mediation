@@ -15,6 +15,7 @@ class ConsultationRescheduleService
         private readonly ZoomClient $zoom,
         private readonly AdminZoomNotificationService $zoomNotifications,
         private readonly OutlookCalendarClient $outlook,
+        private readonly QuestionnaireWorkflowService $questionnaires,
     ) {
     }
 
@@ -57,10 +58,30 @@ class ConsultationRescheduleService
                 'message' => 'Consultation rescheduled.',
             ]);
 
-            $this->regenerateZoomLink($consultation->refresh()->load(['type', 'participants']), $source);
-            $this->recreateOutlookEvent($consultation->refresh()->load(['type', 'professional']), $source);
+            $rescheduledConsultation = $consultation->refresh()->load(['type', 'participants', 'questionnaireSubmissions']);
 
-            return $consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests']);
+            if ($this->questionnaires->isReadyForMeetingRelease($rescheduledConsultation)) {
+                $this->regenerateZoomLink($rescheduledConsultation, $source);
+                $this->recreateOutlookEvent($consultation->refresh()->load(['type', 'professional']), $source);
+            } else {
+                $this->clearZoomLink($consultation->refresh(), $source);
+
+                $consultation->integrationLogs()->create([
+                    'provider' => 'zoom',
+                    'action' => $source.'_zoom_link',
+                    'status' => 'skipped',
+                    'message' => 'Zoom link regeneration was skipped because required questionnaire steps are not complete.',
+                ]);
+
+                $consultation->integrationLogs()->create([
+                    'provider' => 'outlook',
+                    'action' => $source.'_outlook_sync',
+                    'status' => 'skipped',
+                    'message' => 'Outlook sync was skipped because required questionnaire steps are not complete.',
+                ]);
+            }
+
+            return $consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests', 'questionnaireSubmissions']);
         });
     }
 
@@ -109,6 +130,31 @@ class ConsultationRescheduleService
         }
     }
 
+    private function clearZoomLink(Consultation $consultation, string $source): void
+    {
+        if ($consultation->consultation_mode !== 'online') {
+            return;
+        }
+
+        if (filled($consultation->zoom_meeting_id)) {
+            try {
+                $this->zoom->deleteMeeting($consultation->zoom_meeting_id);
+            } catch (\Throwable $exception) {
+                $consultation->integrationLogs()->create([
+                    'provider' => 'zoom',
+                    'action' => $source.'_delete_pending_meeting',
+                    'status' => 'failed',
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        $consultation->update([
+            'zoom_meeting_id' => null,
+            'zoom_join_url' => null,
+        ]);
+    }
+
     private function recreateOutlookEvent(Consultation $consultation, string $source): void
     {
         if (! config('services.outlook.enabled')) {
@@ -145,7 +191,8 @@ class ConsultationRescheduleService
 
     private function statusAfterReschedule(Consultation $consultation): string
     {
-        if ($consultation->status === 'scheduled' || filled($consultation->zoom_join_url)) {
+        if (($consultation->status === 'scheduled' || filled($consultation->zoom_join_url))
+            && $this->questionnaires->isReadyForMeetingRelease($consultation)) {
             return 'scheduled';
         }
 

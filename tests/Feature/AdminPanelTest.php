@@ -188,7 +188,7 @@ class AdminPanelTest extends TestCase
             ->assertSee('Meeting Mode')
             ->assertSee('Zoom')
             ->assertSee('Outlook Calendar')
-            ->assertSee('View Payment Link')
+            ->assertSee('Copy Payment Link')
             ->assertSee('Send Reminder')
             ->assertSee('Send Payment Links')
             ->assertSee('Sync This Booking To Outlook');
@@ -302,6 +302,33 @@ class AdminPanelTest extends TestCase
             ->assertHeader('content-type', 'application/pdf');
     }
 
+    public function test_admin_hides_pdf_download_until_questionnaire_is_submitted(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+        $participant = $consultation->participants()->firstOrFail();
+        $submission = QuestionnaireSubmission::create([
+            'consultation_id' => $consultation->id,
+            'participant_id' => $participant->id,
+            'template_key' => 'socal_party_mediation',
+            'template_version' => 1,
+            'token' => 'pending-admin-questionnaire-token',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $consultation))
+            ->assertOk()
+            ->assertSee('The questionnaire has not been submitted yet.')
+            ->assertDontSee(route('admin.consultations.questionnaires.pdf', [$consultation, $submission]));
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.questionnaires.pdf', [$consultation, $submission]))
+            ->assertNotFound();
+    }
+
     public function test_calendar_can_be_filtered_by_application(): void
     {
         $this->seed();
@@ -312,7 +339,35 @@ class AdminPanelTest extends TestCase
             ->get(route('admin.calendar.index', ['application' => 'legal']))
             ->assertOk()
             ->assertSee('All Applications')
-            ->assertSee('Legal Consultation');
+            ->assertSee('Law Office');
+    }
+
+    public function test_calendar_can_be_filtered_by_status(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $scheduled = Consultation::query()->firstOrFail();
+        $cancelled = Consultation::query()->whereKeyNot($scheduled->getKey())->firstOrFail();
+        $month = now()->format('Y-m');
+
+        $scheduled->update([
+            'booking_number' => 'FILTER-SCHEDULED-001',
+            'status' => 'scheduled',
+            'starts_at' => now()->startOfMonth()->addDays(5)->setTime(9, 0),
+            'ends_at' => now()->startOfMonth()->addDays(5)->setTime(10, 0),
+        ]);
+        $cancelled->update([
+            'booking_number' => 'FILTER-CANCELLED-001',
+            'status' => 'cancelled',
+            'starts_at' => now()->startOfMonth()->addDays(6)->setTime(9, 0),
+            'ends_at' => now()->startOfMonth()->addDays(6)->setTime(10, 0),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.calendar.index', ['month' => $month, 'status' => 'cancelled']))
+            ->assertOk()
+            ->assertViewHas('consultations', fn ($consultations) => $consultations->pluck('booking_number')->all() === ['FILTER-CANCELLED-001']);
     }
 
     public function test_calendar_sync_pushes_future_consultations_and_deletes_stale_outlook_events(): void
@@ -335,9 +390,16 @@ class AdminPanelTest extends TestCase
         $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
         $consultation->update([
             'status' => 'scheduled',
+            'payment_status' => 'paid',
             'starts_at' => now(config('app.booking_timezone'))->addDays(5)->setTime(10, 0),
             'ends_at' => now(config('app.booking_timezone'))->addDays(5)->setTime(11, 0),
         ]);
+        app(\App\Services\QuestionnaireWorkflowService::class)
+            ->ensureSubmission($consultation, $consultation->participants()->where('is_primary', true)->firstOrFail())
+            ->update([
+                'status' => 'submitted',
+                'submitted_at' => now(),
+            ]);
 
         ExternalCalendarEvent::create([
             'provider' => 'outlook',
@@ -591,6 +653,57 @@ class AdminPanelTest extends TestCase
         ]);
     }
 
+    public function test_law_office_reschedule_sends_zoom_email_after_questionnaire_is_complete(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        config([
+            'services.zoom.enabled' => true,
+            'services.zoom.oauth_base_url' => 'https://zoom.test',
+            'services.zoom.base_url' => 'https://api.zoom.test/v2',
+            'services.zoom.account_id' => 'account-id',
+            'services.zoom.client_id' => 'client-id',
+            'services.zoom.client_secret' => 'client-secret',
+        ]);
+        Http::fake([
+            'zoom.test/oauth/token' => Http::response(['access_token' => 'zoom-token'], 200),
+            'api.zoom.test/v2/users/me/meetings' => Http::response([
+                'id' => 'law-office-rescheduled-meeting',
+                'join_url' => 'https://zoom.test/j/law-office-rescheduled-meeting',
+                'start_url' => 'https://zoom.test/s/law-office-rescheduled-meeting',
+            ], 201),
+        ]);
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-07')->firstOrFail();
+        $participant = $consultation->participants()->where('is_primary', true)->firstOrFail();
+
+        app(\App\Services\QuestionnaireWorkflowService::class)
+            ->ensureSubmission($consultation, $participant)
+            ->update([
+                'status' => 'submitted',
+                'submitted_at' => now(),
+            ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.reschedule', $consultation), [
+                'starts_at' => '2026-10-08T09:00',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Consultation rescheduled.');
+
+        Mail::assertSent(ConsultationZoomLinkMail::class, fn (ConsultationZoomLinkMail $mail) => $mail->participant->email === 'lena.ortiz@example.com');
+        $this->assertSame('https://zoom.test/j/law-office-rescheduled-meeting', $consultation->refresh()->zoom_join_url);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'mail',
+            'action' => 'manual_reschedule_zoom_link',
+            'status' => 'sent',
+        ]);
+    }
+
     public function test_email_activity_uses_distinct_labels_for_each_mail_action(): void
     {
         $this->seed();
@@ -648,6 +761,12 @@ class AdminPanelTest extends TestCase
             'status' => 'failed',
             'message' => 'This failure belongs to another consultation.',
         ]);
+        $skippedLookupLog = $payment->integrationLogs()->create([
+            'provider' => 'converge',
+            'action' => 'payment_status_sync',
+            'status' => 'skipped',
+            'message' => 'Converge status lookup did not return a final payment status.',
+        ]);
 
         $this->actingAs($admin)
             ->get(route('admin.consultations.show', $consultation))
@@ -656,6 +775,8 @@ class AdminPanelTest extends TestCase
             ->assertSee('PAY-'.$log->id)
             ->assertSee('Hosted Payment Session')
             ->assertSee('Converge rejected the request because the account is not enabled for Hosted Payments.')
+            ->assertDontSee('PAY-'.$skippedLookupLog->id)
+            ->assertDontSee('Converge status lookup did not return a final payment status.')
             ->assertDontSee('PAY-'.$otherLog->id)
             ->assertDontSee('This failure belongs to another consultation.');
     }
@@ -737,7 +858,7 @@ class AdminPanelTest extends TestCase
                 'starts_at' => $onlineConsultation->starts_at->format('Y-m-d\TH:i'),
             ])
             ->assertRedirect()
-            ->assertSessionHas('error', 'Selected slot overlaps with an existing booking or Outlook event.');
+            ->assertSessionHas('error', 'This time slot is no longer available. Please choose another slot.');
 
         $this->assertSame('2026-10-02 13:00:00', $halfDayConsultation->refresh()->starts_at->format('Y-m-d H:i:s'));
 
@@ -758,6 +879,16 @@ class AdminPanelTest extends TestCase
 
         $admin = User::where('email', 'admin@socal.test')->firstOrFail();
         $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+        $consultation->participants()->get()->each(function ($participant) use ($consultation) {
+            app(\App\Services\QuestionnaireWorkflowService::class)
+                ->ensureSubmission($consultation, $participant)
+                ->update([
+                    'status' => 'submitted',
+                    'submitted_at' => now(),
+                    'agreement_accepted' => true,
+                    'agreement_accepted_at' => now(),
+                ]);
+        });
         $oldZoomUrl = $consultation->zoom_join_url;
 
         $this->actingAs($admin)
@@ -811,6 +942,16 @@ class AdminPanelTest extends TestCase
 
         $admin = User::where('email', 'admin@socal.test')->firstOrFail();
         $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+        $consultation->participants()->get()->each(function ($participant) use ($consultation) {
+            app(\App\Services\QuestionnaireWorkflowService::class)
+                ->ensureSubmission($consultation, $participant)
+                ->update([
+                    'status' => 'submitted',
+                    'submitted_at' => now(),
+                    'agreement_accepted' => true,
+                    'agreement_accepted_at' => now(),
+                ]);
+        });
 
         $this->actingAs($admin)
             ->post(route('admin.consultations.sync-outlook', $consultation))
@@ -841,6 +982,57 @@ class AdminPanelTest extends TestCase
                 'is_busy' => true,
             ]);
         }
+    }
+
+    public function test_outlook_sync_does_not_create_event_for_unpaid_full_day_mediation(): void
+    {
+        $this->seed();
+        config([
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.socal_user_id' => 'socal@example.com',
+            'services.outlook.socal_calendar_id' => 'socal-calendar',
+            'services.outlook.legal_user_id' => 'legal@example.com',
+            'services.outlook.legal_calendar_id' => 'legal-calendar',
+        ]);
+
+        Consultation::query()->update(['starts_at' => null, 'ends_at' => null]);
+        $consultation = Consultation::where('booking_number', 'SAMPLE-05')->firstOrFail();
+        $consultation->update([
+            'status' => 'payment_pending',
+            'payment_status' => 'pending',
+            'starts_at' => now(config('app.booking_timezone'))->addDays(5)->setTime(13, 0),
+            'ends_at' => now(config('app.booking_timezone'))->addDays(5)->setTime(17, 0),
+        ]);
+
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
+            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/calendarView*' => Http::response(['value' => []], 200),
+            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/calendarView*' => Http::response(['value' => []], 200),
+            'graph.microsoft.com/v1.0/users/*/calendars/*/events' => Http::response(['id' => 'should-not-be-created'], 201),
+        ]);
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('admin.calendar.sync'))
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Outlook sync completed. 0 busy event(s) refreshed, 0 future consultation(s) synced, 0 stale consultation event(s) deleted.');
+
+        foreach (['socal', 'legal'] as $application) {
+            $this->assertDatabaseMissing('external_calendar_events', [
+                'provider' => 'outlook',
+                'external_id' => 'consultation-'.$consultation->id.'-'.$application,
+            ]);
+        }
+
+        Http::assertNotSent(fn ($request) => $request->method() === 'POST'
+            && str_contains($request->url(), 'graph.microsoft.com')
+            && str_ends_with($request->url(), '/events'));
     }
 
     public function test_reschedule_automatically_syncs_consultation_to_outlook_when_enabled(): void

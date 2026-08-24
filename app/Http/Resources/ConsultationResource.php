@@ -62,6 +62,7 @@ class ConsultationResource extends JsonResource
                 'submitted' => 0,
                 'pending' => 0,
                 'complete' => false,
+                'agreement_agreed' => false,
             ];
         }
 
@@ -77,8 +78,7 @@ class ConsultationResource extends JsonResource
             'submitted' => $submitted,
             'pending' => max(0, $total - $submitted),
             'complete' => $total > 0 && $submitted === $total && (! $agreementRequired || $agreementAccepted === $total),
-            'agreement_required' => $agreementRequired,
-            'agreement_accepted' => $agreementAccepted,
+            'agreement_agreed' => $agreementRequired && $total > 0 && $agreementAccepted === $total,
         ];
     }
 }

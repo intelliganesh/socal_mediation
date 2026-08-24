@@ -151,6 +151,16 @@ class IntegrationToggleTest extends TestCase
         $consultation = Consultation::with(['type', 'professional'])
             ->where('booking_number', 'SAMPLE-04')
             ->firstOrFail();
+        $consultation->participants()->get()->each(function ($participant) use ($consultation) {
+            app(\App\Services\QuestionnaireWorkflowService::class)
+                ->ensureSubmission($consultation, $participant)
+                ->update([
+                    'status' => 'submitted',
+                    'submitted_at' => now(),
+                    'agreement_accepted' => true,
+                    'agreement_accepted_at' => now(),
+                ]);
+        });
         $outlook = app(OutlookCalendarClient::class);
 
         $outlook->syncConsultation($consultation, 'dual_calendar_create');

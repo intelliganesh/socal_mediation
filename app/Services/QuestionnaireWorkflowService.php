@@ -174,26 +174,34 @@ class QuestionnaireWorkflowService
 
     public function releaseIfComplete(Consultation $consultation): void
     {
-        if (! $this->templates->requiresQuestionnaire($consultation)) {
-            $this->releaseConsultation($consultation);
-
-            return;
-        }
-
-        if ($consultation->payment_status !== 'paid') {
-            return;
-        }
-
-        $submissions = $this->ensureSubmissions($consultation);
-
-        if ($submissions->isEmpty() || $submissions->contains(function (QuestionnaireSubmission $submission) {
-            return $submission->status !== 'submitted'
-                || ($this->templates->requiresAgreement($submission->template_key) && ! $submission->agreement_accepted);
-        })) {
+        if (! $this->isReadyForMeetingRelease($consultation)) {
             return;
         }
 
         $this->releaseConsultation($consultation);
+    }
+
+    public function isReadyForMeetingRelease(Consultation $consultation): bool
+    {
+        if (! $this->templates->requiresQuestionnaire($consultation)) {
+            if ($consultation->payment_status !== 'paid' && $consultation->total_amount_cents > 0) {
+                return false;
+            }
+
+            return true;
+        }
+
+        if ($consultation->payment_status !== 'paid') {
+            return false;
+        }
+
+        $submissions = $this->ensureSubmissions($consultation);
+
+        return $submissions->isNotEmpty()
+            && ! $submissions->contains(function (QuestionnaireSubmission $submission) {
+                return $submission->status !== 'submitted'
+                    || ($this->templates->requiresAgreement($submission->template_key) && ! $submission->agreement_accepted);
+            });
     }
 
     public function progress(Consultation $consultation): array

@@ -10,7 +10,7 @@
     'cancelled' => ['badge' => 'status-badge-cancelled', 'progress' => 'progress-fill-cancelled', 'label' => 'Cancelled'],
     'completed' => ['badge' => 'status-badge-completed', 'progress' => 'progress-fill-completed', 'label' => 'Completed'],
     'rescheduled' => ['badge' => 'status-badge-rescheduled', 'progress' => 'progress-fill-scheduled', 'label' => 'Rescheduled'],
-    'in_progress' => ['badge' => 'status-badge-in-progress', 'progress' => 'progress-fill-scheduled', 'label' => 'In Progress'],
+    // 'in_progress' => ['badge' => 'status-badge-in-progress', 'progress' => 'progress-fill-scheduled', 'label' => 'In Progress'],
     'overdue' => ['badge' => 'status-badge-overdue', 'progress' => 'progress-fill-overdue', 'label' => 'Overdue'],
     'partially_paid' => ['badge' => 'status-badge-partially-paid', 'progress' => 'progress-fill-partially-paid', 'label' => 'Partially Paid'],
     'pending', 'payment_pending' => ['badge' => 'status-badge-pending', 'progress' => 'progress-fill-pending', 'label' => $status === 'payment_pending' ? 'Payment Pending' : 'Pending'],
@@ -254,7 +254,7 @@
                                     <span class="status-badge {{ $participantStatus['badge'] }}">{{ $participantStatus['label'] }}</span>
                                 </div>
                                     @if(filled($participantPayment?->payment_url) && $participantPayment?->status !== 'paid')
-                                    <a href="{{ $participantPayment?->payment_url }}" target="_blank" rel="noopener" aria-label="View Payment Link"><i data-lucide="link" class="admin-brand-text h-4 w-4"></i><span class="sr-only">View Payment Link</span></a>
+                                    <button class="copy-payment-link inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F7F8FC]" type="button" data-payment-url="{{ $participantPayment->payment_url }}" aria-label="Copy Payment Link" title="Copy Payment Link"><i data-lucide="link" class="admin-brand-text h-4 w-4"></i><span class="sr-only">Copy Payment Link</span></button>
                                     @endif
                                 </div>
                             </div>
@@ -345,10 +345,12 @@
                     @endif
                 </div>
                 <div class="flex items-start justify-end">
+                    @if($submission->status === 'submitted')
                     <a class="inline-flex h-10 items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.consultations.questionnaires.pdf', [$consultation, $submission]) }}">
                         <i data-lucide="download" class="h-4 w-4"></i>
                         PDF
                     </a>
+                    @endif
                 </div>
             </article>
             @empty
@@ -406,7 +408,7 @@
                         <div class="flex items-center gap-2">
                             <span class="status-badge {{ $status['badge'] }}">{{ $status['label'] }}</span>
                             @if(filled($payment->payment_url) && $payment->status !== 'paid')
-                            <a href="{{ $payment->payment_url }}" target="_blank" rel="noopener" aria-label="View Payment Link"><i data-lucide="link" class="admin-brand-text h-4 w-4"></i><span class="sr-only">View Payment Link</span></a>
+                            <button class="copy-payment-link inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F7F8FC]" type="button" data-payment-url="{{ $payment->payment_url }}" aria-label="Copy Payment Link" title="Copy Payment Link"><i data-lucide="link" class="admin-brand-text h-4 w-4"></i><span class="sr-only">Copy Payment Link</span></button>
                             @endif
                         </div>
                     </div>
@@ -447,4 +449,32 @@
         </section>
     </div>
 </div>
+<script>
+    document.querySelectorAll('.copy-payment-link').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const paymentUrl = button.dataset.paymentUrl || '';
+            if (! paymentUrl) {
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(paymentUrl);
+                button.setAttribute('title', 'Copied');
+                button.setAttribute('aria-label', 'Payment Link Copied');
+            } catch (error) {
+                const fallback = document.createElement('textarea');
+                fallback.value = paymentUrl;
+                fallback.setAttribute('readonly', '');
+                fallback.style.position = 'absolute';
+                fallback.style.left = '-9999px';
+                document.body.appendChild(fallback);
+                fallback.select();
+                document.execCommand('copy');
+                fallback.remove();
+                button.setAttribute('title', 'Copied');
+                button.setAttribute('aria-label', 'Payment Link Copied');
+            }
+        });
+    });
+</script>
 </x-admin.layout>

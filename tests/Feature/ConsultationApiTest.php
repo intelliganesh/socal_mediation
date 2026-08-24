@@ -377,6 +377,34 @@ class ConsultationApiTest extends TestCase
     {
         $this->seed();
         Mail::fake();
+        config([
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant',
+            'services.outlook.client_id' => 'client',
+            'services.outlook.client_secret' => 'secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.socal_user_id' => 'socal-user',
+            'services.outlook.legal_user_id' => 'legal-user',
+        ]);
+        $eventCreateRequests = 0;
+        Http::fake(function ($request) use (&$eventCreateRequests) {
+            if (str_contains($request->url(), 'login.microsoftonline.com')) {
+                return Http::response(['access_token' => 'outlook-token']);
+            }
+
+            if ($request->method() === 'POST' && str_ends_with($request->url(), '/events')) {
+                $eventCreateRequests++;
+
+                return Http::response([
+                    'id' => (string) Str::uuid(),
+                    'webLink' => 'https://outlook.example.test/event',
+                    'showAs' => 'busy',
+                ], 201);
+            }
+
+            return Http::response(['value' => []]);
+        });
 
         $type = ConsultationType::where('slug', 'socal-free-intro-call')->firstOrFail();
 
@@ -445,6 +473,22 @@ class ConsultationApiTest extends TestCase
             'id' => $participants[1]->id,
             'scheduling_status' => 'scheduled',
         ]);
+
+        $allParticipants = Consultation::findOrFail($consultationId)->participants()->orderBy('email')->get();
+        foreach ($allParticipants as $participant) {
+            $this->assertDatabaseHas('external_calendar_events', [
+                'provider' => 'outlook',
+                'external_id' => 'free-intro-participant-'.$participant->id.'-socal',
+                'application' => 'socal',
+            ]);
+            $this->assertDatabaseHas('external_calendar_events', [
+                'provider' => 'outlook',
+                'external_id' => 'free-intro-participant-'.$participant->id.'-legal',
+                'application' => 'legal',
+            ]);
+        }
+
+        $this->assertSame(6, $eventCreateRequests);
     }
 
     public function test_free_intro_participant_slot_rejects_invalid_token(): void
@@ -949,7 +993,9 @@ class ConsultationApiTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.questionnaire_progress.complete', false)
-            ->assertJsonPath('data.questionnaire_progress.agreement_accepted', 0);
+            ->assertJsonPath('data.questionnaire_progress.agreement_agreed', false)
+            ->assertJsonMissingPath('data.questionnaire_progress.agreement_required')
+            ->assertJsonMissingPath('data.questionnaire_progress.agreement_accepted');
 
         $this->getJson('/api/v1/agreements/'.$submission->token)
             ->assertOk()
@@ -960,7 +1006,10 @@ class ConsultationApiTest extends TestCase
             'accepted' => true,
         ])
             ->assertOk()
-            ->assertJsonPath('data.questionnaire_progress.complete', true);
+            ->assertJsonPath('data.questionnaire_progress.complete', true)
+            ->assertJsonPath('data.questionnaire_progress.agreement_agreed', true)
+            ->assertJsonMissingPath('data.questionnaire_progress.agreement_required')
+            ->assertJsonMissingPath('data.questionnaire_progress.agreement_accepted');
 
         $this->assertDatabaseHas('questionnaire_submissions', [
             'id' => $submission->id,
@@ -2020,6 +2069,16 @@ class ConsultationApiTest extends TestCase
             'zoom_meeting_id' => 'local-old-meeting-id',
             'zoom_join_url' => 'https://zoom.us/j/old-meeting',
         ]);
+        $consultation->participants()->get()->each(function ($participant) use ($consultation) {
+            app(QuestionnaireWorkflowService::class)
+                ->ensureSubmission($consultation, $participant)
+                ->update([
+                    'status' => 'submitted',
+                    'submitted_at' => now(),
+                    'agreement_accepted' => true,
+                    'agreement_accepted_at' => now(),
+                ]);
+        });
         $oldZoomUrl = $consultation->zoom_join_url;
 
         ExternalCalendarEvent::create([
@@ -2087,6 +2146,37 @@ class ConsultationApiTest extends TestCase
         ]);
     }
 
+    public function test_reschedule_booking_api_does_not_generate_zoom_before_questionnaires_are_complete(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+        $consultation->update([
+            'zoom_meeting_id' => 'old-pending-questionnaire-meeting-id',
+            'zoom_join_url' => 'https://zoom.us/j/old-pending-questionnaire-meeting',
+        ]);
+
+        $this->postJson('/api/v1/consultations/'.$consultation->id.'/reschedule', [
+            'starts_at' => '2026-10-07T09:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Consultation rescheduled.')
+            ->assertJsonPath('data.status', 'paid')
+            ->assertJsonPath('data.zoom_join_url', null);
+
+        Mail::assertNotSent(ConsultationZoomLinkMail::class);
+        $this->assertNull($consultation->refresh()->zoom_join_url);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'zoom',
+            'action' => 'api_reschedule_zoom_link',
+            'status' => 'skipped',
+        ]);
+    }
+
     public function test_reschedule_booking_api_rejects_unavailable_slot(): void
     {
         $this->seed();
@@ -2107,7 +2197,7 @@ class ConsultationApiTest extends TestCase
             'timezone' => 'America/Los_Angeles',
         ])
             ->assertStatus(422)
-            ->assertJsonPath('message', 'Selected slot overlaps with an existing booking or Outlook event.');
+            ->assertJsonPath('message', 'This time slot is no longer available. Please choose another slot.');
     }
 
     public function test_reschedule_status_api_returns_only_pending_or_completed(): void
@@ -2339,46 +2429,32 @@ class ConsultationApiTest extends TestCase
         $this->assertFalse(collect($data['slots'])->firstWhere('time', '10:00')['available']);
     }
 
-    public function test_availability_refreshes_outlook_before_returning_slots_when_enabled(): void
+    public function test_availability_uses_locally_synced_outlook_rows_without_inline_http_calls(): void
     {
         config([
             'app.booking_day_start' => '09:00',
             'app.booking_day_end' => '12:00',
             'services.outlook.enabled' => true,
-            'services.outlook.tenant_id' => 'tenant-id',
-            'services.outlook.client_id' => 'client-id',
-            'services.outlook.client_secret' => 'client-secret',
-            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
-            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
-            'services.outlook.socal_user_id' => 'socal@example.com',
-            'services.outlook.socal_calendar_id' => 'socal-calendar',
-            'services.outlook.legal_user_id' => 'legal@example.com',
-            'services.outlook.legal_calendar_id' => 'legal-calendar',
         ]);
         $this->seed();
-
-        Http::fake([
-            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
-            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/calendarView*' => Http::response([
-                'value' => [[
-                    'id' => 'socal-outlook-busy',
-                    'subject' => '10 AM Team catchup meeting',
-                    'showAs' => 'busy',
-                    'webLink' => 'https://outlook.office.com/socal-event',
-                    'start' => ['dateTime' => '2026-08-04T10:00:00', 'timeZone' => 'America/Los_Angeles'],
-                    'end' => ['dateTime' => '2026-08-04T11:00:00', 'timeZone' => 'America/Los_Angeles'],
-                ]],
-            ], 200),
-            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/calendarView*' => Http::response([
-                'value' => [[
-                    'id' => 'legal-outlook-busy',
-                    'subject' => '11 AM Legal hold',
-                    'showAs' => 'busy',
-                    'webLink' => 'https://outlook.office.com/legal-event',
-                    'start' => ['dateTime' => '2026-08-04T11:00:00', 'timeZone' => 'America/Los_Angeles'],
-                    'end' => ['dateTime' => '2026-08-04T12:00:00', 'timeZone' => 'America/Los_Angeles'],
-                ]],
-            ], 200),
+        Http::fake();
+        ExternalCalendarEvent::create([
+            'provider' => 'outlook',
+            'external_id' => 'socal-outlook-busy',
+            'application' => 'socal',
+            'title' => '10 AM Team catchup meeting',
+            'starts_at' => '2026-08-04 10:00:00',
+            'ends_at' => '2026-08-04 11:00:00',
+            'is_busy' => true,
+        ]);
+        ExternalCalendarEvent::create([
+            'provider' => 'outlook',
+            'external_id' => 'legal-outlook-busy',
+            'application' => 'legal',
+            'title' => '11 AM Legal hold',
+            'starts_at' => '2026-08-04 11:00:00',
+            'ends_at' => '2026-08-04 12:00:00',
+            'is_busy' => true,
         ]);
 
         $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
@@ -2401,9 +2477,10 @@ class ConsultationApiTest extends TestCase
             'title' => '11 AM Legal hold',
             'is_busy' => true,
         ]);
+        Http::assertNothingSent();
     }
 
-    public function test_availability_converts_outlook_utc_events_to_configured_booking_timezone(): void
+    public function test_availability_uses_outlook_rows_in_configured_booking_timezone(): void
     {
         config([
             'app.timezone' => 'Asia/Kolkata',
@@ -2411,31 +2488,17 @@ class ConsultationApiTest extends TestCase
             'app.booking_day_start' => '10:00',
             'app.booking_day_end' => '11:00',
             'services.outlook.enabled' => true,
-            'services.outlook.tenant_id' => 'tenant-id',
-            'services.outlook.client_id' => 'client-id',
-            'services.outlook.client_secret' => 'client-secret',
-            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
-            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
-            'services.outlook.socal_user_id' => 'socal@example.com',
-            'services.outlook.socal_calendar_id' => 'socal-calendar',
-            'services.outlook.legal_user_id' => 'legal@example.com',
-            'services.outlook.legal_calendar_id' => 'legal-calendar',
         ]);
         $this->seed();
-
-        Http::fake([
-            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
-            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/calendarView*' => Http::response([
-                'value' => [[
-                    'id' => 'team-catchup-utc',
-                    'subject' => 'Team catchup meeting',
-                    'showAs' => 'tentative',
-                    'webLink' => 'https://outlook.office.com/team-catchup',
-                    'start' => ['dateTime' => '2026-07-23T04:30:00.0000000', 'timeZone' => 'UTC'],
-                    'end' => ['dateTime' => '2026-07-23T05:00:00.0000000', 'timeZone' => 'UTC'],
-                ]],
-            ], 200),
-            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/calendarView*' => Http::response(['value' => []], 200),
+        Http::fake();
+        ExternalCalendarEvent::create([
+            'provider' => 'outlook',
+            'external_id' => 'team-catchup-utc',
+            'application' => 'socal',
+            'title' => 'Team catchup meeting',
+            'starts_at' => '2026-07-23 10:00:00',
+            'ends_at' => '2026-07-23 10:30:00',
+            'is_busy' => true,
         ]);
 
         $type = ConsultationType::where('slug', 'socal-free-intro-call')->firstOrFail();
@@ -2455,6 +2518,7 @@ class ConsultationApiTest extends TestCase
             'ends_at' => '2026-07-23 10:30:00',
             'is_busy' => true,
         ]);
+        Http::assertNothingSent();
     }
 
     public function test_unknown_legal_service_name_returns_validation_style_error(): void

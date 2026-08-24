@@ -73,7 +73,9 @@ class ConsultationCompletionService
             $this->notifications->sendPaymentLinks($consultation, 'automatic_payment_link');
         }
 
-        $this->syncToOutlook($consultation);
+        if (! $freeIntroHandled) {
+            $this->syncToOutlook($consultation);
+        }
 
         return $consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests']);
     }

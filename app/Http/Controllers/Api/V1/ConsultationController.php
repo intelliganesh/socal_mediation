@@ -14,8 +14,6 @@ use App\Services\ConsultationCompletionService;
 use App\Services\ConsultationDraftService;
 use App\Services\ConsultationRescheduleService;
 use App\Services\FreeIntroCallWorkflowService;
-use App\Services\Integrations\OutlookCalendarClient;
-use App\Services\PaymentReconciliationService;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -245,7 +243,7 @@ class ConsultationController extends Controller
         path: '/v1/availability',
         tags: ['Consultations'],
         summary: 'Return duration-based available slots for a consultation type and month',
-        description: 'The day window comes from BOOKING_DAY_START and BOOKING_DAY_END in BOOKING_TIMEZONE. Slot spacing comes from the selected consultation type duration, and each slot is marked unavailable when it overlaps any application booking or Outlook busy event.',
+        description: 'The day window comes from BOOKING_DAY_START and BOOKING_DAY_END in BOOKING_TIMEZONE. Slot spacing comes from the selected consultation type duration, and each slot is marked unavailable when it overlaps any application booking or locally synced Outlook busy event. Outlook is refreshed by the scheduled/admin sync, not inline during this read API.',
         parameters: [
             new OA\Parameter(name: 'consultation_type_id', in: 'query', required: true, schema: new OA\Schema(type: 'integer', example: 3)),
             new OA\Parameter(name: 'date', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date', example: '2026-08-14')),
@@ -261,7 +259,7 @@ class ConsultationController extends Controller
             new OA\Response(response: 422, description: 'Validation failed'),
         ]
     )]
-    public function availability(Request $request, AvailabilityService $availability, OutlookCalendarClient $outlook, PaymentReconciliationService $payments)
+    public function availability(Request $request, AvailabilityService $availability)
     {
         $request->validate([
             'consultation_type_id' => ['required', 'integer', 'exists:consultation_types,id'],
@@ -272,18 +270,7 @@ class ConsultationController extends Controller
 
         $type = ConsultationType::findOrFail($request->integer('consultation_type_id'));
         $selectedDate = $request->query('date');
-        $month = $selectedDate !== null
-            ? substr($selectedDate, 0, 7)
-            : $request->query('month');
-
-        if (config('services.outlook.enabled')) {
-            try {
-                $payments->syncLightweight();
-                $outlook->syncMonth($month);
-            } catch (\DomainException|\RuntimeException $exception) {
-                return ApiResponse::error('Outlook availability sync failed: '.$exception->getMessage(), 422);
-            }
-        }
+        $month = $selectedDate !== null ? substr($selectedDate, 0, 7) : $request->query('month');
 
         if ($selectedDate !== null) {
             return ApiResponse::success($availability->dateAvailability(

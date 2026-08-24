@@ -4,6 +4,7 @@
             ? ['label' => 'Law Office', 'icon' => 'scale', 'theme' => 'app-theme-legal', 'iconClass' => 'app-icon-legal', 'textClass' => 'app-text-legal', 'progress' => 'app-progress-legal']
             : ['label' => 'SoCal Mediation Center', 'icon' => 'landmark', 'theme' => 'app-theme-socal', 'iconClass' => 'app-icon-socal', 'textClass' => 'app-text-socal', 'progress' => 'app-progress-socal'];
         $currentUser = auth()->user();
+        $consultationStatusOptions = ['draft', 'pending', 'payment_pending', 'paid', 'scheduled', 'rescheduled', 'completed', 'cancelled', 'overdue'];
 
         $statusTheme = function (?string $status) {
             return match ($status) {
@@ -39,8 +40,8 @@
             @endif
             <select class="h-11 w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-sm font-semibold text-[#111827]" name="status">
                 <option value="">All Statuses</option>
-                @foreach(['draft', 'payment_pending', 'paid', 'scheduled', 'cancelled'] as $status)
-                    <option value="{{ $status }}" @selected(request('status') === $status)>{{ str_replace('_', ' ', ucfirst($status)) }}</option>
+                @foreach($consultationStatusOptions as $status)
+                    <option value="{{ $status }}" @selected(request('status') === $status)>{{ Str::headline($status) }}</option>
                 @endforeach
             </select>
             <label class="relative">
