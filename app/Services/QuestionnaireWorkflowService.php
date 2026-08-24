@@ -51,7 +51,11 @@ class QuestionnaireWorkflowService
         );
     }
 
-    public function sendQuestionnairesForPaidParticipants(Consultation $consultation): int
+    public function sendQuestionnairesForPaidParticipants(
+        Consultation $consultation,
+        bool $resendPending = false,
+        string $action = 'questionnaire_link'
+    ): int
     {
         if (! $this->templates->requiresQuestionnaire($consultation)) {
             return 0;
@@ -66,10 +70,15 @@ class QuestionnaireWorkflowService
             ? $consultation->participants
             : $paidPayments->pluck('participant')->filter()->unique('id')->values();
 
-        return $this->sendQuestionnaireLinks($consultation, $participants);
+        return $this->sendQuestionnaireLinks($consultation, $participants, $resendPending, $action);
     }
 
-    public function sendQuestionnaireLinks(Consultation $consultation, Collection $participants): int
+    public function sendQuestionnaireLinks(
+        Consultation $consultation,
+        Collection $participants,
+        bool $resendPending = false,
+        string $action = 'questionnaire_link'
+    ): int
     {
         $sent = 0;
         $template = $this->templates->templateForConsultation($consultation);
@@ -81,7 +90,7 @@ class QuestionnaireWorkflowService
 
             $submission = $this->ensureSubmission($consultation, $participant, $template);
 
-            if ($submission->status === 'submitted' || $submission->invited_at !== null) {
+            if ($submission->status === 'submitted' || (! $resendPending && $submission->invited_at !== null)) {
                 continue;
             }
 
@@ -90,7 +99,7 @@ class QuestionnaireWorkflowService
             $submission->update(['invited_at' => now()]);
             $consultation->integrationLogs()->create([
                 'provider' => 'mail',
-                'action' => 'questionnaire_link',
+                'action' => $action,
                 'status' => 'sent',
                 'request_payload' => [
                     'recipient' => $participant->email,
@@ -98,7 +107,9 @@ class QuestionnaireWorkflowService
                     'questionnaire_submission_id' => $submission->id,
                     'template_key' => $submission->template_key,
                 ],
-                'message' => 'Questionnaire link email sent.',
+                'message' => $action === 'questionnaire_link'
+                    ? 'Questionnaire link email sent.'
+                    : 'Questionnaire link email sent after consultation reschedule.',
             ]);
             $sent++;
         }

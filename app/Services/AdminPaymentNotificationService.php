@@ -45,7 +45,23 @@ class AdminPaymentNotificationService
                 continue;
             }
 
-            Mail::to($recipient)->send(new $mailable($paymentRequest));
+            try {
+                Mail::to($recipient)->send(new $mailable($paymentRequest));
+            } catch (\Throwable $exception) {
+                $consultation->integrationLogs()->create([
+                    'provider' => 'mail',
+                    'action' => $action,
+                    'status' => 'failed',
+                    'request_payload' => [
+                        'recipient' => $recipient,
+                        'template' => $mailable,
+                        'payment_request_uuid' => $paymentRequest->id,
+                    ],
+                    'message' => 'Payment email failed: '.$exception->getMessage(),
+                ]);
+
+                continue;
+            }
 
             $paymentRequest->forceFill(['sent_at' => now()])->save();
             $consultation->integrationLogs()->create([

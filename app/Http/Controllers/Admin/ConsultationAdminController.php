@@ -16,6 +16,7 @@ use App\Services\Integrations\ZoomClient;
 use App\Services\PaymentReconciliationService;
 use App\Services\QuestionnairePdfService;
 use App\Services\QuestionnaireWorkflowService;
+use App\Services\RescheduleNotificationService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
@@ -227,7 +228,8 @@ class ConsultationAdminController extends Controller
         OutlookCalendarClient $outlook,
         ZoomClient $zoom,
         AdminZoomNotificationService $zoomNotifications,
-        QuestionnaireWorkflowService $questionnaires
+        QuestionnaireWorkflowService $questionnaires,
+        RescheduleNotificationService $rescheduleNotifications
     ) {
         $this->authorizeConsultation($consultation);
         $data = $request->validate([
@@ -315,6 +317,10 @@ class ConsultationAdminController extends Controller
                 'status' => 'skipped',
                 'message' => 'Zoom link regeneration was skipped because required questionnaire steps are not complete.',
             ]);
+        }
+
+        if (! $isReadyForMeetingRelease) {
+            $rescheduleNotifications->sendPendingNextSteps($consultation->refresh(), 'manual_reschedule');
         }
 
         if (config('services.outlook.enabled') && $isReadyForMeetingRelease) {

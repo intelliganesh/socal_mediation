@@ -16,6 +16,7 @@ class ConsultationRescheduleService
         private readonly OutlookCalendarClient $outlook,
         private readonly QuestionnaireWorkflowService $questionnaires,
         private readonly BookingDateTimeService $bookingDateTimes,
+        private readonly RescheduleNotificationService $rescheduleNotifications,
     ) {
     }
 
@@ -64,6 +65,7 @@ class ConsultationRescheduleService
                 $this->recreateOutlookEvent($consultation->refresh()->load(['type', 'professional']), $source);
             } else {
                 $this->clearZoomLink($consultation->refresh(), $source);
+                $this->rescheduleNotifications->sendPendingNextSteps($consultation->refresh(), $source);
 
                 $consultation->integrationLogs()->create([
                     'provider' => 'zoom',

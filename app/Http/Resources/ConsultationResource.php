@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources;
 
-use App\Services\QuestionnaireTemplateService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -49,36 +48,21 @@ class ConsultationResource extends JsonResource
                 'paid' => $paidCount,
                 'pending' => max(0, $paymentCount - $paidCount),
             ],
-            'questionnaire_progress' => $this->questionnaireProgress(),
+            'agreement_agreed' => $this->agreementAgreed(),
         ];
     }
 
-    private function questionnaireProgress(): array
+    private function agreementAgreed(): bool
     {
         if (! $this->relationLoaded('questionnaireSubmissions')) {
-            return [
-                'required' => false,
-                'total' => 0,
-                'submitted' => 0,
-                'pending' => 0,
-                'complete' => false,
-                'agreement_agreed' => false,
-            ];
+            return false;
         }
 
         $total = $this->questionnaireSubmissions->count();
-        $submitted = $this->questionnaireSubmissions->where('status', 'submitted')->count();
-        $templates = app(QuestionnaireTemplateService::class);
-        $agreementRequired = $this->questionnaireSubmissions->contains(fn ($submission) => $templates->requiresAgreement($submission->template_key));
-        $agreementAccepted = $this->questionnaireSubmissions->where('agreement_accepted', true)->count();
+        if ($total === 0) {
+            return false;
+        }
 
-        return [
-            'required' => $total > 0,
-            'total' => $total,
-            'submitted' => $submitted,
-            'pending' => max(0, $total - $submitted),
-            'complete' => $total > 0 && $submitted === $total && (! $agreementRequired || $agreementAccepted === $total),
-            'agreement_agreed' => $agreementRequired && $total > 0 && $agreementAccepted === $total,
-        ];
+        return $this->questionnaireSubmissions->where('agreement_accepted', true)->count() === $total;
     }
 }

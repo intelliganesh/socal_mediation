@@ -970,7 +970,8 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('data.status', 'paid')
             ->assertJsonPath('data.payment_status', 'paid')
             ->assertJsonPath('data.zoom_join_url', null)
-            ->assertJsonPath('data.questionnaire_progress.pending', 1);
+            ->assertJsonPath('data.agreement_agreed', false)
+            ->assertJsonMissingPath('data.questionnaire_progress');
 
         $this->assertDatabaseHas('payment_requests', [
             'id' => $paymentRequestId,
@@ -991,7 +992,7 @@ class ConsultationApiTest extends TestCase
         $this->assertGreaterThan(0, $submissions->count());
         $this->assertSame('socal_party_mediation', $submissions->first()->template_key);
         $questionnaireMailHtml = (new ConsultationQuestionnaireMail($submissions->first()))->render();
-        $this->assertStringContainsString('/party-mediation-questionnaire?token='.$submissions->first()->token, $questionnaireMailHtml);
+        $this->assertStringContainsString('/party-mediation?token='.$submissions->first()->token, $questionnaireMailHtml);
         $this->assertStringContainsString('/agreement?token='.$submissions->first()->token, $questionnaireMailHtml);
 
         foreach ($submissions as $index => $submission) {
@@ -1014,7 +1015,8 @@ class ConsultationApiTest extends TestCase
                 $response
                     ->assertJsonPath('data.status', 'scheduled')
                     ->assertJsonPath('data.payment_status', 'paid')
-                    ->assertJsonPath('data.questionnaire_progress.complete', true)
+                    ->assertJsonPath('data.agreement_agreed', true)
+                    ->assertJsonMissingPath('data.questionnaire_progress')
                     ->assertJsonPath('data.zoom_join_url', 'https://zoom.test/j/questionnaire-zoom-meeting');
             }
         }
@@ -1057,10 +1059,8 @@ class ConsultationApiTest extends TestCase
             'answers' => ['full_name' => 'Alex Morgan'],
         ])
             ->assertOk()
-            ->assertJsonPath('data.questionnaire_progress.complete', false)
-            ->assertJsonPath('data.questionnaire_progress.agreement_agreed', false)
-            ->assertJsonMissingPath('data.questionnaire_progress.agreement_required')
-            ->assertJsonMissingPath('data.questionnaire_progress.agreement_accepted');
+            ->assertJsonPath('data.agreement_agreed', false)
+            ->assertJsonMissingPath('data.questionnaire_progress');
 
         $this->getJson('/api/v1/agreements/'.$submission->token)
             ->assertOk()
@@ -1071,10 +1071,8 @@ class ConsultationApiTest extends TestCase
             'accepted' => true,
         ])
             ->assertOk()
-            ->assertJsonPath('data.questionnaire_progress.complete', true)
-            ->assertJsonPath('data.questionnaire_progress.agreement_agreed', true)
-            ->assertJsonMissingPath('data.questionnaire_progress.agreement_required')
-            ->assertJsonMissingPath('data.questionnaire_progress.agreement_accepted');
+            ->assertJsonPath('data.agreement_agreed', true)
+            ->assertJsonMissingPath('data.questionnaire_progress');
 
         $this->assertDatabaseHas('questionnaire_submissions', [
             'id' => $submission->id,
@@ -2232,13 +2230,56 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('data.zoom_join_url', null);
 
         Mail::assertNotSent(ConsultationZoomLinkMail::class);
+        Mail::assertSent(ConsultationQuestionnaireMail::class, 4);
         $this->assertNull($consultation->refresh()->zoom_join_url);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'mail',
+            'action' => 'api_reschedule_questionnaire_link',
+            'status' => 'sent',
+        ]);
         $this->assertDatabaseHas('integration_logs', [
             'loggable_type' => Consultation::class,
             'loggable_id' => $consultation->id,
             'provider' => 'zoom',
             'action' => 'api_reschedule_zoom_link',
             'status' => 'skipped',
+        ]);
+    }
+
+    public function test_reschedule_booking_api_resends_pending_payment_links_before_questionnaires(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        $consultation = Consultation::where('booking_number', 'SAMPLE-03')->firstOrFail();
+
+        $this->postJson('/api/v1/consultations/'.$consultation->id.'/reschedule', [
+            'starts_at' => '2026-10-09T13:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Consultation rescheduled.')
+            ->assertJsonPath('data.payment_status', 'partially_paid')
+            ->assertJsonPath('data.status', 'payment_pending');
+
+        Mail::assertSent(ConsultationPaymentLinkMail::class, 2);
+        Mail::assertSent(ConsultationQuestionnaireMail::class, 1);
+        Mail::assertNotSent(ConsultationZoomLinkMail::class);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'mail',
+            'action' => 'api_reschedule_payment_link',
+            'status' => 'sent',
+        ]);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'mail',
+            'action' => 'api_reschedule_questionnaire_link',
+            'status' => 'sent',
         ]);
     }
 
