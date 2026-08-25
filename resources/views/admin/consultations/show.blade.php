@@ -233,11 +233,20 @@
                     @php($participantName = trim($participant->first_name.' '.$participant->last_name))
                     @php($participantPayment = $consultation->paymentRequests->firstWhere('participant_id', $participant->id))
                     @php($participantStatus = $statusTheme($participantPayment?->status))
-                    <article class="rounded-lg border border-[#E5E7EB] p-3 text-sm">
+                    @php($repeatFreeIntroParticipant = $repeatFreeIntroParticipants->get($participant->id))
+                    <article class="rounded-lg border p-3 text-sm {{ $repeatFreeIntroParticipant ? 'border-amber-300 bg-amber-50/70 ring-1 ring-amber-200' : 'border-[#E5E7EB]' }}">
                         <div class="flex items-start gap-3">
                             <div class="admin-brand-soft grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold">{{ Str::upper(Str::substr($participantName, 0, 2)) }}</div>
                             <div class="min-w-0">
-                                <div class="truncate font-bold text-[#111827]">{{ $participantName }}</div>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <div class="truncate font-bold text-[#111827]">{{ $participantName }}</div>
+                                    @if($repeatFreeIntroParticipant)
+                                    <span class="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                                        <i data-lucide="repeat-2" class="h-3 w-3"></i>
+                                        Repeat Intro
+                                    </span>
+                                    @endif
+                                </div>
                                 <div class="truncate text-xs text-gray-500">{{ $participant->email ?: 'Not provided' }}</div>
                                 @if($consultation->type->slug === 'socal-free-intro-call')
                                 <div class="mt-1 text-xs font-semibold text-gray-500">
@@ -245,6 +254,17 @@
                                     @if($participant->scheduled_starts_at)
                                     - {{ $participant->scheduled_starts_at->format('M d, Y g:i A') }}
                                     @endif
+                                </div>
+                                @endif
+                                @if($repeatFreeIntroParticipant)
+                                <div class="mt-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-900">
+                                    Previously completed Free 15-Min Intro Call
+                                    <span class="block text-amber-800">
+                                        {{ $repeatFreeIntroParticipant->consultation?->booking_number }}
+                                        @if($repeatFreeIntroParticipant->consultation?->starts_at)
+                                        - {{ $repeatFreeIntroParticipant->consultation->starts_at->format('M d, Y g:i A') }}
+                                        @endif
+                                    </span>
                                 </div>
                                 @endif
                                 <div class="font-bold mt-2">${{ number_format($participantPayment?->amount_cents / 100, 2) }}</div>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Consultation;
+use App\Models\ConsultationParticipant;
 use App\Models\IntegrationLog;
 use App\Models\PaymentRequest;
 use App\Models\QuestionnaireSubmission;
@@ -19,6 +20,7 @@ use App\Services\QuestionnaireWorkflowService;
 use App\Services\RescheduleNotificationService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class ConsultationAdminController extends Controller
 {
@@ -111,6 +113,7 @@ class ConsultationAdminController extends Controller
         return view('admin.consultations.show', [
             'consultation' => $consultation,
             'paymentGatewayActivities' => $paymentGatewayActivities,
+            'repeatFreeIntroParticipants' => $this->repeatFreeIntroParticipants($consultation),
         ]);
     }
 
@@ -466,5 +469,64 @@ class ConsultationAdminController extends Controller
     private function authorizeConsultation(Consultation $consultation): void
     {
         abort_unless(auth()->user()?->canAccessApplication($consultation->application), 403);
+    }
+
+    private function repeatFreeIntroParticipants(Consultation $consultation): Collection
+    {
+        $contacts = $consultation->participants
+            ->mapWithKeys(fn (ConsultationParticipant $participant) => [
+                $participant->id => [
+                    'email' => $this->normalizedEmail($participant->email),
+                    'phone' => $this->normalizedPhone($participant->phone_country, $participant->phone),
+                ],
+            ])
+            ->filter(fn (array $contact) => filled($contact['email']) || filled($contact['phone']));
+
+        if ($contacts->isEmpty()) {
+            return collect();
+        }
+
+        $priorParticipants = ConsultationParticipant::query()
+            ->with(['consultation.type'])
+            ->where('consultation_id', '!=', $consultation->id)
+            ->whereHas('consultation', function ($query) use ($consultation) {
+                $query->where('status', 'completed')
+                    ->whereHas('type', fn ($query) => $query->where('slug', 'socal-free-intro-call'));
+
+                if ($consultation->starts_at) {
+                    $query->where('starts_at', '<', $consultation->starts_at);
+                }
+            })
+            ->get();
+
+        return $contacts
+            ->map(function (array $contact) use ($priorParticipants) {
+                return $priorParticipants
+                    ->filter(function (ConsultationParticipant $participant) use ($contact) {
+                        $emailMatches = filled($contact['email'])
+                            && $this->normalizedEmail($participant->email) === $contact['email'];
+                        $phoneMatches = filled($contact['phone'])
+                            && $this->normalizedPhone($participant->phone_country, $participant->phone) === $contact['phone'];
+
+                        return $emailMatches || $phoneMatches;
+                    })
+                    ->sortByDesc(fn (ConsultationParticipant $participant) => $participant->consultation?->starts_at)
+                    ->first();
+            })
+            ->filter();
+    }
+
+    private function normalizedEmail(?string $email): ?string
+    {
+        $email = strtolower(trim((string) $email));
+
+        return $email === '' ? null : $email;
+    }
+
+    private function normalizedPhone(?string $country, ?string $phone): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $country.(string) $phone);
+
+        return $digits === '' ? null : $digits;
     }
 }

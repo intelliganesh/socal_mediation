@@ -12,6 +12,7 @@ use App\Models\QuestionnaireSubmission;
 use App\Models\User;
 use App\Services\Integrations\OutlookCalendarClient;
 use App\Services\QuestionnaireTemplateService;
+use App\Services\QuestionnaireWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -264,6 +265,57 @@ class AdminPanelTest extends TestCase
             ->assertSee('Other Referral');
     }
 
+    public function test_admin_consultation_detail_marks_repeat_free_intro_participants(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $previous = Consultation::where('booking_number', 'SAMPLE-01')->firstOrFail();
+        $nextConsultationTemplate = Consultation::where('booking_number', 'SAMPLE-02')->firstOrFail();
+        $previous->update(['status' => 'completed']);
+
+        $current = Consultation::create([
+            'booking_number' => 'REPEAT-INTRO-01',
+            'consultation_type_id' => $nextConsultationTemplate->consultation_type_id,
+            'legal_service_name' => $nextConsultationTemplate->legal_service_name,
+            'professional_id' => $nextConsultationTemplate->professional_id,
+            'application' => 'socal',
+            'status' => 'scheduled',
+            'payment_status' => 'paid',
+            'consultation_mode' => 'phone',
+            'timezone' => 'America/Los_Angeles',
+            'starts_at' => $previous->starts_at->copy()->addMonth(),
+            'ends_at' => $previous->starts_at->copy()->addMonth()->addMinutes(15),
+            'primary_first_name' => 'Avery',
+            'primary_last_name' => 'Stone',
+            'primary_email' => 'avery.stone@example.com',
+            'primary_phone_country' => '+1',
+            'primary_phone' => '(555) 010-0100',
+            'total_amount_cents' => 0,
+            'currency' => 'USD',
+        ]);
+        $current->participants()->create([
+            'first_name' => 'Avery',
+            'last_name' => 'Stone',
+            'email' => 'avery.stone@example.com',
+            'phone_country' => '+1',
+            'phone' => '(555) 010-0100',
+            'is_primary' => true,
+            'scheduling_status' => 'scheduled',
+            'scheduled_starts_at' => $current->starts_at,
+            'scheduled_ends_at' => $current->ends_at,
+            'scheduled_timezone' => 'America/Los_Angeles',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $current))
+            ->assertOk()
+            ->assertSee('Repeat Intro')
+            ->assertSee('Previously completed Free 15-Min Intro Call')
+            ->assertSee('SAMPLE-01');
+    }
+
     public function test_admin_can_view_questionnaire_answers_and_download_summary_pdf(): void
     {
         $this->seed();
@@ -394,7 +446,7 @@ class AdminPanelTest extends TestCase
             'starts_at' => now(config('app.booking_timezone'))->addDays(5)->setTime(10, 0),
             'ends_at' => now(config('app.booking_timezone'))->addDays(5)->setTime(11, 0),
         ]);
-        app(\App\Services\QuestionnaireWorkflowService::class)
+        app(QuestionnaireWorkflowService::class)
             ->ensureSubmission($consultation, $consultation->participants()->where('is_primary', true)->firstOrFail())
             ->update([
                 'status' => 'submitted',
@@ -679,7 +731,7 @@ class AdminPanelTest extends TestCase
         $consultation = Consultation::where('booking_number', 'SAMPLE-07')->firstOrFail();
         $participant = $consultation->participants()->where('is_primary', true)->firstOrFail();
 
-        app(\App\Services\QuestionnaireWorkflowService::class)
+        app(QuestionnaireWorkflowService::class)
             ->ensureSubmission($consultation, $participant)
             ->update([
                 'status' => 'submitted',
@@ -880,7 +932,7 @@ class AdminPanelTest extends TestCase
         $admin = User::where('email', 'admin@socal.test')->firstOrFail();
         $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
         $consultation->participants()->get()->each(function ($participant) use ($consultation) {
-            app(\App\Services\QuestionnaireWorkflowService::class)
+            app(QuestionnaireWorkflowService::class)
                 ->ensureSubmission($consultation, $participant)
                 ->update([
                     'status' => 'submitted',
@@ -943,7 +995,7 @@ class AdminPanelTest extends TestCase
         $admin = User::where('email', 'admin@socal.test')->firstOrFail();
         $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
         $consultation->participants()->get()->each(function ($participant) use ($consultation) {
-            app(\App\Services\QuestionnaireWorkflowService::class)
+            app(QuestionnaireWorkflowService::class)
                 ->ensureSubmission($consultation, $participant)
                 ->update([
                     'status' => 'submitted',
