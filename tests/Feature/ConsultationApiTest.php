@@ -1096,7 +1096,8 @@ class ConsultationApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.required', true)
             ->assertJsonPath('data.accepted', false)
-            ->assertJsonPath('data.questionnaire_completed', true);
+            ->assertJsonPath('data.questionnaire_completed', true)
+            ->assertJsonMissingPath('data.consultation.questionnaire_completed');
 
         $this->postJson('/api/v1/agreements/'.$submission->token, [
             'accepted' => true,

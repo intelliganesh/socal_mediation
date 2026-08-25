@@ -197,7 +197,16 @@ class QuestionnaireController extends Controller
             new OA\Parameter(name: 'token', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
         ],
         responses: [
-            new OA\Response(response: 200, description: 'Agreement detail'),
+            new OA\Response(response: 200, description: 'Agreement detail', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'data', type: 'object', properties: [
+                    new OA\Property(property: 'token', type: 'string'),
+                    new OA\Property(property: 'required', type: 'boolean'),
+                    new OA\Property(property: 'accepted', type: 'boolean'),
+                    new OA\Property(property: 'accepted_at', type: 'string', nullable: true),
+                    new OA\Property(property: 'questionnaire_completed', type: 'boolean', example: true),
+                ]),
+            ])),
             new OA\Response(response: 404, description: 'Agreement token not found'),
         ]
     )]
