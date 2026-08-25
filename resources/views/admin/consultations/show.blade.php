@@ -258,9 +258,9 @@
                                 @endif
                                 @if($repeatFreeIntroParticipant)
                                 <div class="mt-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-900">
-                                    Previously completed Free 15-Min Intro Call
+                                    Previous Free 15-Min Intro Call found
                                     <span class="block text-amber-800">
-                                        {{ $repeatFreeIntroParticipant->booking_number }}
+                                        {{ $repeatFreeIntroParticipant->booking_number }} - {{ Str::headline($repeatFreeIntroParticipant->status) }}
                                         @if($repeatFreeIntroParticipant->starts_at)
                                         - {{ $repeatFreeIntroParticipant->starts_at->format('M d, Y g:i A') }}
                                         @endif

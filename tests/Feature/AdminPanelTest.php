@@ -273,7 +273,7 @@ class AdminPanelTest extends TestCase
         $admin = User::where('email', 'admin@socal.test')->firstOrFail();
         $previous = Consultation::where('booking_number', 'SAMPLE-01')->firstOrFail();
         $nextConsultationTemplate = Consultation::where('booking_number', 'SAMPLE-02')->firstOrFail();
-        $previous->update(['status' => 'completed']);
+        $previous->update(['status' => 'pending']);
 
         $current = Consultation::create([
             'booking_number' => 'REPEAT-INTRO-01',
@@ -302,6 +302,16 @@ class AdminPanelTest extends TestCase
             'phone_country' => '+1',
             'phone' => '(555) 010-0100',
             'is_primary' => true,
+            'scheduling_status' => 'pending',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $current))
+            ->assertOk()
+            ->assertDontSee('Repeat Intro')
+            ->assertDontSee('Previous Free 15-Min Intro Call found');
+
+        $current->participants()->firstOrFail()->update([
             'scheduling_status' => 'scheduled',
             'scheduled_starts_at' => $current->starts_at,
             'scheduled_ends_at' => $current->ends_at,
@@ -312,7 +322,8 @@ class AdminPanelTest extends TestCase
             ->get(route('admin.consultations.show', $current))
             ->assertOk()
             ->assertSee('Repeat Intro')
-            ->assertSee('Previously completed Free 15-Min Intro Call')
+            ->assertSee('Previous Free 15-Min Intro Call found')
+            ->assertSee('Pending')
             ->assertSee('SAMPLE-01');
     }
 

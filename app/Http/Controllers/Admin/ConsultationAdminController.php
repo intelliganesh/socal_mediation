@@ -474,6 +474,8 @@ class ConsultationAdminController extends Controller
     private function repeatFreeIntroParticipants(Consultation $consultation): Collection
     {
         $contacts = $consultation->participants
+            ->filter(fn (ConsultationParticipant $participant) => filled($participant->scheduled_starts_at)
+                && ! in_array($participant->scheduling_status, ['draft', 'cancelled'], true))
             ->mapWithKeys(fn (ConsultationParticipant $participant) => [
                 $participant->id => [
                     'email' => $this->normalizedEmail($participant->email),
@@ -489,7 +491,7 @@ class ConsultationAdminController extends Controller
         $priorConsultations = Consultation::query()
             ->with(['participants', 'type'])
             ->whereKeyNot($consultation->id)
-            ->where('status', 'completed')
+            ->whereNotIn('status', ['draft', 'cancelled'])
             ->whereHas('type', fn ($query) => $query->where('slug', 'socal-free-intro-call'))
             ->when($consultation->starts_at, fn ($query) => $query->where('starts_at', '<', $consultation->starts_at))
             ->get();
