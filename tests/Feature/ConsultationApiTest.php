@@ -96,6 +96,36 @@ class ConsultationApiTest extends TestCase
             ->assertDontSee('javascript:alert(1)');
     }
 
+    public function test_payment_success_page_shows_only_agreement_link_when_agreement_and_questionnaire_are_pending(): void
+    {
+        $this->seed();
+        config(['app.payment_redirect_urls.socal' => 'https://socal.example.test']);
+
+        $consultation = Consultation::where('booking_number', 'SAMPLE-03')->firstOrFail();
+        $payment = $consultation->paymentRequests()
+            ->with('participant')
+            ->where('status', 'paid')
+            ->firstOrFail();
+
+        $submission = app(QuestionnaireWorkflowService::class)
+            ->ensureSubmission($consultation, $payment->participant);
+
+        $submission->update([
+            'status' => 'pending',
+            'agreement_accepted' => false,
+        ]);
+
+        $this->get(URL::signedRoute('payments.status.show', [
+            'paymentRequest' => $payment,
+            'state' => 'success',
+        ]))
+            ->assertOk()
+            ->assertSee('Proceed to Agreement')
+            ->assertDontSee('Proceed to Questionnaire')
+            ->assertSee('/agreement?token='.$submission->token, false)
+            ->assertDontSee('/party-mediation?token='.$submission->token, false);
+    }
+
     public function test_it_creates_a_draft_consultation(): void
     {
         $this->seed();
@@ -1065,7 +1095,8 @@ class ConsultationApiTest extends TestCase
         $this->getJson('/api/v1/agreements/'.$submission->token)
             ->assertOk()
             ->assertJsonPath('data.required', true)
-            ->assertJsonPath('data.accepted', false);
+            ->assertJsonPath('data.accepted', false)
+            ->assertJsonPath('data.questionnaire_completed', true);
 
         $this->postJson('/api/v1/agreements/'.$submission->token, [
             'accepted' => true,

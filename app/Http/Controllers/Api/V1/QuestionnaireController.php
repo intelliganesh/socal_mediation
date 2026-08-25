@@ -211,6 +211,7 @@ class QuestionnaireController extends Controller
             'required' => (bool) ($template['requires_agreement'] ?? false),
             'accepted' => $submission->agreement_accepted,
             'accepted_at' => $submission->agreement_accepted_at?->toIso8601String(),
+            'questionnaire_completed' => $submission->status === 'submitted',
             'version' => QuestionnaireTemplateService::AGREEMENT_VERSION,
             'participant' => [
                 'first_name' => $submission->participant->first_name,

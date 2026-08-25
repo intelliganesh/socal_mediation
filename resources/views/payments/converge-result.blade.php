@@ -51,8 +51,9 @@
                 @if($questionnaireSubmission && $questionnaireSubmission->status === 'pending' && filled($questionnaireUrl))
                     @if(filled($agreementUrl) && ! $questionnaireSubmission->agreement_accepted)
                         <a href="{{ $agreementUrl }}" style="display:inline-block;margin-top:24px;border-radius:6px;background:{{ $brand }};color:#fff;font-weight:700;padding:13px 22px;text-decoration:none;">Proceed to Agreement</a>
+                    @else
+                        <a href="{{ $questionnaireUrl }}" style="display:inline-block;margin-top:24px;border-radius:6px;background:{{ $brand }};color:#fff;border:1px solid {{ $brand }};font-weight:700;padding:13px 22px;text-decoration:none;">Proceed to Questionnaire</a>
                     @endif
-                    <a href="{{ $questionnaireUrl }}" style="display:inline-block;margin-top:{{ filled($agreementUrl) && ! $questionnaireSubmission->agreement_accepted ? '12px' : '24px' }};border-radius:6px;background:{{ filled($agreementUrl) && ! $questionnaireSubmission->agreement_accepted ? '#fff' : $brand }};color:{{ filled($agreementUrl) && ! $questionnaireSubmission->agreement_accepted ? $brand : '#fff' }};border:1px solid {{ $brand }};font-weight:700;padding:13px 22px;text-decoration:none;">Proceed to Questionnaire</a>
                 @elseif($questionnaireSubmission && $questionnaireSubmission->status === 'submitted')
                     <p style="margin:18px 0 0;color:#64748b;font-size:14px;">Your questionnaire has already been submitted. Meeting details will be shared after all required questionnaires are complete.</p>
                     @if(filled($redirectUrl))
