@@ -263,7 +263,10 @@ class QuestionnaireController extends Controller
             return ApiResponse::error($exception->getMessage(), 422);
         }
 
-        return ApiResponse::success(new ConsultationResource($consultation), 'Agreement accepted.');
+        return ApiResponse::success([
+            ...((new ConsultationResource($consultation))->resolve($request)),
+            'questionnaire_completed' => $submission->refresh()->status === 'submitted',
+        ], 'Agreement accepted.');
     }
 
     private function submission(string $token): QuestionnaireSubmission

@@ -1104,6 +1104,8 @@ class ConsultationApiTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.agreement_agreed', true)
+            ->assertJsonPath('data.questionnaire_completed', true)
+            ->assertJsonMissingPath('data.consultation.questionnaire_completed')
             ->assertJsonMissingPath('data.questionnaire_progress');
 
         $this->assertDatabaseHas('questionnaire_submissions', [
