@@ -7,6 +7,7 @@ use App\Http\Requests\Api\CompleteConsultationRequest;
 use App\Http\Requests\Api\CreateDraftConsultationRequest;
 use App\Http\Resources\ConsultationResource;
 use App\Models\Consultation;
+use App\Models\ConsultationParticipant;
 use App\Models\ConsultationType;
 use App\Services\ApiResponse;
 use App\Services\AvailabilityService;
@@ -233,8 +234,18 @@ class ConsultationController extends Controller
             return ApiResponse::error($exception->getMessage(), 422);
         }
 
+        $participant = ConsultationParticipant::query()
+            ->where('scheduling_token', $schedulingToken)
+            ->firstOrFail();
+        $timezone = $participant->scheduled_timezone ?: config('app.booking_timezone');
+        $resource = (new ConsultationResource($consultation->loadMissing(['type', 'professional', 'participants', 'paymentRequests', 'questionnaireSubmissions'])))
+            ->resolve($request);
+        $resource['starts_at'] = $participant->scheduled_starts_at?->timezone($timezone)->toIso8601String();
+        $resource['ends_at'] = $participant->scheduled_ends_at?->timezone($timezone)->toIso8601String();
+        $resource['timezone'] = $timezone;
+
         return ApiResponse::success(
-            new ConsultationResource($consultation->loadMissing(['type', 'professional', 'participants', 'paymentRequests', 'questionnaireSubmissions'])),
+            $resource,
             'Participant slot scheduled.'
         );
     }

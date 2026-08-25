@@ -542,12 +542,18 @@ class ConsultationApiTest extends TestCase
         $this->assertNotNull($participants[0]->scheduling_token);
         $this->assertSame('pending', $participants[0]->scheduling_status);
 
-        $this->postJson('/api/v1/free-intro-slots/'.$participants[0]->scheduling_token, [
+        $firstSlotResponse = $this->postJson('/api/v1/free-intro-slots/'.$participants[0]->scheduling_token, [
             'starts_at' => '2026-10-21T09:15:00-07:00',
             'timezone' => 'America/Los_Angeles',
         ])
             ->assertOk()
-            ->assertJsonPath('data.status', 'paid');
+            ->assertJsonPath('data.status', 'paid')
+            ->assertJsonPath('data.starts_at', '2026-10-21T09:15:00-07:00')
+            ->assertJsonPath('data.ends_at', '2026-10-21T09:30:00-07:00')
+            ->assertJsonPath('data.timezone', 'America/Los_Angeles')
+            ->assertJsonMissingPath('data.scheduled_participant_slot');
+
+        $this->assertNotSame('2026-10-21T09:00:00-07:00', $firstSlotResponse->json('data.starts_at'));
 
         Mail::assertSent(ConsultationConfirmationMail::class, 2);
 
