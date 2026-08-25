@@ -226,7 +226,7 @@
             <section class="rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <h3 class="font-bold text-[#111827]">Participants</h3>
-                    <span class="text-sm font-bold text-gray-500">Payment Shares</span>
+                    {{-- <span class="text-sm font-bold text-gray-500">Payment Shares</span> --}}
                 </div>
                 <div class="grid gap-3 md:grid-cols-3">
                     @foreach($consultation->participants as $participant)
@@ -260,9 +260,9 @@
                                 <div class="mt-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-900">
                                     Previously completed Free 15-Min Intro Call
                                     <span class="block text-amber-800">
-                                        {{ $repeatFreeIntroParticipant->consultation?->booking_number }}
-                                        @if($repeatFreeIntroParticipant->consultation?->starts_at)
-                                        - {{ $repeatFreeIntroParticipant->consultation->starts_at->format('M d, Y g:i A') }}
+                                        {{ $repeatFreeIntroParticipant->booking_number }}
+                                        @if($repeatFreeIntroParticipant->starts_at)
+                                        - {{ $repeatFreeIntroParticipant->starts_at->format('M d, Y g:i A') }}
                                         @endif
                                     </span>
                                 </div>

@@ -486,31 +486,37 @@ class ConsultationAdminController extends Controller
             return collect();
         }
 
-        $priorParticipants = ConsultationParticipant::query()
-            ->with(['consultation.type'])
-            ->where('consultation_id', '!=', $consultation->id)
-            ->whereHas('consultation', function ($query) use ($consultation) {
-                $query->where('status', 'completed')
-                    ->whereHas('type', fn ($query) => $query->where('slug', 'socal-free-intro-call'));
-
-                if ($consultation->starts_at) {
-                    $query->where('starts_at', '<', $consultation->starts_at);
-                }
-            })
+        $priorConsultations = Consultation::query()
+            ->with(['participants', 'type'])
+            ->whereKeyNot($consultation->id)
+            ->where('status', 'completed')
+            ->whereHas('type', fn ($query) => $query->where('slug', 'socal-free-intro-call'))
+            ->when($consultation->starts_at, fn ($query) => $query->where('starts_at', '<', $consultation->starts_at))
             ->get();
 
         return $contacts
-            ->map(function (array $contact) use ($priorParticipants) {
-                return $priorParticipants
-                    ->filter(function (ConsultationParticipant $participant) use ($contact) {
-                        $emailMatches = filled($contact['email'])
-                            && $this->normalizedEmail($participant->email) === $contact['email'];
-                        $phoneMatches = filled($contact['phone'])
-                            && $this->normalizedPhone($participant->phone_country, $participant->phone) === $contact['phone'];
+            ->map(function (array $contact) use ($priorConsultations) {
+                return $priorConsultations
+                    ->filter(function (Consultation $priorConsultation) use ($contact) {
+                        $primaryEmailMatches = filled($contact['email'])
+                            && $this->normalizedEmail($priorConsultation->primary_email) === $contact['email'];
+                        $primaryPhoneMatches = filled($contact['phone'])
+                            && $this->normalizedPhone($priorConsultation->primary_phone_country, $priorConsultation->primary_phone) === $contact['phone'];
 
-                        return $emailMatches || $phoneMatches;
+                        if ($primaryEmailMatches || $primaryPhoneMatches) {
+                            return true;
+                        }
+
+                        return $priorConsultation->participants->contains(function (ConsultationParticipant $participant) use ($contact) {
+                            $emailMatches = filled($contact['email'])
+                                && $this->normalizedEmail($participant->email) === $contact['email'];
+                            $phoneMatches = filled($contact['phone'])
+                                && $this->normalizedPhone($participant->phone_country, $participant->phone) === $contact['phone'];
+
+                            return $emailMatches || $phoneMatches;
+                        });
                     })
-                    ->sortByDesc(fn (ConsultationParticipant $participant) => $participant->consultation?->starts_at)
+                    ->sortByDesc(fn (Consultation $priorConsultation) => $priorConsultation->starts_at)
                     ->first();
             })
             ->filter();
