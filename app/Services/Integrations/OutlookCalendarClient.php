@@ -32,9 +32,7 @@ class OutlookCalendarClient
         'America/Phoenix' => 'US Mountain Standard Time',
     ];
 
-    public function __construct(private readonly QuestionnaireTemplateService $questionnaireTemplates)
-    {
-    }
+    public function __construct(private readonly QuestionnaireTemplateService $questionnaireTemplates) {}
 
     public function syncAllConsultations(): array
     {
@@ -185,6 +183,7 @@ class OutlookCalendarClient
                 ExternalCalendarEvent::updateOrCreate([
                     'provider' => 'outlook',
                     'external_id' => $event['id'],
+                    'application' => $application,
                 ], [
                     'application' => $application,
                     'title' => $event['subject'] ?? 'Outlook busy event',
@@ -524,20 +523,30 @@ class OutlookCalendarClient
     private function calendarView(string $application, CarbonImmutable $start, CarbonImmutable $end): array
     {
         $calendarUrl = $this->calendarUrl($application);
+        $events = [];
+        $nextUrl = $calendarUrl.'/calendarView';
+        $query = [
+            'startDateTime' => $start->toIso8601String(),
+            'endDateTime' => $end->toIso8601String(),
+            '$top' => 100,
+        ];
 
-        $response = Http::withToken($this->accessToken())
-            ->acceptJson()
-            ->get($calendarUrl.'/calendarView', [
-                'startDateTime' => $start->toIso8601String(),
-                'endDateTime' => $end->toIso8601String(),
-                '$top' => 100,
-            ]);
+        do {
+            $response = Http::withToken($this->accessToken())
+                ->acceptJson()
+                ->get($nextUrl, $query);
 
-        if ($response->failed()) {
-            throw new \RuntimeException('Outlook calendar view sync failed: '.$response->body());
-        }
+            if ($response->failed()) {
+                throw new \RuntimeException('Outlook calendar view sync failed: '.$response->body());
+            }
 
-        return $response->json('value', []);
+            $payload = $response->json();
+            $events = array_merge($events, $payload['value'] ?? []);
+            $nextUrl = $payload['@odata.nextLink'] ?? null;
+            $query = [];
+        } while (filled($nextUrl));
+
+        return $events;
     }
 
     private function createEvent(string $application, array $payload): array

@@ -604,6 +604,78 @@ class AdminPanelTest extends TestCase
         ]);
     }
 
+    public function test_calendar_sync_refreshes_paginated_outlook_busy_events_per_application(): void
+    {
+        $this->seed();
+        $this->travelTo('2026-08-26 10:00:00');
+        config([
+            'app.booking_timezone' => 'Asia/Kolkata',
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.socal_user_id' => 'shared@example.com',
+            'services.outlook.socal_calendar_id' => 'shared-calendar',
+            'services.outlook.legal_user_id' => 'shared@example.com',
+            'services.outlook.legal_calendar_id' => 'shared-calendar',
+        ]);
+
+        ExternalCalendarEvent::create([
+            'provider' => 'outlook',
+            'external_id' => 'shared-page-two-event',
+            'application' => 'legal',
+            'title' => 'Old title',
+            'starts_at' => '2026-09-04 13:00:00',
+            'ends_at' => '2026-09-04 17:00:00',
+            'is_busy' => true,
+        ]);
+
+        $firstPage = [
+            'value' => [],
+            '@odata.nextLink' => 'https://graph.microsoft.com/v1.0/page-two',
+        ];
+        $secondPage = [
+            'value' => [[
+                'id' => 'shared-page-two-event',
+                'subject' => 'Updated Outlook meeting',
+                'showAs' => 'busy',
+                'webLink' => 'https://outlook.office.com/updated',
+                'start' => [
+                    'dateTime' => '2026-09-04T09:00:00',
+                    'timeZone' => 'India Standard Time',
+                ],
+                'end' => [
+                    'dateTime' => '2026-09-04T13:00:00',
+                    'timeZone' => 'India Standard Time',
+                ],
+            ]],
+        ];
+
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
+            'graph.microsoft.com/v1.0/page-two*' => Http::response($secondPage, 200),
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/calendarView*' => Http::sequence()
+                ->push($firstPage, 200)
+                ->push($firstPage, 200),
+        ]);
+
+        app(OutlookCalendarClient::class)->syncCurrentWindow();
+
+        foreach (['socal', 'legal'] as $application) {
+            $this->assertDatabaseHas('external_calendar_events', [
+                'provider' => 'outlook',
+                'external_id' => 'shared-page-two-event',
+                'application' => $application,
+                'title' => 'Updated Outlook meeting',
+                'starts_at' => '2026-09-04 09:00:00',
+                'ends_at' => '2026-09-04 13:00:00',
+                'is_busy' => true,
+            ]);
+        }
+    }
+
     public function test_calendar_sync_deletes_marked_outlook_event_when_consultation_and_tracking_are_missing(): void
     {
         config([
