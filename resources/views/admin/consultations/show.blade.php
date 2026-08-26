@@ -81,7 +81,7 @@
         </form>
         @endif
 
-        @if($consultation->starts_at)
+        @if($consultation->starts_at && ! $isFreeIntroCall)
         <form class="action-card action-card-pending min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.reschedule', $consultation) }}">
             @csrf
             <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="refresh-cw" class="h-7 w-7"></i></div>

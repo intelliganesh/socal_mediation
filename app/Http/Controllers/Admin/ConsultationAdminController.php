@@ -249,6 +249,10 @@ class ConsultationAdminController extends Controller
             return back()->withInput()->with('error', 'Completed consultations cannot be rescheduled.');
         }
 
+        if ($consultation->type?->slug === 'socal-free-intro-call') {
+            return back()->withInput()->with('error', 'Free 15-Min Intro Call bookings cannot be rescheduled from the admin panel.');
+        }
+
         try {
             $availability->assertAvailable($type, $startsAt, $consultation->professional_id, $consultation->id);
         } catch (\DomainException $exception) {

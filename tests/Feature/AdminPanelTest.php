@@ -406,6 +406,33 @@ class AdminPanelTest extends TestCase
             ->assertSee('SAMPLE-01');
     }
 
+    public function test_admin_reschedule_is_disabled_for_free_intro_calls(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $freeIntro = Consultation::where('booking_number', 'SAMPLE-01')->firstOrFail();
+        $paidConsultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $freeIntro))
+            ->assertOk()
+            ->assertDontSee('Reschedule Meeting')
+            ->assertDontSee('name="starts_at"', false);
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $paidConsultation))
+            ->assertOk()
+            ->assertSee('Reschedule Meeting');
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.reschedule', $freeIntro), [
+                'starts_at' => '2026-10-01T09:00',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error', 'Free 15-Min Intro Call bookings cannot be rescheduled from the admin panel.');
+    }
+
     public function test_admin_can_view_questionnaire_answers_and_download_summary_pdf(): void
     {
         $this->seed();
