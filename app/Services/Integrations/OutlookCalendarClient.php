@@ -14,6 +14,8 @@ use Illuminate\Support\Str;
 
 class OutlookCalendarClient
 {
+    private const SYNC_WINDOW_MONTHS = 4;
+
     private const CONSULTATION_MARKER = 'SMC-CONSULTATION:';
 
     private const PARTICIPANT_MARKER = 'SMC-CONSULTATION-PARTICIPANT:';
@@ -50,24 +52,27 @@ class OutlookCalendarClient
     {
         $this->assertEnabled();
 
-        $start = CarbonImmutable::now(config('app.booking_timezone'))->startOfMonth();
-        $end = $start->addMonths(3)->endOfMonth();
+        [$start, $end] = $this->rollingSyncWindow();
 
         return $this->syncWindow($start, $end);
     }
 
-    public function syncFutureConsultations(?CarbonImmutable $from = null): array
+    public function syncFutureConsultations(?CarbonImmutable $from = null, ?CarbonImmutable $until = null): array
     {
         $this->assertEnabled();
 
-        $from ??= CarbonImmutable::now(config('app.booking_timezone'))->startOfDay();
+        [$windowStart, $windowEnd] = $this->rollingSyncWindow();
+        $from ??= $windowStart;
+        $until ??= $windowEnd;
         $fromDatabase = $from->timezone(config('app.booking_timezone'))->format('Y-m-d H:i:s');
+        $untilDatabase = $until->timezone(config('app.booking_timezone'))->format('Y-m-d H:i:s');
         $consultations = Consultation::query()
             ->with(['type', 'professional', 'questionnaireSubmissions'])
             ->whereNotNull('starts_at')
             ->whereIn('status', self::ACTIVE_CONSULTATION_STATUSES)
             ->where('payment_status', 'paid')
             ->where('starts_at', '>=', $fromDatabase)
+            ->where('starts_at', '<=', $untilDatabase)
             ->orderBy('starts_at')
             ->get()
             ->filter(fn (Consultation $consultation) => $this->isReadyForOutlook($consultation));
@@ -83,6 +88,7 @@ class OutlookCalendarClient
             ->where('scheduling_status', 'scheduled')
             ->whereNotNull('scheduled_starts_at')
             ->where('scheduled_starts_at', '>=', $fromDatabase)
+            ->where('scheduled_starts_at', '<=', $untilDatabase)
             ->whereHas('consultation', fn ($query) => $query
                 ->whereIn('status', ['paid', 'scheduled'])
                 ->where('payment_status', 'paid'))
@@ -211,7 +217,29 @@ class OutlookCalendarClient
                 ->delete();
         }
 
+        $this->deleteOutlookBusyRowsOutsideWindow($start, $end);
+
         return $count;
+    }
+
+    private function rollingSyncWindow(): array
+    {
+        $start = CarbonImmutable::now(config('app.booking_timezone'))->startOfDay();
+
+        return [$start, $start->addMonths(self::SYNC_WINDOW_MONTHS)->endOfDay()];
+    }
+
+    private function deleteOutlookBusyRowsOutsideWindow(CarbonImmutable $start, CarbonImmutable $end): void
+    {
+        ExternalCalendarEvent::query()
+            ->where('provider', 'outlook')
+            ->where('external_id', 'not like', 'consultation-%')
+            ->where('external_id', 'not like', 'free-intro-participant-%')
+            ->where(function ($query) use ($start, $end) {
+                $query->where('ends_at', '<=', $start->format('Y-m-d H:i:s'))
+                    ->orWhere('starts_at', '>', $end->format('Y-m-d H:i:s'));
+            })
+            ->delete();
     }
 
     public function syncConsultation(Consultation $consultation, string $source = 'admin_manual_sync'): ?ExternalCalendarEvent

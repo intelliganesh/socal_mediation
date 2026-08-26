@@ -676,6 +676,72 @@ class AdminPanelTest extends TestCase
         }
     }
 
+    public function test_calendar_sync_keeps_only_rolling_next_four_month_window(): void
+    {
+        $this->seed();
+        $this->travelTo('2026-08-26 10:00:00');
+        config([
+            'app.booking_timezone' => 'Asia/Kolkata',
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.socal_user_id' => 'socal@example.com',
+            'services.outlook.socal_calendar_id' => 'socal-calendar',
+            'services.outlook.legal_user_id' => 'legal@example.com',
+            'services.outlook.legal_calendar_id' => 'legal-calendar',
+        ]);
+
+        Consultation::query()->update(['starts_at' => null, 'ends_at' => null]);
+        $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+        $consultation->update([
+            'status' => 'scheduled',
+            'payment_status' => 'paid',
+            'starts_at' => '2027-01-10 10:00:00',
+            'ends_at' => '2027-01-10 11:00:00',
+        ]);
+        app(QuestionnaireWorkflowService::class)
+            ->ensureSubmission($consultation, $consultation->participants()->where('is_primary', true)->firstOrFail())
+            ->update([
+                'status' => 'submitted',
+                'submitted_at' => now(),
+            ]);
+
+        foreach ([
+            ['external_id' => 'past-outlook-busy', 'starts_at' => '2026-08-01 10:00:00', 'ends_at' => '2026-08-01 11:00:00'],
+            ['external_id' => 'too-far-outlook-busy', 'starts_at' => '2027-01-10 10:00:00', 'ends_at' => '2027-01-10 11:00:00'],
+        ] as $event) {
+            ExternalCalendarEvent::create($event + [
+                'provider' => 'outlook',
+                'application' => 'socal',
+                'title' => 'Out of window',
+                'is_busy' => true,
+            ]);
+        }
+
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
+            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/calendarView*' => Http::response(['value' => []], 200),
+            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/calendarView*' => Http::response(['value' => []], 200),
+        ]);
+
+        $sync = app(OutlookCalendarClient::class)->syncAllConsultations();
+
+        $this->assertSame(0, $sync['synced']);
+        foreach (['past-outlook-busy', 'too-far-outlook-busy'] as $externalId) {
+            $this->assertDatabaseMissing('external_calendar_events', [
+                'provider' => 'outlook',
+                'external_id' => $externalId,
+            ]);
+        }
+        $this->assertDatabaseMissing('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultation->id.'-legal',
+        ]);
+    }
+
     public function test_calendar_sync_deletes_marked_outlook_event_when_consultation_and_tracking_are_missing(): void
     {
         config([
