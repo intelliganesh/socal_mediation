@@ -109,10 +109,7 @@ class ConsultationRescheduleService
         }
 
         try {
-            if (filled($consultation->zoom_meeting_id)) {
-                $this->zoom->deleteMeeting($consultation->zoom_meeting_id);
-            }
-
+            $oldMeetingId = $consultation->zoom_meeting_id;
             $meeting = $this->zoom->createMeeting($consultation);
 
             $consultation->update([
@@ -130,6 +127,19 @@ class ConsultationRescheduleService
             ]);
 
             $this->zoomNotifications->sendZoomLink($consultation->refresh(), $source.'_zoom_link');
+
+            if (filled($oldMeetingId) && $oldMeetingId !== (string) $meeting['id']) {
+                try {
+                    $this->zoom->deleteMeeting($oldMeetingId);
+                } catch (\Throwable $exception) {
+                    $consultation->integrationLogs()->create([
+                        'provider' => 'zoom',
+                        'action' => $source.'_delete_old_meeting',
+                        'status' => 'failed',
+                        'message' => $exception->getMessage(),
+                    ]);
+                }
+            }
         } catch (\Throwable $exception) {
             $consultation->integrationLogs()->create([
                 'provider' => 'zoom',

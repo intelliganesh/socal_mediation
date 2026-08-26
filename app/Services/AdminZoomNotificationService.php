@@ -61,6 +61,7 @@ class AdminZoomNotificationService
                 'message' => match ($action) {
                     'manual_zoom_link' => 'Zoom meeting link resent from admin panel.',
                     'manual_reschedule_zoom_link' => 'Zoom meeting link sent after consultation reschedule.',
+                    'api_reschedule_zoom_link' => 'Zoom meeting link sent after consultation reschedule.',
                     default => 'Zoom meeting link sent after all payments were completed.',
                 },
             ]);

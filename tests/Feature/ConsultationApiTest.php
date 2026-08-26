@@ -1111,7 +1111,10 @@ class ConsultationApiTest extends TestCase
             }
         }
 
-        Mail::assertSent(ConsultationZoomLinkMail::class);
+        Mail::assertSent(ConsultationZoomLinkMail::class, fn (ConsultationZoomLinkMail $mail) => $mail->isReschedule
+            && $mail->envelope()->subject === 'Your rescheduled consultation Zoom meeting link'
+            && str_contains($mail->render(), 'Consultation Rescheduled')
+            && str_contains($mail->render(), 'updated Zoom meeting link'));
         $this->assertDatabaseHas('questionnaire_submissions', [
             'id' => $submissions->first()->id,
             'status' => 'submitted',
