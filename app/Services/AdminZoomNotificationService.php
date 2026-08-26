@@ -28,10 +28,11 @@ class AdminZoomNotificationService
 
         $recipients = $consultation->participants()->whereNotNull('email')->get();
         $sent = 0;
+        $isReschedule = str_contains($action, 'reschedule');
 
         foreach ($recipients as $participant) {
             try {
-                Mail::to($participant->email)->send(new ConsultationZoomLinkMail($consultation, $participant));
+                Mail::to($participant->email)->send(new ConsultationZoomLinkMail($consultation, $participant, $isReschedule));
             } catch (\Throwable $exception) {
                 $consultation->integrationLogs()->create([
                     'provider' => 'mail',

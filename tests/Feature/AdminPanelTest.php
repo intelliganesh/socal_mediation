@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\AdminConsultationRescheduledMail;
 use App\Mail\ConsultationConclusionMail;
 use App\Mail\ConsultationPaymentLinkMail;
 use App\Mail\ConsultationZoomLinkMail;
@@ -398,6 +399,7 @@ class AdminPanelTest extends TestCase
             ->get(route('admin.consultations.show', $current))
             ->assertOk()
             ->assertSee('Repeat Intro')
+            ->assertSee('Repeat intro details')
             ->assertSee('Previous Free 15-Min Intro Call found')
             ->assertSee('Pending')
             ->assertSee('Service: '.$previous->legal_service_name)
@@ -798,6 +800,14 @@ class AdminPanelTest extends TestCase
         $this->seed();
         Mail::fake();
 
+        AppSetting::create([
+            'key' => 'admin_new_consultation_notifications',
+            'value' => [
+                'enabled' => true,
+                'emails' => ['owner@example.com'],
+            ],
+        ]);
+
         config([
             'services.zoom.enabled' => true,
             'services.zoom.oauth_base_url' => 'https://zoom.test',
@@ -833,7 +843,11 @@ class AdminPanelTest extends TestCase
             ->assertRedirect()
             ->assertSessionHas('status', 'Consultation rescheduled.');
 
-        Mail::assertSent(ConsultationZoomLinkMail::class, fn (ConsultationZoomLinkMail $mail) => $mail->participant->email === 'lena.ortiz@example.com');
+        Mail::assertSent(ConsultationZoomLinkMail::class, fn (ConsultationZoomLinkMail $mail) => $mail->participant->email === 'lena.ortiz@example.com'
+            && $mail->isReschedule
+            && $mail->envelope()->subject === 'Your rescheduled consultation Zoom meeting link'
+            && str_contains($mail->render(), 'Consultation Rescheduled'));
+        Mail::assertSent(AdminConsultationRescheduledMail::class, fn (AdminConsultationRescheduledMail $mail) => $mail->hasTo('owner@example.com'));
         $this->assertSame('https://zoom.test/j/law-office-rescheduled-meeting', $consultation->refresh()->zoom_join_url);
         $this->assertDatabaseHas('integration_logs', [
             'loggable_type' => Consultation::class,

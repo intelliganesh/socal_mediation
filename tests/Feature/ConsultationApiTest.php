@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\AdminConsultationRescheduledMail;
 use App\Mail\AdminNewConsultationRequestMail;
 use App\Mail\ConsultationConfirmationMail;
 use App\Mail\ConsultationPaymentLinkMail;
@@ -2315,6 +2316,66 @@ class ConsultationApiTest extends TestCase
             'provider' => 'outlook',
             'action' => 'api_reschedule_outlook_sync',
             'status' => 'synced',
+        ]);
+    }
+
+    public function test_reschedule_booking_api_sends_confirmation_and_admin_email_after_questionnaires_are_complete(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config([
+            'services.outlook.enabled' => false,
+            'services.zoom.enabled' => false,
+        ]);
+
+        AppSetting::create([
+            'key' => 'admin_new_consultation_notifications',
+            'value' => [
+                'enabled' => true,
+                'emails' => ['owner@example.com'],
+            ],
+        ]);
+
+        $consultation = Consultation::where('booking_number', 'SAMPLE-07')->firstOrFail();
+        $consultation->update(['consultation_mode' => 'phone']);
+        $participant = $consultation->participants()->where('is_primary', true)->firstOrFail();
+
+        app(QuestionnaireWorkflowService::class)
+            ->ensureSubmission($consultation, $participant)
+            ->update([
+                'status' => 'submitted',
+                'submitted_at' => now(),
+            ]);
+
+        $this->postJson('/api/v1/consultations/'.$consultation->id.'/reschedule', [
+            'starts_at' => '2026-10-06T10:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Consultation rescheduled.')
+            ->assertJsonPath('data.status', 'scheduled')
+            ->assertJsonPath('data.starts_at', '2026-10-06T10:00:00-07:00');
+
+        Mail::assertSent(ConsultationConfirmationMail::class, fn (ConsultationConfirmationMail $mail) => $mail->participant->email === 'lena.ortiz@example.com'
+            && $mail->isReschedule
+            && $mail->envelope()->subject === 'Your consultation has been rescheduled'
+            && str_contains($mail->render(), 'Consultation Rescheduled'));
+        Mail::assertSent(AdminConsultationRescheduledMail::class, fn (AdminConsultationRescheduledMail $mail) => $mail->hasTo('owner@example.com'));
+        Mail::assertNotSent(ConsultationZoomLinkMail::class);
+
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'mail',
+            'action' => 'api_reschedule_confirmation',
+            'status' => 'sent',
+        ]);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'mail',
+            'action' => 'admin_consultation_rescheduled',
+            'status' => 'sent',
         ]);
     }
 

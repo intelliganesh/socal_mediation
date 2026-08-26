@@ -5,9 +5,11 @@
 
 @include('emails.partials.consultation-card', [
     'consultation' => $consultation,
-    'title' => 'Consultation Confirmed',
-    'intro' => "Hello <strong>" . e($clientName) . "</strong>, Thank you for your booking. Your consultation with <strong>" . e($professional) . "</strong> has been confirmed and scheduled successfully. Please find the consultation details below.",
-    'statusLabel' => 'Payment Successful',
+    'title' => $isReschedule ? 'Consultation Rescheduled' : 'Consultation Confirmed',
+    'intro' => $isReschedule
+        ? "Hello <strong>" . e($clientName) . "</strong>, your consultation with <strong>" . e($professional) . "</strong> has been rescheduled. Please use the updated Zoom meeting link below."
+        : "Hello <strong>" . e($clientName) . "</strong>, Thank you for your booking. Your consultation with <strong>" . e($professional) . "</strong> has been confirmed and scheduled successfully. Please find the consultation details below.",
+    'statusLabel' => $isReschedule ? 'Rescheduled' : 'Payment Successful',
     'amountCents' => $consultation->total_amount_cents,
     'zoomUrl' => $consultation->zoom_join_url,
     'buttonUrl' => $consultation->zoom_join_url,

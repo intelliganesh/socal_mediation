@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Mail\AdminConsultationRescheduledMail;
 use App\Mail\AdminNewConsultationRequestMail;
 use App\Models\AppSetting;
 use App\Models\Consultation;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Mail;
 
 class AdminNewConsultationNotificationService
@@ -62,6 +64,41 @@ class AdminNewConsultationNotificationService
             'action' => 'admin_new_consultation_request',
             'status' => 'sent',
             'message' => 'New consultation request notification sent to configured admin recipients.',
+            'response_payload' => [
+                'recipient_count' => count($settings['emails']),
+                'recipients' => $settings['emails'],
+            ],
+        ]);
+
+        return count($settings['emails']);
+    }
+
+    public function sendForReschedule(Consultation $consultation, ?CarbonInterface $oldStartsAt = null, ?CarbonInterface $newStartsAt = null): int
+    {
+        if ($consultation->status === 'draft') {
+            return 0;
+        }
+
+        $settings = $this->settings();
+        if (! $settings['enabled'] || $settings['emails'] === []) {
+            return 0;
+        }
+
+        $consultation->loadMissing(['type', 'professional', 'participants']);
+
+        foreach ($settings['emails'] as $email) {
+            Mail::to($email)->send(new AdminConsultationRescheduledMail($consultation, $oldStartsAt, $newStartsAt));
+        }
+
+        $consultation->integrationLogs()->create([
+            'provider' => 'mail',
+            'action' => 'admin_consultation_rescheduled',
+            'status' => 'sent',
+            'message' => 'Consultation reschedule notification sent to configured admin recipients.',
+            'request_payload' => [
+                'old_starts_at' => $oldStartsAt?->toIso8601String(),
+                'new_starts_at' => $newStartsAt?->toIso8601String(),
+            ],
             'response_payload' => [
                 'recipient_count' => count($settings['emails']),
                 'recipients' => $settings['emails'],

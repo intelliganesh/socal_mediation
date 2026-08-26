@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Services;
 
 use App\Models\Consultation;
@@ -10,7 +9,8 @@ use Illuminate\Support\Str;
 
 class ConsultationDraftService
 {
-    public function __construct(private readonly PaymentReconciliationService $payments) {}
+    public function __construct(private readonly PaymentReconciliationService $payments)
+    {}
 
     public function createDraft(ConsultationType $type, array $data = []): Consultation
     {
@@ -18,15 +18,15 @@ class ConsultationDraftService
 
         return DB::transaction(function () use ($type, $data) {
             $consultation = Consultation::create([
-                'id' => (string) Str::uuid(),
-                'booking_number' => $this->bookingNumber($type->application),
+                'id'                   => (string) Str::uuid(),
+                'booking_number'       => $this->bookingNumber($type->application),
                 'consultation_type_id' => $type->id,
-                'application' => $type->application,
-                'status' => 'draft',
-                'payment_status' => 'pending',
-                'timezone' => config('app.booking_timezone'),
-                'total_amount_cents' => $type->price_cents,
-                'currency' => $type->currency,
+                'application'          => $type->application,
+                'status'               => 'draft',
+                'payment_status'       => 'pending',
+                'timezone'             => config('app.booking_timezone'),
+                'total_amount_cents'   => $type->price_cents,
+                'currency'             => $type->currency,
             ]);
 
             if ($this->hasDraftFormFields($data)) {
@@ -40,21 +40,21 @@ class ConsultationDraftService
     public function updateDetails(Consultation $consultation, array $data): Consultation
     {
         return DB::transaction(function () use ($consultation, $data) {
-            $primary = $data['primary_client'];
+            $primary          = $data['primary_client'];
             $legalServiceName = $this->resolveLegalServiceName($consultation, $data['legal_service_name'] ?? null);
 
             $consultation->update([
-                'legal_service_name' => $legalServiceName,
-                'consultation_mode' => $data['consultation_mode'],
-                'description' => $data['description'] ?? null,
-                'referral_source' => $data['referral_source'] ?? null,
+                'legal_service_name'     => $legalServiceName,
+                'consultation_mode'      => $data['consultation_mode'],
+                'description'            => $data['description'] ?? null,
+                'referral_source'        => $data['referral_source'] ?? null,
                 'referral_source_others' => $this->otherReferralSource($data),
-                'primary_first_name' => $primary['first_name'],
-                'primary_last_name' => $primary['last_name'] ?? null,
-                'primary_email' => $primary['email'],
-                'primary_phone_country' => $primary['phone_country'] ?? null,
-                'primary_phone' => $primary['phone'] ?? null,
-                'status' => 'draft',
+                'primary_first_name'     => $primary['first_name'],
+                'primary_last_name'      => $primary['last_name'] ?? null,
+                'primary_email'          => $primary['email'],
+                'primary_phone_country'  => $primary['phone_country'] ?? null,
+                'primary_phone'          => $primary['phone'] ?? null,
+                'status'                 => 'draft',
             ]);
 
             $consultation->participants()->delete();
@@ -63,12 +63,12 @@ class ConsultationDraftService
 
             foreach ($participants as $participant) {
                 $consultation->participants()->create([
-                    'first_name' => $participant['first_name'],
-                    'last_name' => $participant['last_name'] ?? null,
-                    'email' => $participant['email'] ?? null,
+                    'first_name'    => $participant['first_name'],
+                    'last_name'     => $participant['last_name'] ?? null,
+                    'email'         => $participant['email'] ?? null,
                     'phone_country' => $participant['phone_country'] ?? null,
-                    'phone' => $participant['phone'] ?? null,
-                    'is_primary' => (bool) ($participant['is_primary'] ?? false),
+                    'phone'         => $participant['phone'] ?? null,
+                    'is_primary'    => (bool) ($participant['is_primary'] ?? false),
                 ]);
             }
 
@@ -82,9 +82,9 @@ class ConsultationDraftService
             return null;
         }
 
-        $candidate = Str::of($name)->squish()->toString();
+        $candidate  = Str::of($name)->squish()->toString();
         $normalized = Str::of($candidate)->lower()->toString();
-        $service = LegalService::query()
+        $service    = LegalService::query()
             ->where('application', $consultation->application)
             ->whereRaw('LOWER(name) = ?', [$normalized])
             ->first();
@@ -106,29 +106,29 @@ class ConsultationDraftService
             'referral_source_others',
             'primary_client',
             'participants',
-        ])->contains(fn (string $field) => array_key_exists($field, $data));
+        ])->contains(fn(string $field) => array_key_exists($field, $data));
     }
 
     private function applyDraftFormFields(Consultation $consultation, array $data): void
     {
-        $primary = $data['primary_client'] ?? [];
+        $primary          = $data['primary_client'] ?? [];
         $legalServiceName = $this->resolveLegalServiceName($consultation, $data['legal_service_name'] ?? null);
 
         $consultation->update([
-            'legal_service_name' => $legalServiceName,
-            'consultation_mode' => $data['consultation_mode'] ?? null,
-            'description' => $data['description'] ?? null,
-            'referral_source' => $data['referral_source'] ?? null,
+            'legal_service_name'     => $legalServiceName,
+            'consultation_mode'      => $data['consultation_mode'] ?? null,
+            'description'            => $data['description'] ?? null,
+            'referral_source'        => $data['referral_source'] ?? null,
             'referral_source_others' => $this->otherReferralSource($data),
-            'primary_first_name' => $primary['first_name'] ?? null,
-            'primary_last_name' => $primary['last_name'] ?? null,
-            'primary_email' => $primary['email'] ?? null,
-            'primary_phone_country' => $primary['phone_country'] ?? null,
-            'primary_phone' => $primary['phone'] ?? null,
-            'status' => 'draft',
+            'primary_first_name'     => $primary['first_name'] ?? null,
+            'primary_last_name'      => $primary['last_name'] ?? null,
+            'primary_email'          => $primary['email'] ?? null,
+            'primary_phone_country'  => $primary['phone_country'] ?? null,
+            'primary_phone'          => $primary['phone'] ?? null,
+            'status'                 => 'draft',
         ]);
 
-        $participants = $data['participants'] ?? [];
+        $participants          = $data['participants'] ?? [];
         $hasPrimaryParticipant = array_filter($primary) !== [];
 
         $consultation->participants()->delete();
@@ -143,19 +143,19 @@ class ConsultationDraftService
             }
 
             $consultation->participants()->create([
-                'first_name' => $participant['first_name'],
-                'last_name' => $participant['last_name'] ?? null,
-                'email' => $participant['email'] ?? null,
+                'first_name'    => $participant['first_name'],
+                'last_name'     => $participant['last_name'] ?? null,
+                'email'         => $participant['email'] ?? null,
                 'phone_country' => $participant['phone_country'] ?? null,
-                'phone' => $participant['phone'] ?? null,
-                'is_primary' => (bool) ($participant['is_primary'] ?? false),
+                'phone'         => $participant['phone'] ?? null,
+                'is_primary'    => (bool) ($participant['is_primary'] ?? false),
             ]);
         }
     }
 
     private function bookingNumber(string $application): string
     {
-        $prefix = $application === 'legal' ? 'SCM' : 'LX';
+        $prefix = $application === 'legal' ? 'SL' : 'SMC';
 
         do {
             $number = sprintf('%s-%s', $prefix, random_int(10000, 99999));

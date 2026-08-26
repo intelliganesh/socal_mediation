@@ -16,7 +16,8 @@ class ConsultationConfirmationMail extends Mailable
 
     public function __construct(
         public Consultation $consultation,
-        public ConsultationParticipant $participant
+        public ConsultationParticipant $participant,
+        public bool $isReschedule = false
     ) {
         $this->consultation->loadMissing(['type', 'professional']);
     }
@@ -24,7 +25,9 @@ class ConsultationConfirmationMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your consultation is confirmed'
+            subject: $this->isReschedule
+                ? 'Your consultation has been rescheduled'
+                : 'Your consultation is confirmed'
         );
     }
 

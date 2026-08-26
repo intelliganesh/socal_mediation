@@ -17,8 +17,8 @@ class ConsultationRescheduleService
         private readonly QuestionnaireWorkflowService $questionnaires,
         private readonly BookingDateTimeService $bookingDateTimes,
         private readonly RescheduleNotificationService $rescheduleNotifications,
-    ) {
-    }
+        private readonly AdminNewConsultationNotificationService $adminNotifications,
+    ) {}
 
     public function reschedule(Consultation $consultation, array $data, string $source = 'api_reschedule'): Consultation
     {
@@ -35,6 +35,7 @@ class ConsultationRescheduleService
         return DB::transaction(function () use ($consultation, $startsAt, $timezone, $type, $professionalId, $source) {
             $oldStartsAt = $consultation->starts_at?->toIso8601String();
             $oldEndsAt = $consultation->ends_at?->toIso8601String();
+            $oldStartsAtDate = $consultation->starts_at?->toImmutable();
 
             $consultation->update([
                 'professional_id' => $professionalId,
@@ -61,7 +62,13 @@ class ConsultationRescheduleService
             $rescheduledConsultation = $consultation->refresh()->load(['type', 'participants', 'questionnaireSubmissions']);
 
             if ($this->questionnaires->isReadyForMeetingRelease($rescheduledConsultation)) {
-                $this->regenerateZoomLink($rescheduledConsultation, $source);
+                if ($rescheduledConsultation->consultation_mode === 'online') {
+                    $this->regenerateZoomLink($rescheduledConsultation, $source);
+                } else {
+                    $this->rescheduleNotifications->sendReadyConfirmation($rescheduledConsultation, $source);
+                    $rescheduledConsultation->update(['status' => 'scheduled']);
+                }
+
                 $this->recreateOutlookEvent($consultation->refresh()->load(['type', 'professional']), $source);
             } else {
                 $this->clearZoomLink($consultation->refresh(), $source);
@@ -81,6 +88,8 @@ class ConsultationRescheduleService
                     'message' => 'Outlook sync was skipped because required questionnaire steps are not complete.',
                 ]);
             }
+
+            $this->adminNotifications->sendForReschedule($consultation->refresh(), $oldStartsAtDate, $startsAt);
 
             return $consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests', 'questionnaireSubmissions']);
         });

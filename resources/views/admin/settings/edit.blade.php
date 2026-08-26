@@ -7,8 +7,8 @@
             <label class="flex items-start gap-3 rounded-lg border border-[#E5E7EB] bg-[#F7F8FC] p-4">
                 <input class="mt-1 h-5 w-5 rounded border-[#E5E7EB]" type="checkbox" name="new_consultation_notifications_enabled" value="1" @checked(old('new_consultation_notifications_enabled', $notificationSettings['enabled']))>
                 <span>
-                    <span class="block text-sm font-bold text-[#111827]">Send email when a new consultation request is created</span>
-                    <span class="mt-1 block text-xs font-semibold text-gray-500">Draft consultations are ignored. Emails are sent only when the request is completed/submitted.</span>
+                    <span class="block text-sm font-bold text-[#111827]">Send admin consultation notifications</span>
+                    <span class="mt-1 block text-xs font-semibold text-gray-500">Draft consultations are ignored. Emails are sent when a request is completed/submitted and when an existing consultation is rescheduled.</span>
                 </span>
             </label>
 

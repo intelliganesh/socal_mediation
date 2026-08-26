@@ -9,6 +9,7 @@ use App\Models\IntegrationLog;
 use App\Models\PaymentRequest;
 use App\Models\QuestionnaireSubmission;
 use App\Services\AdminConclusionNotificationService;
+use App\Services\AdminNewConsultationNotificationService;
 use App\Services\AdminPaymentNotificationService;
 use App\Services\AdminZoomNotificationService;
 use App\Services\AvailabilityService;
@@ -232,7 +233,8 @@ class ConsultationAdminController extends Controller
         ZoomClient $zoom,
         AdminZoomNotificationService $zoomNotifications,
         QuestionnaireWorkflowService $questionnaires,
-        RescheduleNotificationService $rescheduleNotifications
+        RescheduleNotificationService $rescheduleNotifications,
+        AdminNewConsultationNotificationService $adminNotifications
     ) {
         $this->authorizeConsultation($consultation);
         $data = $request->validate([
@@ -253,6 +255,7 @@ class ConsultationAdminController extends Controller
             return back()->withInput()->with('error', $exception->getMessage());
         }
 
+        $oldStartsAt = $consultation->starts_at?->toImmutable();
         $consultation->update([
             'starts_at' => $startsAt,
             'ends_at' => $startsAt->addMinutes($type->duration_minutes),
@@ -294,6 +297,12 @@ class ConsultationAdminController extends Controller
                 }
             } catch (\RuntimeException $exception) {
                 return back()->with('error', 'Consultation rescheduled, but Zoom link update failed: '.$exception->getMessage());
+            }
+        } elseif ($isReadyForMeetingRelease) {
+            $sent = $rescheduleNotifications->sendReadyConfirmation($consultation->refresh(), 'manual_reschedule');
+
+            if ($sent === 0) {
+                $zoomMailWarning = ' No participant reschedule emails were sent.';
             }
         } elseif ($consultation->consultation_mode === 'online') {
             if (filled($consultation->zoom_meeting_id)) {
@@ -350,6 +359,8 @@ class ConsultationAdminController extends Controller
                 'message' => 'Outlook sync was skipped because required questionnaire steps are not complete.',
             ]);
         }
+
+        $adminNotifications->sendForReschedule($consultation->refresh(), $oldStartsAt, $startsAt);
 
         return back()->with('status', 'Consultation rescheduled.'.($zoomMailWarning ?? ''));
     }

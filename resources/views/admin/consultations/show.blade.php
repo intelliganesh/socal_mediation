@@ -246,6 +246,23 @@
                                         <i data-lucide="repeat-2" class="h-3 w-3"></i>
                                         Repeat Intro
                                     </span>
+                                    <details class="relative">
+                                        <summary class="grid h-6 w-6 cursor-pointer list-none place-items-center rounded-full border border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200" aria-label="Repeat intro details" title="Repeat intro details">
+                                            <i data-lucide="circle-alert" class="h-4 w-4"></i>
+                                        </summary>
+                                        <div class="absolute left-0 z-10 mt-2 w-72 rounded-lg border border-amber-200 bg-white p-3 text-xs font-semibold text-amber-900 shadow-lg">
+                                            <div>Previous Free 15-Min Intro Call found</div>
+                                            <div class="mt-1 text-amber-800">
+                                                {{ $repeatFreeIntroParticipant->booking_number }} - {{ Str::headline($repeatFreeIntroParticipant->status) }}
+                                                @if($repeatFreeIntroParticipant->starts_at)
+                                                - {{ $repeatFreeIntroParticipant->starts_at->format('M d, Y g:i A') }}
+                                                @endif
+                                            </div>
+                                            @if($repeatFreeIntroParticipant->legal_service_name)
+                                            <div class="mt-1 text-amber-800">Service: {{ $repeatFreeIntroParticipant->legal_service_name }}</div>
+                                            @endif
+                                        </div>
+                                    </details>
                                     @endif
                                 </div>
                                 <div class="truncate text-xs text-gray-500">{{ $participant->email ?: 'Not provided' }}</div>
@@ -254,20 +271,6 @@
                                     {{ Str::headline($participant->scheduling_status ?? 'pending') }}
                                     @if($participant->scheduled_starts_at)
                                     - {{ $participant->scheduled_starts_at->format('M d, Y g:i A') }}
-                                    @endif
-                                </div>
-                                @endif
-                                @if($repeatFreeIntroParticipant)
-                                <div class="mt-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-900">
-                                    Previous Free 15-Min Intro Call found
-                                    <span class="block text-amber-800">
-                                        {{ $repeatFreeIntroParticipant->booking_number }} - {{ Str::headline($repeatFreeIntroParticipant->status) }}
-                                        @if($repeatFreeIntroParticipant->starts_at)
-                                        - {{ $repeatFreeIntroParticipant->starts_at->format('M d, Y g:i A') }}
-                                        @endif
-                                    </span>
-                                    @if($repeatFreeIntroParticipant->legal_service_name)
-                                    <span class="mt-1 block text-amber-800">Service: {{ $repeatFreeIntroParticipant->legal_service_name }}</span>
                                     @endif
                                 </div>
                                 @endif
