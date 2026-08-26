@@ -13,6 +13,32 @@ use OpenApi\Attributes as OA;
 
 class QuestionnaireController extends Controller
 {
+    #[OA\Get(
+        path: '/v1/questionnaires/socal-divorce-intake/{token}',
+        tags: ['Questionnaires'],
+        summary: 'Check SoCal divorce intake completion status',
+        parameters: [
+            new OA\Parameter(name: 'token', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Questionnaire status', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'data', type: 'object', properties: [
+                    new OA\Property(property: 'token', type: 'string'),
+                    new OA\Property(property: 'questionnaire_completed', type: 'boolean', example: false),
+                    new OA\Property(property: 'submitted_at', type: 'string', nullable: true),
+                    new OA\Property(property: 'agreement_agreed', type: 'boolean', example: false),
+                ]),
+            ])),
+            new OA\Response(response: 404, description: 'Questionnaire token not found'),
+            new OA\Response(response: 409, description: 'Questionnaire token is not valid for this form'),
+        ]
+    )]
+    public function showSocalDivorceIntake(string $token)
+    {
+        return $this->showForTemplate($token, 'socal_divorce_intake');
+    }
+
     #[OA\Post(
         path: '/v1/questionnaires/socal-divorce-intake/{token}',
         tags: ['Questionnaires'],
@@ -91,6 +117,32 @@ class QuestionnaireController extends Controller
         return $this->storeForTemplate($token, 'socal_divorce_intake', $request, $workflow);
     }
 
+    #[OA\Get(
+        path: '/v1/questionnaires/socal-party-mediation/{token}',
+        tags: ['Questionnaires'],
+        summary: 'Check SoCal party mediation completion status',
+        parameters: [
+            new OA\Parameter(name: 'token', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Questionnaire status', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'data', type: 'object', properties: [
+                    new OA\Property(property: 'token', type: 'string'),
+                    new OA\Property(property: 'questionnaire_completed', type: 'boolean', example: false),
+                    new OA\Property(property: 'submitted_at', type: 'string', nullable: true),
+                    new OA\Property(property: 'agreement_agreed', type: 'boolean', example: false),
+                ]),
+            ])),
+            new OA\Response(response: 404, description: 'Questionnaire token not found'),
+            new OA\Response(response: 409, description: 'Questionnaire token is not valid for this form'),
+        ]
+    )]
+    public function showSocalPartyMediation(string $token)
+    {
+        return $this->showForTemplate($token, 'socal_party_mediation');
+    }
+
     #[OA\Post(
         path: '/v1/questionnaires/socal-party-mediation/{token}',
         tags: ['Questionnaires'],
@@ -132,6 +184,32 @@ class QuestionnaireController extends Controller
         return $this->storeForTemplate($token, 'socal_party_mediation', $request, $workflow);
     }
 
+    #[OA\Get(
+        path: '/v1/questionnaires/legal-initial-intake/{token}',
+        tags: ['Questionnaires'],
+        summary: 'Check legal initial intake completion status',
+        parameters: [
+            new OA\Parameter(name: 'token', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Questionnaire status', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'data', type: 'object', properties: [
+                    new OA\Property(property: 'token', type: 'string'),
+                    new OA\Property(property: 'questionnaire_completed', type: 'boolean', example: false),
+                    new OA\Property(property: 'submitted_at', type: 'string', nullable: true),
+                    new OA\Property(property: 'agreement_agreed', type: 'boolean', example: false),
+                ]),
+            ])),
+            new OA\Response(response: 404, description: 'Questionnaire token not found'),
+            new OA\Response(response: 409, description: 'Questionnaire token is not valid for this form'),
+        ]
+    )]
+    public function showLegalInitialIntake(string $token)
+    {
+        return $this->showForTemplate($token, 'legal_initial_intake');
+    }
+
     #[OA\Post(
         path: '/v1/questionnaires/legal-initial-intake/{token}',
         tags: ['Questionnaires'],
@@ -164,6 +242,22 @@ class QuestionnaireController extends Controller
     public function storeLegalInitialIntake(string $token, Request $request, QuestionnaireWorkflowService $workflow)
     {
         return $this->storeForTemplate($token, 'legal_initial_intake', $request, $workflow);
+    }
+
+    private function showForTemplate(string $token, string $templateKey)
+    {
+        $submission = $this->submission($token);
+
+        if ($submission->template_key !== $templateKey) {
+            return ApiResponse::error('This questionnaire link is not valid for the selected form.', 409);
+        }
+
+        return ApiResponse::success([
+            'token' => $submission->token,
+            'questionnaire_completed' => $submission->status === 'submitted',
+            'submitted_at' => $submission->submitted_at?->toIso8601String(),
+            'agreement_agreed' => (bool) $submission->agreement_accepted,
+        ]);
     }
 
     private function storeForTemplate(string $token, string $templateKey, Request $request, QuestionnaireWorkflowService $workflow)
@@ -203,6 +297,7 @@ class QuestionnaireController extends Controller
                     new OA\Property(property: 'token', type: 'string'),
                     new OA\Property(property: 'required', type: 'boolean'),
                     new OA\Property(property: 'accepted', type: 'boolean'),
+                    new OA\Property(property: 'agreement_agreed', type: 'boolean', example: false),
                     new OA\Property(property: 'accepted_at', type: 'string', nullable: true),
                     new OA\Property(property: 'questionnaire_completed', type: 'boolean', example: true),
                 ]),
@@ -219,6 +314,7 @@ class QuestionnaireController extends Controller
             'token' => $submission->token,
             'required' => (bool) ($template['requires_agreement'] ?? false),
             'accepted' => $submission->agreement_accepted,
+            'agreement_agreed' => (bool) $submission->agreement_accepted,
             'accepted_at' => $submission->agreement_accepted_at?->toIso8601String(),
             'questionnaire_completed' => $submission->status === 'submitted',
             'version' => QuestionnaireTemplateService::AGREEMENT_VERSION,

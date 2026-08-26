@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Mail\ConsultationConclusionMail;
 use App\Mail\ConsultationPaymentLinkMail;
 use App\Mail\ConsultationZoomLinkMail;
+use App\Models\AppSetting;
 use App\Models\Consultation;
 use App\Models\ExternalCalendarEvent;
 use App\Models\PaymentRequest;
@@ -77,6 +78,52 @@ class AdminPanelTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('admin.users.index'))
+            ->assertForbidden();
+    }
+
+    public function test_global_admin_can_manage_new_consultation_notification_settings(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get(route('admin.settings.edit'))
+            ->assertOk()
+            ->assertSee('Send email when a new consultation request is created')
+            ->assertSee('Notification Recipients');
+
+        $this->actingAs($admin)
+            ->put(route('admin.settings.update'), [
+                'new_consultation_notifications_enabled' => '1',
+                'new_consultation_notification_emails' => "owner@example.com\nmanager@example.com, owner@example.com",
+            ])
+            ->assertRedirect(route('admin.settings.edit'));
+
+        $this->assertDatabaseHas('app_settings', [
+            'key' => 'admin_new_consultation_notifications',
+        ]);
+
+        $this->assertSame([
+            'enabled' => true,
+            'emails' => ['owner@example.com', 'manager@example.com'],
+        ], AppSetting::where('key', 'admin_new_consultation_notifications')->firstOrFail()->value);
+    }
+
+    public function test_scoped_admin_cannot_access_settings(): void
+    {
+        $this->seed();
+
+        $user = User::create([
+            'name' => 'SoCal Admin',
+            'email' => 'socal.settings@example.com',
+            'password' => 'password123',
+            'role' => 'admin',
+            'application' => 'socal',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('admin.settings.edit'))
             ->assertForbidden();
     }
 
@@ -201,6 +248,27 @@ class AdminPanelTest extends TestCase
         Mail::assertSent(ConsultationPaymentLinkMail::class, 2);
     }
 
+    public function test_free_intro_call_shows_zero_payers_in_admin_payment_progress(): void
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-01')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.index', ['q' => $consultation->booking_number]))
+            ->assertOk()
+            ->assertSee('0 payers')
+            ->assertSee('0 Paid');
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $consultation))
+            ->assertOk()
+            ->assertSee('Payment Progress')
+            ->assertSee('0 payers')
+            ->assertSee('0 Paid · 0 Pending');
+    }
+
     public function test_admin_consultation_show_reconciles_pending_converge_payments(): void
     {
         $this->seed();
@@ -321,9 +389,18 @@ class AdminPanelTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.consultations.show', $current))
             ->assertOk()
+            ->assertDontSee('Repeat Intro')
+            ->assertDontSee('Previous Free 15-Min Intro Call found');
+
+        $current->update(['legal_service_name' => $previous->legal_service_name]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $current))
+            ->assertOk()
             ->assertSee('Repeat Intro')
             ->assertSee('Previous Free 15-Min Intro Call found')
             ->assertSee('Pending')
+            ->assertSee('Service: '.$previous->legal_service_name)
             ->assertSee('SAMPLE-01');
     }
 

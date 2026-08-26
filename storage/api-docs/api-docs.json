@@ -630,7 +630,7 @@
                     "Consultations"
                 ],
                 "summary": "Return duration-based available slots for a consultation type and month",
-                "description": "The day window comes from BOOKING_DAY_START and BOOKING_DAY_END in BOOKING_TIMEZONE. Slot spacing comes from the selected consultation type duration, and each slot is marked unavailable when it overlaps any application booking or Outlook busy event.",
+                "description": "The day window comes from BOOKING_DAY_START and BOOKING_DAY_END in BOOKING_TIMEZONE. Slot spacing comes from the selected consultation type duration, and each slot is marked unavailable when it overlaps any application booking or locally synced Outlook busy event. Outlook is refreshed by the scheduled/admin sync, not inline during this read API.",
                 "operationId": "dc46d90a1ee3cef5f47d540a7c896d01",
                 "parameters": [
                     {
@@ -781,6 +781,67 @@
             }
         },
         "/v1/questionnaires/socal-divorce-intake/{token}": {
+            "get": {
+                "tags": [
+                    "Questionnaires"
+                ],
+                "summary": "Check SoCal divorce intake completion status",
+                "operationId": "2f86b7aaf8fbfa760c044e71ec5bc469",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Questionnaire status",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "token": {
+                                                    "type": "string"
+                                                },
+                                                "questionnaire_completed": {
+                                                    "type": "boolean",
+                                                    "example": false
+                                                },
+                                                "submitted_at": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "agreement_agreed": {
+                                                    "type": "boolean",
+                                                    "example": false
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Questionnaire token not found"
+                    },
+                    "409": {
+                        "description": "Questionnaire token is not valid for this form"
+                    }
+                }
+            },
             "post": {
                 "tags": [
                     "Questionnaires"
@@ -1065,6 +1126,67 @@
             }
         },
         "/v1/questionnaires/socal-party-mediation/{token}": {
+            "get": {
+                "tags": [
+                    "Questionnaires"
+                ],
+                "summary": "Check SoCal party mediation completion status",
+                "operationId": "86da8360e98680911641c410ced43abd",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Questionnaire status",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "token": {
+                                                    "type": "string"
+                                                },
+                                                "questionnaire_completed": {
+                                                    "type": "boolean",
+                                                    "example": false
+                                                },
+                                                "submitted_at": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "agreement_agreed": {
+                                                    "type": "boolean",
+                                                    "example": false
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Questionnaire token not found"
+                    },
+                    "409": {
+                        "description": "Questionnaire token is not valid for this form"
+                    }
+                }
+            },
             "post": {
                 "tags": [
                     "Questionnaires"
@@ -1193,6 +1315,67 @@
             }
         },
         "/v1/questionnaires/legal-initial-intake/{token}": {
+            "get": {
+                "tags": [
+                    "Questionnaires"
+                ],
+                "summary": "Check legal initial intake completion status",
+                "operationId": "c50e08dc1264a6e5d6f15fffff129f63",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Questionnaire status",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "token": {
+                                                    "type": "string"
+                                                },
+                                                "questionnaire_completed": {
+                                                    "type": "boolean",
+                                                    "example": false
+                                                },
+                                                "submitted_at": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "agreement_agreed": {
+                                                    "type": "boolean",
+                                                    "example": false
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Questionnaire token not found"
+                    },
+                    "409": {
+                        "description": "Questionnaire token is not valid for this form"
+                    }
+                }
+            },
             "post": {
                 "tags": [
                     "Questionnaires"
@@ -1309,7 +1492,46 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Agreement detail"
+                        "description": "Agreement detail",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "token": {
+                                                    "type": "string"
+                                                },
+                                                "required": {
+                                                    "type": "boolean"
+                                                },
+                                                "accepted": {
+                                                    "type": "boolean"
+                                                },
+                                                "agreement_agreed": {
+                                                    "type": "boolean",
+                                                    "example": false
+                                                },
+                                                "accepted_at": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                },
+                                                "questionnaire_completed": {
+                                                    "type": "boolean",
+                                                    "example": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     },
                     "404": {
                         "description": "Agreement token not found"

@@ -34,6 +34,7 @@
             ['label' => 'Consultations', 'icon' => 'calendar-days', 'href' => route('admin.consultations.index'), 'active' => request()->routeIs('admin.consultations.*')],
             ['label' => 'Calendar', 'icon' => 'calendar', 'href' => route('admin.calendar.index'), 'active' => request()->routeIs('admin.calendar.*')],
             ...($currentUser?->isGlobalAdmin() ? [['label' => 'Users', 'icon' => 'users', 'href' => route('admin.users.index'), 'active' => request()->routeIs('admin.users.*')]] : []),
+            ...($currentUser?->isGlobalAdmin() ? [['label' => 'Settings', 'icon' => 'settings', 'href' => route('admin.settings.edit'), 'active' => request()->routeIs('admin.settings.*')]] : []),
             ['label' => 'API Documentation', 'icon' => 'clipboard-list', 'href' => url('/api/documentation'), 'active' => false, 'external' => true, 'aria' => 'API Documentation'],
         ];
         $userName = $brand['profileName'] ?: ($currentUser?->name ?: 'John Davis');

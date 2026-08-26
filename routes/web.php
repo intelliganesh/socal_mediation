@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\CalendarController;
 use App\Http\Controllers\Admin\ConsultationAdminController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Payments\ConvergeCheckoutController;
 use Illuminate\Support\Facades\Route;
@@ -54,6 +55,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('consultations/{consultation}/sync-outlook', [ConsultationAdminController::class, 'syncOutlook'])->name('consultations.sync-outlook');
         Route::get('calendar', [CalendarController::class, 'index'])->name('calendar.index');
         Route::post('calendar/sync', [CalendarController::class, 'sync'])->name('calendar.sync');
+        Route::get('settings', [SettingsController::class, 'edit'])->name('settings.edit');
+        Route::put('settings', [SettingsController::class, 'update'])->name('settings.update');
         Route::resource('users', UserController::class)->except(['show', 'destroy']);
     });
 });

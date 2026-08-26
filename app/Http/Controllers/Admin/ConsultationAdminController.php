@@ -493,6 +493,11 @@ class ConsultationAdminController extends Controller
             ->whereKeyNot($consultation->id)
             ->whereNotIn('status', ['draft', 'cancelled'])
             ->whereHas('type', fn ($query) => $query->where('slug', 'socal-free-intro-call'))
+            ->when(
+                filled($consultation->legal_service_name),
+                fn ($query) => $query->where('legal_service_name', $consultation->legal_service_name),
+                fn ($query) => $query->whereNull('legal_service_name')
+            )
             ->when($consultation->starts_at, fn ($query) => $query->where('starts_at', '<', $consultation->starts_at))
             ->get();
 

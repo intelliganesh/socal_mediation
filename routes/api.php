@@ -25,8 +25,11 @@ Route::prefix('v1')->group(function () {
     Route::post('consultations/{consultation}/reschedule', [ConsultationController::class, 'reschedule']);
     Route::post('free-intro-slots/{scheduling_token}', [ConsultationController::class, 'scheduleFreeIntroParticipantSlot']);
 
+    Route::get('questionnaires/socal-divorce-intake/{token}', [QuestionnaireController::class, 'showSocalDivorceIntake']);
     Route::post('questionnaires/socal-divorce-intake/{token}', [QuestionnaireController::class, 'storeSocalDivorceIntake']);
+    Route::get('questionnaires/socal-party-mediation/{token}', [QuestionnaireController::class, 'showSocalPartyMediation']);
     Route::post('questionnaires/socal-party-mediation/{token}', [QuestionnaireController::class, 'storeSocalPartyMediation']);
+    Route::get('questionnaires/legal-initial-intake/{token}', [QuestionnaireController::class, 'showLegalInitialIntake']);
     Route::post('questionnaires/legal-initial-intake/{token}', [QuestionnaireController::class, 'storeLegalInitialIntake']);
     Route::get('agreements/{token}', [QuestionnaireController::class, 'showAgreement']);
     Route::post('agreements/{token}', [QuestionnaireController::class, 'acceptAgreement']);

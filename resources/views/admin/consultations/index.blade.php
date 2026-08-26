@@ -22,7 +22,7 @@
         };
     @endphp
 
-    <form class="mb-5 rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.04)]" method="get">
+    <form class="mb-5 rounded-lg border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.04)] overflow-x-auto" method="get">
         <div class="grid gap-3 xl:grid-cols-[minmax(220px,1fr)_150px_140px_170px_170px_auto_auto_auto] xl:items-center">
             <label class="relative">
                 <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500"></i>
@@ -67,8 +67,9 @@
                 @php($app = $applicationTheme($consultation->application))
                 @php($status = $statusTheme($consultation->status))
                 @php($paymentStatus = $statusTheme($consultation->payment_status))
-                @php($payerCount = max(1, $consultation->paymentRequests->count()))
-                @php($paidCount = $consultation->paymentRequests->where('status', 'paid')->count())
+                @php($isFreeIntroCall = $consultation->type?->slug === 'socal-free-intro-call')
+                @php($payerCount = $isFreeIntroCall ? 0 : max(1, $consultation->paymentRequests->count()))
+                @php($paidCount = $isFreeIntroCall ? 0 : $consultation->paymentRequests->where('status', 'paid')->count())
                 @php($progressPercent = round($payerCount ? ($paidCount / $payerCount) * 100 : 0))
                 @php($name = trim($consultation->primary_first_name.' '.$consultation->primary_last_name) ?: 'No name yet')
                 <article class="p-4">
@@ -128,8 +129,9 @@
                         @php($app = $applicationTheme($consultation->application))
                         @php($status = $statusTheme($consultation->status))
                         @php($paymentStatus = $statusTheme($consultation->payment_status))
-                        @php($payerCount = max(1, $consultation->paymentRequests->count()))
-                        @php($paidCount = $consultation->paymentRequests->where('status', 'paid')->count())
+                        @php($isFreeIntroCall = $consultation->type?->slug === 'socal-free-intro-call')
+                        @php($payerCount = $isFreeIntroCall ? 0 : max(1, $consultation->paymentRequests->count()))
+                        @php($paidCount = $isFreeIntroCall ? 0 : $consultation->paymentRequests->where('status', 'paid')->count())
                         @php($progressPercent = round($payerCount ? ($paidCount / $payerCount) * 100 : 0))
                         @php($name = trim($consultation->primary_first_name.' '.$consultation->primary_last_name) ?: 'No name yet')
                         <tr class="align-middle hover:bg-[#FAFAFB]">

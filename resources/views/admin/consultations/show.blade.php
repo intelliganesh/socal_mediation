@@ -19,10 +19,11 @@
     };
     $bookingStatus = $statusTheme($consultation->status);
     $paymentStatus = $statusTheme($consultation->payment_status);
-    $paidPaymentCount = $consultation->paymentRequests->where('status', 'paid')->count();
-    $totalPaymentCount = $consultation->paymentRequests->count();
+    $isFreeIntroCall = $consultation->type?->slug === 'socal-free-intro-call';
+    $paidPaymentCount = $isFreeIntroCall ? 0 : $consultation->paymentRequests->where('status', 'paid')->count();
+    $totalPaymentCount = $isFreeIntroCall ? 0 : $consultation->paymentRequests->count();
     $pendingPaymentCount = max(0, $totalPaymentCount - $paidPaymentCount);
-    $collectedAmountCents = $consultation->paymentRequests->where('status', 'paid')->sum('amount_cents');
+    $collectedAmountCents = $isFreeIntroCall ? 0 : $consultation->paymentRequests->where('status', 'paid')->sum('amount_cents');
     $progressPercent = $totalPaymentCount ? round(($paidPaymentCount / $totalPaymentCount) * 100) : 0;
     $unpaidPaymentCount = $consultation->paymentRequests->filter(fn ($payment) => $payment->status !== 'paid')->count();
     $emailActivities = $consultation->integrationLogs->where('provider', 'mail')->sortByDesc('created_at')->values();
@@ -257,7 +258,7 @@
                                 </div>
                                 @endif
                                 @if($repeatFreeIntroParticipant)
-                                {{-- <div class="mt-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-900">
+                                <div class="mt-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-900">
                                     Previous Free 15-Min Intro Call found
                                     <span class="block text-amber-800">
                                         {{ $repeatFreeIntroParticipant->booking_number }} - {{ Str::headline($repeatFreeIntroParticipant->status) }}
@@ -265,7 +266,10 @@
                                         - {{ $repeatFreeIntroParticipant->starts_at->format('M d, Y g:i A') }}
                                         @endif
                                     </span>
-                                </div> --}}
+                                    @if($repeatFreeIntroParticipant->legal_service_name)
+                                    <span class="mt-1 block text-amber-800">Service: {{ $repeatFreeIntroParticipant->legal_service_name }}</span>
+                                    @endif
+                                </div>
                                 @endif
                                 <div class="font-bold mt-2">${{ number_format($participantPayment?->amount_cents / 100, 2) }}</div>
 
@@ -292,7 +296,7 @@
                 </div>
                 <div class="p-5">
                     <div class="mb-3 flex items-center justify-between gap-4 text-sm">
-                        <span class="text-gray-500">{{ $totalPaymentCount }} {{ Str::plural('participant', $totalPaymentCount) }}</span>
+                        <span class="text-gray-500">{{ $totalPaymentCount }} {{ Str::plural('payer', $totalPaymentCount) }}</span>
                         <span class="font-bold text-gray-500">{{ $paidPaymentCount }} Paid · {{ $pendingPaymentCount }} Pending</span>
                     </div>
                     <div class="progress-track">
@@ -302,7 +306,7 @@
                         <span class="text-gray-500">${{ number_format($collectedAmountCents / 100, 2) }} collected</span>
                         <span class="text-gray-500">${{ number_format($consultation->total_amount_cents / 100, 2) }} total</span>
                     </div>
-                    <div class="sr-only">{{ $totalPaymentCount }} participants - {{ $paidPaymentCount }} Paid - {{ $pendingPaymentCount }} Pending</div>
+                    <div class="sr-only">{{ $totalPaymentCount }} payers - {{ $paidPaymentCount }} Paid - {{ $pendingPaymentCount }} Pending</div>
                 </div>
             </article>
         </section>
@@ -378,7 +382,7 @@
             @endforelse
         </div>
     </section>
-    <div class="grid gap-5 xl:grid-cols-3 ">
+    <div class="grid gap-5 xl:grid-cols-2 ">
         <div class="space-y-5 ">
             <section class="rounded-lg border border-[#E5E7EB] bg-white  shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
                 <div class="border-b border-[#E5E7EB] px-5 py-4">
@@ -438,7 +442,7 @@
                 </div>
             </div>
         </section> --}}
-        <section class="xl:col-span-2 overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+        <section class=" overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
             <div class="border-b border-[#E5E7EB] px-5 py-4">
                 <h3 class="flex items-center gap-3 font-bold text-[#111827]"><i data-lucide="activity" class="admin-brand-text h-5 w-5"></i>Payment Gateway Activity</h3>
             </div>

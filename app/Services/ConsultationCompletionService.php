@@ -13,6 +13,7 @@ class ConsultationCompletionService
         private readonly AvailabilityService $availability,
         private readonly PaymentLinkService $payments,
         private readonly AdminPaymentNotificationService $notifications,
+        private readonly AdminNewConsultationNotificationService $newRequestNotifications,
         private readonly PaymentSimulationService $simulation,
         private readonly OutlookCalendarClient $outlook,
         private readonly FreeIntroCallWorkflowService $freeIntroCalls,
@@ -75,6 +76,8 @@ class ConsultationCompletionService
         if (! $freeIntroHandled) {
             $this->syncToOutlook($consultation);
         }
+
+        $this->newRequestNotifications->sendForNewRequest($consultation);
 
         return $consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests']);
     }

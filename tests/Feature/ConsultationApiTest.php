@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Mail\AdminNewConsultationRequestMail;
 use App\Mail\ConsultationConfirmationMail;
 use App\Mail\ConsultationPaymentLinkMail;
 use App\Mail\ConsultationQuestionnaireMail;
 use App\Mail\ConsultationZoomLinkMail;
 use App\Mail\FreeIntroParticipantScheduleMail;
+use App\Models\AppSetting;
 use App\Models\Consultation;
 use App\Models\ConsultationType;
 use App\Models\ExternalCalendarEvent;
@@ -146,6 +148,57 @@ class ConsultationApiTest extends TestCase
         $this->assertTrue(Str::isUuid($response->json('data.uuid')));
         $this->assertDatabaseHas('consultations', [
             'id' => $response->json('data.uuid'),
+        ]);
+    }
+
+    public function test_new_consultation_request_notification_is_sent_after_completion_not_draft(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config([
+            'services.converge.enabled' => false,
+            'services.outlook.enabled' => false,
+        ]);
+
+        AppSetting::create([
+            'key' => 'admin_new_consultation_notifications',
+            'value' => [
+                'enabled' => true,
+                'emails' => ['owner@example.com', 'manager@example.com'],
+            ],
+        ]);
+
+        $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
+
+        $consultationId = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'phone',
+            'primary_client' => [
+                'first_name' => 'New',
+                'last_name' => 'Client',
+                'email' => 'new.client@example.com',
+            ],
+        ])->assertCreated()->json('data.uuid');
+
+        Mail::assertNotSent(AdminNewConsultationRequestMail::class);
+
+        $this->postJson('/api/v1/consultations/'.$consultationId.'/complete', [
+            'starts_at' => '2026-10-19T13:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+            'payment_mode' => 'full',
+            'payment_method' => 'card',
+        ])->assertOk();
+
+        Mail::assertSent(AdminNewConsultationRequestMail::class, 2);
+        Mail::assertSent(AdminNewConsultationRequestMail::class, fn (AdminNewConsultationRequestMail $mail) => $mail->hasTo('owner@example.com'));
+        Mail::assertSent(AdminNewConsultationRequestMail::class, fn (AdminNewConsultationRequestMail $mail) => $mail->hasTo('manager@example.com'));
+
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultationId,
+            'provider' => 'mail',
+            'action' => 'admin_new_consultation_request',
+            'status' => 'sent',
         ]);
     }
 
@@ -1087,6 +1140,15 @@ class ConsultationApiTest extends TestCase
         $this->getJson('/api/v1/questionnaires/'.$submission->token)
             ->assertNotFound();
 
+        $this->getJson('/api/v1/questionnaires/socal-party-mediation/'.$submission->token)
+            ->assertStatus(409);
+
+        $this->getJson('/api/v1/questionnaires/socal-divorce-intake/'.$submission->token)
+            ->assertOk()
+            ->assertJsonPath('data.questionnaire_completed', false)
+            ->assertJsonPath('data.agreement_agreed', false)
+            ->assertJsonPath('data.submitted_at', null);
+
         $this->postJson('/api/v1/questionnaires/socal-party-mediation/'.$submission->token, [
             'answers' => ['full_name' => 'Wrong endpoint for this token.'],
         ])->assertStatus(409);
@@ -1098,10 +1160,17 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('data.agreement_agreed', false)
             ->assertJsonMissingPath('data.questionnaire_progress');
 
+        $this->getJson('/api/v1/questionnaires/socal-divorce-intake/'.$submission->token)
+            ->assertOk()
+            ->assertJsonPath('data.questionnaire_completed', true)
+            ->assertJsonPath('data.agreement_agreed', false)
+            ->assertJsonPath('data.submitted_at', fn ($value) => is_string($value));
+
         $this->getJson('/api/v1/agreements/'.$submission->token)
             ->assertOk()
             ->assertJsonPath('data.required', true)
             ->assertJsonPath('data.accepted', false)
+            ->assertJsonPath('data.agreement_agreed', false)
             ->assertJsonPath('data.questionnaire_completed', true)
             ->assertJsonMissingPath('data.consultation.questionnaire_completed');
 
