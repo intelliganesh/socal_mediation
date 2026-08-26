@@ -655,7 +655,7 @@ class AdminPanelTest extends TestCase
 
         Http::fake([
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
-            'graph.microsoft.com/v1.0/page-two*' => Http::response($secondPage, 200),
+            'graph.microsoft.com/v1.0/page-two?startDateTime=*&endDateTime=*' => Http::response($secondPage, 200),
             'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/calendarView*' => Http::sequence()
                 ->push($firstPage, 200)
                 ->push($firstPage, 200),

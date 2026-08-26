@@ -524,17 +524,16 @@ class OutlookCalendarClient
     {
         $calendarUrl = $this->calendarUrl($application);
         $events = [];
-        $nextUrl = $calendarUrl.'/calendarView';
-        $query = [
+        $windowQuery = [
             'startDateTime' => $start->toIso8601String(),
             'endDateTime' => $end->toIso8601String(),
-            '$top' => 100,
         ];
+        $nextUrl = $this->calendarViewUrl($calendarUrl.'/calendarView', $windowQuery + ['$top' => 100]);
 
         do {
             $response = Http::withToken($this->accessToken())
                 ->acceptJson()
-                ->get($nextUrl, $query);
+                ->get($nextUrl);
 
             if ($response->failed()) {
                 throw new \RuntimeException('Outlook calendar view sync failed: '.$response->body());
@@ -542,11 +541,30 @@ class OutlookCalendarClient
 
             $payload = $response->json();
             $events = array_merge($events, $payload['value'] ?? []);
-            $nextUrl = $payload['@odata.nextLink'] ?? null;
-            $query = [];
+            $nextUrl = isset($payload['@odata.nextLink'])
+                ? $this->calendarViewUrl($payload['@odata.nextLink'], $windowQuery)
+                : null;
         } while (filled($nextUrl));
 
         return $events;
+    }
+
+    private function calendarViewUrl(string $url, array $query): string
+    {
+        $parts = parse_url($url);
+        parse_str($parts['query'] ?? '', $existingQuery);
+
+        foreach ($query as $key => $value) {
+            $existingQuery[$key] ??= $value;
+        }
+
+        $scheme = isset($parts['scheme']) ? $parts['scheme'].'://' : '';
+        $host = $parts['host'] ?? '';
+        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+        $path = $parts['path'] ?? '';
+        $fragment = isset($parts['fragment']) ? '#'.$parts['fragment'] : '';
+
+        return $scheme.$host.$port.$path.'?'.http_build_query($existingQuery, '', '&', PHP_QUERY_RFC3986).$fragment;
     }
 
     private function createEvent(string $application, array $payload): array
