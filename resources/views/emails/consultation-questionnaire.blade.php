@@ -7,9 +7,11 @@
 
 @include('emails.partials.consultation-card', [
     'consultation' => $consultation,
-    'title' => 'Consultation Questionnaire',
-    'intro' => 'Hello <strong>'.e($clientName).'</strong>, your payment has been received. Please complete the <strong>'.e($template['label'] ?? 'consultation questionnaire').'</strong> before your meeting details are released.',
-    'statusLabel' => 'Questionnaire Required',
+    'title' => $isReschedule ? 'Consultation Rescheduled' : 'Consultation Questionnaire',
+    'intro' => $isReschedule
+        ? 'Hello <strong>'.e($clientName).'</strong>, your consultation has been rescheduled. Please complete the <strong>'.e($template['label'] ?? 'consultation questionnaire').'</strong> before your meeting details are released.'
+        : 'Hello <strong>'.e($clientName).'</strong>, your payment has been received. Please complete the <strong>'.e($template['label'] ?? 'consultation questionnaire').'</strong> before your meeting details are released.',
+    'statusLabel' => $isReschedule ? 'Rescheduled' : 'Questionnaire Required',
     'amountCents' => $participant->share_amount_cents ?: $consultation->total_amount_cents,
     'buttonUrl' => $agreementUrl,
     'buttonLabel' => $agreementUrl ? 'Accept Agreement' : null,

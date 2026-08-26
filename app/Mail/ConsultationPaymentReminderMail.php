@@ -13,15 +13,19 @@ class ConsultationPaymentReminderMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public PaymentRequest $paymentRequest)
-    {
+    public function __construct(
+        public PaymentRequest $paymentRequest,
+        public bool $isReschedule = false
+    ) {
         $this->paymentRequest->loadMissing(['consultation.type', 'participant']);
     }
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Reminder: complete your consultation payment'
+            subject: $this->isReschedule
+                ? 'Rescheduled consultation: complete your payment'
+                : 'Reminder: complete your consultation payment'
         );
     }
 

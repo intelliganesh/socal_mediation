@@ -55,8 +55,7 @@ class QuestionnaireWorkflowService
         Consultation $consultation,
         bool $resendPending = false,
         string $action = 'questionnaire_link'
-    ): int
-    {
+    ): int {
         if (! $this->templates->requiresQuestionnaire($consultation)) {
             return 0;
         }
@@ -78,10 +77,10 @@ class QuestionnaireWorkflowService
         Collection $participants,
         bool $resendPending = false,
         string $action = 'questionnaire_link'
-    ): int
-    {
+    ): int {
         $sent = 0;
         $template = $this->templates->templateForConsultation($consultation);
+        $isReschedule = str_contains($action, 'reschedule');
 
         foreach ($participants as $participant) {
             if (blank($participant->email)) {
@@ -94,7 +93,7 @@ class QuestionnaireWorkflowService
                 continue;
             }
 
-            Mail::to($participant->email)->send(new ConsultationQuestionnaireMail($submission));
+            Mail::to($participant->email)->send(new ConsultationQuestionnaireMail($submission, $isReschedule));
 
             $submission->update(['invited_at' => now()]);
             $consultation->integrationLogs()->create([

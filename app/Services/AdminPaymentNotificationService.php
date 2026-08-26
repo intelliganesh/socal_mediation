@@ -37,6 +37,7 @@ class AdminPaymentNotificationService
             ->get();
 
         $sent = 0;
+        $isReschedule = str_contains($action, 'reschedule');
 
         foreach ($paymentRequests as $paymentRequest) {
             $recipient = $this->recipientEmail($paymentRequest);
@@ -46,7 +47,7 @@ class AdminPaymentNotificationService
             }
 
             try {
-                Mail::to($recipient)->send(new $mailable($paymentRequest));
+                Mail::to($recipient)->send(new $mailable($paymentRequest, $isReschedule));
             } catch (\Throwable $exception) {
                 $consultation->integrationLogs()->create([
                     'provider' => 'mail',

@@ -19,8 +19,10 @@ class ConsultationQuestionnaireMail extends Mailable
 
     public ?string $agreementUrl;
 
-    public function __construct(public QuestionnaireSubmission $submission)
-    {
+    public function __construct(
+        public QuestionnaireSubmission $submission,
+        public bool $isReschedule = false
+    ) {
         $this->submission->loadMissing(['consultation.type', 'consultation.professional', 'participant']);
         $workflow = app(QuestionnaireWorkflowService::class);
         $this->questionnaireUrl = $workflow->questionnaireUrl($this->submission) ?? '#';
@@ -32,7 +34,9 @@ class ConsultationQuestionnaireMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Please complete your consultation questionnaire'
+            subject: $this->isReschedule
+                ? 'Rescheduled consultation: complete your questionnaire'
+                : 'Please complete your consultation questionnaire'
         );
     }
 

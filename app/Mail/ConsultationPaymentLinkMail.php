@@ -13,15 +13,19 @@ class ConsultationPaymentLinkMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public PaymentRequest $paymentRequest)
-    {
+    public function __construct(
+        public PaymentRequest $paymentRequest,
+        public bool $isReschedule = false
+    ) {
         $this->paymentRequest->loadMissing(['consultation.type', 'participant']);
     }
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your consultation payment link'
+            subject: $this->isReschedule
+                ? 'Rescheduled consultation: payment link'
+                : 'Your consultation payment link'
         );
     }
 

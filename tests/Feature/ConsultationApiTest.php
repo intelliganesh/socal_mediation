@@ -2404,6 +2404,11 @@ class ConsultationApiTest extends TestCase
 
         Mail::assertNotSent(ConsultationZoomLinkMail::class);
         Mail::assertSent(ConsultationQuestionnaireMail::class, 4);
+        Mail::assertSent(ConsultationQuestionnaireMail::class, fn (ConsultationQuestionnaireMail $mail) => $mail->isReschedule
+            && $mail->envelope()->subject === 'Rescheduled consultation: complete your questionnaire'
+            && str_contains($mail->render(), 'Consultation Rescheduled')
+            && str_contains($mail->render(), 'Rescheduled')
+            && str_contains($mail->render(), 'Complete Questionnaire'));
         $this->assertNull($consultation->refresh()->zoom_join_url);
         $this->assertDatabaseHas('integration_logs', [
             'loggable_type' => Consultation::class,
@@ -2438,7 +2443,14 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('data.status', 'payment_pending');
 
         Mail::assertSent(ConsultationPaymentLinkMail::class, 2);
+        Mail::assertSent(ConsultationPaymentLinkMail::class, fn (ConsultationPaymentLinkMail $mail) => $mail->isReschedule
+            && $mail->envelope()->subject === 'Rescheduled consultation: payment link'
+            && str_contains($mail->render(), 'Consultation Rescheduled')
+            && str_contains($mail->render(), 'Rescheduled')
+            && str_contains($mail->render(), 'Pay Consultation Fee'));
         Mail::assertSent(ConsultationQuestionnaireMail::class, 1);
+        Mail::assertSent(ConsultationQuestionnaireMail::class, fn (ConsultationQuestionnaireMail $mail) => $mail->isReschedule
+            && str_contains($mail->render(), 'Complete Questionnaire'));
         Mail::assertNotSent(ConsultationZoomLinkMail::class);
         $this->assertDatabaseHas('integration_logs', [
             'loggable_type' => Consultation::class,

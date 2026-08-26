@@ -6,9 +6,11 @@
 
 @include('emails.partials.consultation-card', [
     'consultation' => $consultation,
-    'title' => 'Payment Reminder',
-    'intro' => 'Hello <strong>'.e($clientName).'</strong>, this is a reminder that payment is still pending for your consultation.',
-    'statusLabel' => 'Payment Pending',
+    'title' => $isReschedule ? 'Consultation Rescheduled' : 'Payment Reminder',
+    'intro' => $isReschedule
+        ? 'Hello <strong>'.e($clientName).'</strong>, your consultation has been rescheduled. Payment is still pending, so please complete payment using the secure link below.'
+        : 'Hello <strong>'.e($clientName).'</strong>, this is a reminder that payment is still pending for your consultation.',
+    'statusLabel' => $isReschedule ? 'Rescheduled' : 'Payment Pending',
     'amountCents' => $paymentRequest->amount_cents,
     'buttonUrl' => $paymentRequest->payment_url,
     'buttonLabel' => 'Complete Payment',
