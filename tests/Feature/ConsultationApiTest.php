@@ -15,6 +15,7 @@ use App\Models\ConsultationType;
 use App\Models\ExternalCalendarEvent;
 use App\Models\PaymentRequest;
 use App\Models\QuestionnaireSubmission;
+use App\Services\BookingDateTimeService;
 use App\Services\Integrations\ConvergeClient;
 use App\Services\QuestionnaireWorkflowService;
 use Carbon\CarbonImmutable;
@@ -2606,6 +2607,20 @@ class ConsultationApiTest extends TestCase
 
         $this->assertSame(['09:00', '13:00'], collect($halfDaySlots)->pluck('time')->all());
         $this->assertSame(['09:00'], collect($fullDaySlots)->pluck('time')->all());
+    }
+
+    public function test_booking_datetime_keeps_selected_slot_wall_time_when_payload_has_browser_offset(): void
+    {
+        config([
+            'app.booking_timezone' => 'Asia/Kolkata',
+        ]);
+
+        [$startsAt, $timezone] = app(BookingDateTimeService::class)
+            ->startsAtFromRequest('2026-09-04T09:00:00-07:00');
+
+        $this->assertSame('Asia/Kolkata', $timezone);
+        $this->assertSame('2026-09-04 09:00:00', $startsAt->format('Y-m-d H:i:s'));
+        $this->assertSame('+05:30', $startsAt->format('P'));
     }
 
     public function test_availability_marks_duration_based_overlaps_unavailable(): void
