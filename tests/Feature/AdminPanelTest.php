@@ -792,7 +792,11 @@ class AdminPanelTest extends TestCase
                 'id' => 'orphan-application-event',
                 'subject' => 'Deleted consultation',
                 'showAs' => 'busy',
-                'body' => ['content' => 'Consultation booking\n\nSMC-CONSULTATION:'.$missingConsultationId],
+                'body' => ['content' => 'Consultation booking'],
+                'singleValueExtendedProperties' => [[
+                    'id' => 'String {66f5a359-4659-4f37-9155-f5af87172f73} Name SMCTrackingId',
+                    'value' => 'SMC-CONSULTATION:'.$missingConsultationId,
+                ]],
             ]]], 200),
             'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events/orphan-application-event' => Http::response(null, 204),
             'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/calendarView*' => Http::response(['value' => []], 200),

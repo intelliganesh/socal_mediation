@@ -6,6 +6,7 @@ use App\Models\Consultation;
 use App\Models\ExternalCalendarEvent;
 use App\Services\Integrations\OutlookCalendarClient;
 use App\Services\Integrations\ZoomClient;
+use App\Services\QuestionnaireWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -152,7 +153,7 @@ class IntegrationToggleTest extends TestCase
             ->where('booking_number', 'SAMPLE-04')
             ->firstOrFail();
         $consultation->participants()->get()->each(function ($participant) use ($consultation) {
-            app(\App\Services\QuestionnaireWorkflowService::class)
+            app(QuestionnaireWorkflowService::class)
                 ->ensureSubmission($consultation, $participant)
                 ->update([
                     'status' => 'submitted',
@@ -244,7 +245,7 @@ class IntegrationToggleTest extends TestCase
             'ends_at' => '2026-08-28 13:00:00',
         ]);
         $consultation->participants()->get()->each(function ($participant) use ($consultation) {
-            app(\App\Services\QuestionnaireWorkflowService::class)
+            app(QuestionnaireWorkflowService::class)
                 ->ensureSubmission($consultation, $participant)
                 ->update([
                     'status' => 'submitted',
@@ -272,6 +273,12 @@ class IntegrationToggleTest extends TestCase
             $this->assertSame('2026-08-28T13:00:00', $payload['end']['dateTime']);
             $this->assertSame('India Standard Time', $payload['start']['timeZone']);
             $this->assertSame('India Standard Time', $payload['end']['timeZone']);
+            $this->assertStringNotContainsString('SMC-CONSULTATION', $payload['body']['content']);
+            $this->assertSame(
+                'String {66f5a359-4659-4f37-9155-f5af87172f73} Name SMCTrackingId',
+                $payload['singleValueExtendedProperties'][0]['id']
+            );
+            $this->assertStringStartsWith('SMC-CONSULTATION', $payload['singleValueExtendedProperties'][0]['value']);
         }
     }
 }

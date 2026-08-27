@@ -20,6 +20,8 @@ class OutlookCalendarClient
 
     private const PARTICIPANT_MARKER = 'SMC-CONSULTATION-PARTICIPANT:';
 
+    private const TRACKING_PROPERTY_ID = 'String {66f5a359-4659-4f37-9155-f5af87172f73} Name SMCTrackingId';
+
     private const CALENDAR_APPLICATIONS = ['socal', 'legal'];
 
     private const ACTIVE_CONSULTATION_STATUSES = ['scheduled'];
@@ -555,6 +557,7 @@ class OutlookCalendarClient
         $windowQuery = [
             'startDateTime' => $start->toIso8601String(),
             'endDateTime' => $end->toIso8601String(),
+            '$expand' => "singleValueExtendedProperties(\$filter=id eq '".self::TRACKING_PROPERTY_ID."')",
         ];
         $nextUrl = $this->calendarViewUrl($calendarUrl.'/calendarView', $windowQuery + ['$top' => 100]);
 
@@ -635,7 +638,7 @@ class OutlookCalendarClient
             'subject' => $consultation->booking_number.' - '.$consultation->type->name,
             'body' => [
                 'contentType' => 'Text',
-                'content' => $body."\n\n".self::CONSULTATION_MARKER.$consultation->id,
+                'content' => $body,
             ],
             'start' => [
                 'dateTime' => $this->storedLocalDateTime($consultation, 'starts_at', $timezone),
@@ -646,6 +649,10 @@ class OutlookCalendarClient
                 'timeZone' => $outlookTimezone,
             ],
             'showAs' => 'busy',
+            'singleValueExtendedProperties' => [[
+                'id' => self::TRACKING_PROPERTY_ID,
+                'value' => self::CONSULTATION_MARKER.$consultation->id,
+            ]],
         ];
     }
 
@@ -662,7 +669,7 @@ class OutlookCalendarClient
             'subject' => $consultation->booking_number.' - '.$participantName.' - '.$consultation->type->name,
             'body' => [
                 'contentType' => 'Text',
-                'content' => $body."\n\n".self::PARTICIPANT_MARKER.$participant->id,
+                'content' => $body,
             ],
             'start' => [
                 'dateTime' => $this->storedLocalDateTime($participant, 'scheduled_starts_at', $timezone),
@@ -673,6 +680,10 @@ class OutlookCalendarClient
                 'timeZone' => $outlookTimezone,
             ],
             'showAs' => 'busy',
+            'singleValueExtendedProperties' => [[
+                'id' => self::TRACKING_PROPERTY_ID,
+                'value' => self::PARTICIPANT_MARKER.$participant->id,
+            ]],
         ];
     }
 
@@ -767,7 +778,8 @@ class OutlookCalendarClient
 
     private function consultationIdFromOutlookEvent(array $event): ?string
     {
-        $body = (string) data_get($event, 'body.content', '');
+        $trackingValue = $this->trackingValueFromOutlookEvent($event);
+        $body = $trackingValue ?: (string) data_get($event, 'body.content', '');
 
         if (! preg_match('/'.preg_quote(self::CONSULTATION_MARKER, '/').'([0-9a-f-]{36})/i', $body, $matches)) {
             return null;
@@ -778,13 +790,27 @@ class OutlookCalendarClient
 
     private function participantIdFromOutlookEvent(array $event): ?int
     {
-        $body = (string) data_get($event, 'body.content', '');
+        $trackingValue = $this->trackingValueFromOutlookEvent($event);
+        $body = $trackingValue ?: (string) data_get($event, 'body.content', '');
 
         if (! preg_match('/'.preg_quote(self::PARTICIPANT_MARKER, '/').'([0-9]+)/', $body, $matches)) {
             return null;
         }
 
         return (int) $matches[1];
+    }
+
+    private function trackingValueFromOutlookEvent(array $event): ?string
+    {
+        $properties = data_get($event, 'singleValueExtendedProperties', []);
+
+        foreach ($properties as $property) {
+            if (($property['id'] ?? null) === self::TRACKING_PROPERTY_ID && filled($property['value'] ?? null)) {
+                return (string) $property['value'];
+            }
+        }
+
+        return null;
     }
 
     private function eventResponsePayload(array $event): array
@@ -799,6 +825,7 @@ class OutlookCalendarClient
             'createdDateTime' => $event['createdDateTime'] ?? null,
             'lastModifiedDateTime' => $event['lastModifiedDateTime'] ?? null,
             'changeKey' => $event['changeKey'] ?? null,
+            'singleValueExtendedProperties' => $event['singleValueExtendedProperties'] ?? null,
         ];
     }
 
