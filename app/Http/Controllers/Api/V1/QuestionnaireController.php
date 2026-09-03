@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ConsultationResource;
+use App\Models\Consultation;
 use App\Models\QuestionnaireSubmission;
 use App\Services\ApiResponse;
 use App\Services\QuestionnaireTemplateService;
@@ -25,6 +26,9 @@ class QuestionnaireController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(property: 'data', type: 'object', properties: [
                     new OA\Property(property: 'token', type: 'string'),
+                    new OA\Property(property: 'name', type: 'string', nullable: true, example: 'John Smith'),
+                    new OA\Property(property: 'email', type: 'string', nullable: true, example: 'john@example.com'),
+                    new OA\Property(property: 'phone', type: 'string', nullable: true, example: '+1 (555) 010-0001'),
                     new OA\Property(property: 'questionnaire_completed', type: 'boolean', example: false),
                     new OA\Property(property: 'submitted_at', type: 'string', nullable: true),
                     new OA\Property(property: 'agreement_agreed', type: 'boolean', example: false),
@@ -106,7 +110,11 @@ class QuestionnaireController extends Controller
             ]),
         ])),
         responses: [
-            new OA\Response(response: 200, description: 'Questionnaire submitted'),
+            new OA\Response(response: 200, description: 'Questionnaire submitted', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email.'),
+                new OA\Property(property: 'data', type: 'object'),
+            ])),
             new OA\Response(response: 404, description: 'Questionnaire token not found'),
             new OA\Response(response: 409, description: 'Questionnaire already submitted'),
             new OA\Response(response: 422, description: 'Validation failed'),
@@ -129,6 +137,9 @@ class QuestionnaireController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(property: 'data', type: 'object', properties: [
                     new OA\Property(property: 'token', type: 'string'),
+                    new OA\Property(property: 'name', type: 'string', nullable: true, example: 'John Smith'),
+                    new OA\Property(property: 'email', type: 'string', nullable: true, example: 'john@example.com'),
+                    new OA\Property(property: 'phone', type: 'string', nullable: true, example: '+1 (555) 010-0001'),
                     new OA\Property(property: 'questionnaire_completed', type: 'boolean', example: false),
                     new OA\Property(property: 'submitted_at', type: 'string', nullable: true),
                     new OA\Property(property: 'agreement_agreed', type: 'boolean', example: false),
@@ -173,7 +184,11 @@ class QuestionnaireController extends Controller
             ]),
         ])),
         responses: [
-            new OA\Response(response: 200, description: 'Questionnaire submitted'),
+            new OA\Response(response: 200, description: 'Questionnaire submitted', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email.'),
+                new OA\Property(property: 'data', type: 'object'),
+            ])),
             new OA\Response(response: 404, description: 'Questionnaire token not found'),
             new OA\Response(response: 409, description: 'Questionnaire already submitted or wrong template'),
             new OA\Response(response: 422, description: 'Validation failed'),
@@ -196,6 +211,9 @@ class QuestionnaireController extends Controller
                 new OA\Property(property: 'success', type: 'boolean', example: true),
                 new OA\Property(property: 'data', type: 'object', properties: [
                     new OA\Property(property: 'token', type: 'string'),
+                    new OA\Property(property: 'name', type: 'string', nullable: true, example: 'John Smith'),
+                    new OA\Property(property: 'email', type: 'string', nullable: true, example: 'john@example.com'),
+                    new OA\Property(property: 'phone', type: 'string', nullable: true, example: '+1 (555) 010-0001'),
                     new OA\Property(property: 'questionnaire_completed', type: 'boolean', example: false),
                     new OA\Property(property: 'submitted_at', type: 'string', nullable: true),
                     new OA\Property(property: 'agreement_agreed', type: 'boolean', example: false),
@@ -233,7 +251,11 @@ class QuestionnaireController extends Controller
             ]),
         ])),
         responses: [
-            new OA\Response(response: 200, description: 'Questionnaire submitted'),
+            new OA\Response(response: 200, description: 'Questionnaire submitted', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'Your intake form has been submitted successfully. After your consultation is confirmed, you will receive your consultation details and Zoom meeting link by email.'),
+                new OA\Property(property: 'data', type: 'object'),
+            ])),
             new OA\Response(response: 404, description: 'Questionnaire token not found'),
             new OA\Response(response: 409, description: 'Questionnaire already submitted or wrong template'),
             new OA\Response(response: 422, description: 'Validation failed'),
@@ -252,8 +274,13 @@ class QuestionnaireController extends Controller
             return ApiResponse::error('This questionnaire link is not valid for the selected form.', 409);
         }
 
+        $participant = $submission->participant;
+
         return ApiResponse::success([
             'token' => $submission->token,
+            'name' => $this->participantName($submission),
+            'email' => $participant?->email,
+            'phone' => $this->participantPhone($submission),
             'questionnaire_completed' => $submission->status === 'submitted',
             'submitted_at' => $submission->submitted_at?->toIso8601String(),
             'agreement_agreed' => (bool) $submission->agreement_accepted,
@@ -280,7 +307,10 @@ class QuestionnaireController extends Controller
             return ApiResponse::error($exception->getMessage(), $status);
         }
 
-        return ApiResponse::success(new ConsultationResource($consultation), 'Questionnaire submitted.');
+        return ApiResponse::success(
+            new ConsultationResource($consultation),
+            $this->questionnaireSuccessMessage($consultation)
+        );
     }
 
     #[OA\Get(
@@ -371,5 +401,40 @@ class QuestionnaireController extends Controller
             ->with(['consultation.type', 'consultation.professional', 'consultation.participants', 'consultation.paymentRequests', 'participant'])
             ->where('token', $token)
             ->firstOrFail();
+    }
+
+    private function participantName(QuestionnaireSubmission $submission): ?string
+    {
+        $participant = $submission->participant;
+        $name = trim(($participant?->first_name ?? '').' '.($participant?->last_name ?? ''));
+
+        return $name !== '' ? $name : null;
+    }
+
+    private function participantPhone(QuestionnaireSubmission $submission): ?string
+    {
+        $participant = $submission->participant;
+        $phone = trim(($participant?->phone_country ?? '').' '.($participant?->phone ?? ''));
+
+        return $phone !== '' ? $phone : null;
+    }
+
+    private function questionnaireSuccessMessage(Consultation $consultation): string
+    {
+        $mode = $consultation->consultation_mode ?: 'online';
+
+        if ($consultation->application === 'legal') {
+            return match ($mode) {
+                'phone' => 'Your intake form has been submitted successfully. After your consultation is confirmed, you will receive your consultation details by email, and the mediator will call you at the phone number provided during booking at your selected consultation time.',
+                'offline' => 'Your intake form has been submitted successfully. After your consultation is confirmed, you will receive your consultation details, including the office location, by email.',
+                default => 'Your intake form has been submitted successfully. After your consultation is confirmed, you will receive your consultation details and Zoom meeting link by email.',
+            };
+        }
+
+        return match ($mode) {
+            'phone' => 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details by email, and the mediator will call you at the phone number provided during booking at your selected consultation time.',
+            'offline' => 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details, including the office location, by email.',
+            default => 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email.',
+        };
     }
 }

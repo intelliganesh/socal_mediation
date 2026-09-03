@@ -127,6 +127,15 @@ class ConsultationAdminController extends Controller
         return $pdf->download($submission);
     }
 
+    public function downloadAgreementPdf(Consultation $consultation, QuestionnaireSubmission $submission, QuestionnairePdfService $pdf)
+    {
+        $this->authorizeConsultation($consultation);
+        abort_unless($submission->consultation_id === $consultation->id, 404);
+        abort_unless($submission->agreement_accepted, 404);
+
+        return $pdf->downloadAgreement($submission);
+    }
+
     public function sendReminder(Consultation $consultation, AdminPaymentNotificationService $notifications, PaymentReconciliationService $payments)
     {
         $this->authorizeConsultation($consultation);
@@ -136,6 +145,18 @@ class ConsultationAdminController extends Controller
         return back()->with('status', $sent > 0
                 ? "{$sent} payment reminder email(s) sent."
                 : 'No unpaid payment requests found for this consultation.'
+        );
+    }
+
+    public function sendQuestionnaireReminder(Consultation $consultation, QuestionnaireWorkflowService $questionnaires, PaymentReconciliationService $payments)
+    {
+        $this->authorizeConsultation($consultation);
+        $payments->syncConsultation($consultation);
+        $sent = $questionnaires->sendPendingQuestionnaireReminders($consultation);
+
+        return back()->with('status', $sent > 0
+                ? "{$sent} questionnaire reminder email(s) sent."
+                : 'No pending questionnaires found for this consultation.'
         );
     }
 

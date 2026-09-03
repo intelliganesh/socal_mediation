@@ -89,7 +89,7 @@ class QuestionnaireWorkflowService
 
             $submission = $this->ensureSubmission($consultation, $participant, $template);
 
-            if ($submission->status === 'submitted' || (! $resendPending && $submission->invited_at !== null)) {
+            if ($this->submissionComplete($submission) || (! $resendPending && $submission->invited_at !== null)) {
                 continue;
             }
 
@@ -106,14 +106,28 @@ class QuestionnaireWorkflowService
                     'questionnaire_submission_id' => $submission->id,
                     'template_key' => $submission->template_key,
                 ],
-                'message' => $action === 'questionnaire_link'
-                    ? 'Questionnaire link email sent.'
-                    : 'Questionnaire link email sent after consultation reschedule.',
+                'message' => $this->questionnaireEmailMessage($action),
             ]);
             $sent++;
         }
 
         return $sent;
+    }
+
+    public function sendPendingQuestionnaireReminders(Consultation $consultation, string $action = 'manual_questionnaire_reminder'): int
+    {
+        if ($consultation->payment_status !== 'paid') {
+            return 0;
+        }
+
+        $consultation->loadMissing(['participants', 'paymentRequests.participant']);
+
+        return $this->sendQuestionnaireLinks(
+            $consultation,
+            $consultation->participants,
+            true,
+            $action
+        );
     }
 
     public function submitQuestionnaire(QuestionnaireSubmission $submission, array $answers): Consultation
@@ -376,5 +390,21 @@ class QuestionnaireWorkflowService
         } while (QuestionnaireSubmission::where('token', $token)->exists());
 
         return $token;
+    }
+
+    private function submissionComplete(QuestionnaireSubmission $submission): bool
+    {
+        return $submission->status === 'submitted'
+            && (! $this->templates->requiresAgreement($submission->template_key) || $submission->agreement_accepted);
+    }
+
+    private function questionnaireEmailMessage(string $action): string
+    {
+        return match ($action) {
+            'manual_questionnaire_reminder' => 'Manual questionnaire reminder email sent.',
+            'automatic_questionnaire_reminder' => 'Automatic questionnaire reminder email sent.',
+            'questionnaire_reschedule_link' => 'Questionnaire link email sent after consultation reschedule.',
+            default => 'Questionnaire link email sent.',
+        };
     }
 }

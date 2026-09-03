@@ -893,7 +893,14 @@ class ConsultationApiTest extends TestCase
         $phoneHtml = (new ConsultationConfirmationMail($consultation->refresh(), $participant))->render();
         $this->assertStringContainsString('Phone Number', $phoneHtml);
         $this->assertStringContainsString('+1 (555) 222-3333', $phoneHtml);
+        $this->assertStringContainsString('Sarah Thompson', $phoneHtml);
+        $this->assertStringContainsString('from SoCal Mediation Center will contact you', $phoneHtml);
+        $this->assertStringContainsString('using +1 (555) 222-3333', $phoneHtml);
         $this->assertStringNotContainsString('123 Mediation Way', $phoneHtml);
+
+        $reschedulePhoneHtml = (new ConsultationConfirmationMail($consultation->refresh(), $participant, true))->render();
+        $this->assertStringContainsString('has been rescheduled', $reschedulePhoneHtml);
+        $this->assertStringContainsString('from SoCal Mediation Center will contact you', $reschedulePhoneHtml);
 
         $consultation->update(['consultation_mode' => 'offline']);
         $locationHtml = (new ConsultationConfirmationMail($consultation->refresh(), $participant))->render();
@@ -1150,6 +1157,9 @@ class ConsultationApiTest extends TestCase
 
         $this->getJson('/api/v1/questionnaires/socal-divorce-intake/'.$submission->token)
             ->assertOk()
+            ->assertJsonPath('data.name', trim($participant->first_name.' '.$participant->last_name))
+            ->assertJsonPath('data.email', $participant->email)
+            ->assertJsonPath('data.phone', trim($participant->phone_country.' '.$participant->phone))
             ->assertJsonPath('data.questionnaire_completed', false)
             ->assertJsonPath('data.agreement_agreed', false)
             ->assertJsonPath('data.submitted_at', null);
@@ -1194,6 +1204,101 @@ class ConsultationApiTest extends TestCase
             'status' => 'submitted',
             'agreement_accepted' => true,
         ]);
+    }
+
+    public function test_questionnaire_post_success_message_matches_application_and_mode(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config(['services.outlook.enabled' => false]);
+
+        $cases = [
+            [
+                'application' => 'socal',
+                'mode' => 'online',
+                'service' => 'Divorce & Family Matters',
+                'endpoint' => 'socal-divorce-intake',
+                'expected' => 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email.',
+            ],
+            [
+                'application' => 'socal',
+                'mode' => 'phone',
+                'service' => 'Business, Payment & Contract Disputes',
+                'endpoint' => 'socal-party-mediation',
+                'expected' => 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details by email, and the mediator will call you at the phone number provided during booking at your selected consultation time.',
+            ],
+            [
+                'application' => 'socal',
+                'mode' => 'offline',
+                'service' => 'Business, Payment & Contract Disputes',
+                'endpoint' => 'socal-party-mediation',
+                'expected' => 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details, including the office location, by email.',
+            ],
+            [
+                'application' => 'legal',
+                'mode' => 'online',
+                'service' => 'Professional Legal Consultation',
+                'endpoint' => 'legal-initial-intake',
+                'expected' => 'Your intake form has been submitted successfully. After your consultation is confirmed, you will receive your consultation details and Zoom meeting link by email.',
+            ],
+            [
+                'application' => 'legal',
+                'mode' => 'phone',
+                'service' => 'Professional Legal Consultation',
+                'endpoint' => 'legal-initial-intake',
+                'expected' => 'Your intake form has been submitted successfully. After your consultation is confirmed, you will receive your consultation details by email, and the mediator will call you at the phone number provided during booking at your selected consultation time.',
+            ],
+            [
+                'application' => 'legal',
+                'mode' => 'offline',
+                'service' => 'Professional Legal Consultation',
+                'endpoint' => 'legal-initial-intake',
+                'expected' => 'Your intake form has been submitted successfully. After your consultation is confirmed, you will receive your consultation details, including the office location, by email.',
+            ],
+        ];
+
+        foreach ($cases as $index => $case) {
+            $type = ConsultationType::where('application', $case['application'])->where('price_cents', '>', 0)->firstOrFail();
+            $consultation = Consultation::create([
+                'booking_number' => 'MSG-'.($index + 1),
+                'consultation_type_id' => $type->id,
+                'legal_service_name' => $case['service'],
+                'application' => $case['application'],
+                'status' => 'payment_pending',
+                'payment_status' => 'pending',
+                'consultation_mode' => $case['mode'],
+                'timezone' => 'America/Los_Angeles',
+                'starts_at' => CarbonImmutable::parse('2026-09-15 10:00:00', 'America/Los_Angeles')->addDays($index),
+                'ends_at' => CarbonImmutable::parse('2026-09-15 11:00:00', 'America/Los_Angeles')->addDays($index),
+                'primary_first_name' => 'Message',
+                'primary_last_name' => 'Client '.$index,
+                'primary_email' => 'message'.$index.'@example.test',
+                'primary_phone_country' => '+1',
+                'primary_phone' => '(555) 010-10'.str_pad((string) $index, 2, '0', STR_PAD_LEFT),
+                'total_amount_cents' => $type->price_cents,
+                'currency' => 'USD',
+                'payment_mode' => 'full',
+            ]);
+            $participant = $consultation->participants()->create([
+                'first_name' => 'Message',
+                'last_name' => 'Client '.$index,
+                'email' => 'message'.$index.'@example.test',
+                'phone_country' => '+1',
+                'phone' => '(555) 010-10'.str_pad((string) $index, 2, '0', STR_PAD_LEFT),
+                'is_primary' => true,
+                'should_pay' => true,
+                'share_amount_cents' => $type->price_cents,
+            ]);
+            $submission = app(QuestionnaireWorkflowService::class)->ensureSubmission($consultation, $participant);
+
+            $this->postJson('/api/v1/questionnaires/'.$case['endpoint'].'/'.$submission->token, [
+                'answers' => ['name' => 'Message Client '.$index],
+            ])
+                ->assertOk()
+                ->assertJsonPath('message', $case['expected'])
+                ->assertJsonPath('data.uuid', $consultation->id)
+                ->assertJsonMissingPath('data.questionnaire_progress');
+        }
     }
 
     public function test_disabled_converge_gateway_does_not_create_a_payment_link(): void

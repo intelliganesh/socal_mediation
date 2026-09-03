@@ -23,4 +23,16 @@ class QuestionnairePdfService
             'answers' => collect($submission->answers ?? []),
         ])->download($filename);
     }
+
+    public function downloadAgreement(QuestionnaireSubmission $submission): Response
+    {
+        $submission->loadMissing(['consultation.type', 'consultation.professional', 'participant']);
+        $filename = Str::slug($submission->consultation->booking_number.'-'.$submission->participant->first_name.'-'.$submission->participant->last_name.'-agreement').'.pdf';
+
+        return Pdf::loadView('pdf.agreement-summary', [
+            'submission' => $submission,
+            'consultation' => $submission->consultation,
+            'participant' => $submission->participant,
+        ])->download($filename);
+    }
 }

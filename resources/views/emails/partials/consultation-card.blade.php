@@ -130,7 +130,7 @@
                                 </tr>
                                 <tr>
                                     <td width="50%" valign="top" style="padding:0 18px 22px 0;">
-                                        <div style="font-size:12px;color:#374151;margin-bottom:7px;">Professional</div>
+                                        <div style="font-size:12px;color:#374151;margin-bottom:7px;">Mediator</div>
                                        {{--  <div style="font-size:14px;line-height:1.4;">
                                             <span style="display:inline-block;width:20px;height:20px;border-radius:999px;background:{{ $brandSoftColor }};text-align:center;vertical-align:-5px;margin-right:7px;">
                                                 <img src="{{ asset($professionalIcon) }}" width="12" height="12" alt="" style="display:inline-block;width:12px;height:12px;vertical-align:middle;margin-top:4px;">

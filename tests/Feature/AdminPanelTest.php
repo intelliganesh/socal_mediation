@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Mail\AdminConsultationRescheduledMail;
 use App\Mail\ConsultationConclusionMail;
 use App\Mail\ConsultationPaymentLinkMail;
+use App\Mail\ConsultationPaymentReminderMail;
+use App\Mail\ConsultationQuestionnaireMail;
 use App\Mail\ConsultationZoomLinkMail;
 use App\Models\AppSetting;
 use App\Models\Consultation;
@@ -15,6 +17,7 @@ use App\Models\User;
 use App\Services\Integrations\OutlookCalendarClient;
 use App\Services\QuestionnaireTemplateService;
 use App\Services\QuestionnaireWorkflowService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -223,7 +226,8 @@ class AdminPanelTest extends TestCase
             ->get(route('admin.consultations.show', $paidConsultation))
             ->assertOk()
             ->assertSee('Admin Actions')
-            ->assertDontSee('Send Reminder')
+            ->assertSee('Questionnaire Reminder')
+            ->assertDontSee('Payment Reminder')
             ->assertDontSee('Send Payment Links');
 
         $this->actingAs($admin)
@@ -231,15 +235,15 @@ class AdminPanelTest extends TestCase
             ->assertOk()
             ->assertSee('Participants')
             ->assertSee('Payment Progress')
-            ->assertSee('Payment Shares')
             ->assertSee('Email Activity')
-            ->assertSee('Professional')
+            ->assertSee('Sarah Thompson')
             ->assertSee('Meeting Mode')
             ->assertSee('Zoom')
             ->assertSee('Outlook Calendar')
             ->assertSee('Copy Payment Link')
             ->assertSee('Send Reminder')
-            ->assertSee('Send Payment Links')
+            ->assertSee('Payment Reminder')
+            ->assertDontSee('Questionnaire Reminder')
             ->assertSee('Sync This Booking To Outlook');
 
         $this->actingAs($admin)
@@ -247,6 +251,60 @@ class AdminPanelTest extends TestCase
             ->assertRedirect();
 
         Mail::assertSent(ConsultationPaymentLinkMail::class, 2);
+    }
+
+    public function test_admin_can_send_questionnaire_reminder_from_consultation_detail(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.show', $consultation))
+            ->assertOk()
+            ->assertSee('Questionnaire Reminder');
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.questionnaire-reminder', $consultation))
+            ->assertRedirect()
+            ->assertSessionHas('status', '4 questionnaire reminder email(s) sent.');
+
+        Mail::assertSent(ConsultationQuestionnaireMail::class, 4);
+    }
+
+    public function test_scheduled_reminder_command_sends_payment_and_questionnaire_reminders(): void
+    {
+        $this->seed();
+        Mail::fake();
+        $this->travelTo(CarbonImmutable::parse('2026-08-26 10:00:00', 'America/Los_Angeles'));
+
+        Consultation::query()->update(['status' => 'cancelled']);
+
+        $paymentConsultation = Consultation::where('booking_number', 'SAMPLE-02')->firstOrFail();
+        $paymentConsultation->update([
+            'status' => 'payment_pending',
+            'payment_status' => 'pending',
+            'starts_at' => CarbonImmutable::parse('2026-08-27 09:00:00', 'America/Los_Angeles'),
+            'ends_at' => CarbonImmutable::parse('2026-08-27 13:00:00', 'America/Los_Angeles'),
+        ]);
+
+        $questionnaireConsultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
+        $questionnaireConsultation->update([
+            'status' => 'scheduled',
+            'payment_status' => 'paid',
+            'starts_at' => CarbonImmutable::parse('2026-08-28 13:00:00', 'America/Los_Angeles'),
+            'ends_at' => CarbonImmutable::parse('2026-08-28 17:00:00', 'America/Los_Angeles'),
+        ]);
+
+        $this->artisan('consultations:send-reminders')
+            ->expectsOutput('Payment reminders sent: 1')
+            ->expectsOutput('Questionnaire reminders sent: 4')
+            ->assertSuccessful();
+
+        Mail::assertSent(ConsultationPaymentReminderMail::class, 1);
+        Mail::assertSent(ConsultationQuestionnaireMail::class, 4);
     }
 
     public function test_free_intro_call_shows_zero_payers_in_admin_payment_progress(): void
@@ -463,10 +521,17 @@ class AdminPanelTest extends TestCase
             ->assertSee('Questionnaires')
             ->assertSee('Party Mediation Questionnaire')
             ->assertSee('Payment disagreement over a contract.')
-            ->assertSee('Agreement Accepted');
+            ->assertSee('Agreement Checked')
+            ->assertSee(route('admin.consultations.questionnaires.pdf', [$consultation, $submission]))
+            ->assertSee(route('admin.consultations.questionnaires.agreement-pdf', [$consultation, $submission]));
 
         $this->actingAs($admin)
             ->get(route('admin.consultations.questionnaires.pdf', [$consultation, $submission]))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.questionnaires.agreement-pdf', [$consultation, $submission]))
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
     }
@@ -491,10 +556,15 @@ class AdminPanelTest extends TestCase
             ->get(route('admin.consultations.show', $consultation))
             ->assertOk()
             ->assertSee('The questionnaire has not been submitted yet.')
-            ->assertDontSee(route('admin.consultations.questionnaires.pdf', [$consultation, $submission]));
+            ->assertDontSee(route('admin.consultations.questionnaires.pdf', [$consultation, $submission]))
+            ->assertDontSee(route('admin.consultations.questionnaires.agreement-pdf', [$consultation, $submission]));
 
         $this->actingAs($admin)
             ->get(route('admin.consultations.questionnaires.pdf', [$consultation, $submission]))
+            ->assertNotFound();
+
+        $this->actingAs($admin)
+            ->get(route('admin.consultations.questionnaires.agreement-pdf', [$consultation, $submission]))
             ->assertNotFound();
     }
 

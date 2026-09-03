@@ -30,6 +30,9 @@
     $emailActivityMeta = function (string $action) {
     return match ($action) {
     'manual_payment_reminder' => ['label' => 'Payment Reminder', 'icon' => 'bell'],
+    'automatic_payment_reminder' => ['label' => 'Payment Reminder', 'icon' => 'bell'],
+    'manual_questionnaire_reminder' => ['label' => 'Questionnaire Reminder', 'icon' => 'clipboard-list'],
+    'automatic_questionnaire_reminder' => ['label' => 'Questionnaire Reminder', 'icon' => 'clipboard-list'],
     'manual_payment_link' => ['label' => 'Payment Link', 'icon' => 'credit-card'],
     'automatic_payment_link' => ['label' => 'Payment Link', 'icon' => 'credit-card'],
     'manual_zoom_link' => ['label' => 'Zoom Link', 'icon' => 'video'],
@@ -50,6 +53,11 @@
     $consultationStatusOptions = ['draft', 'pending', 'payment_pending', 'paid', 'scheduled', 'rescheduled', 'in_progress', 'completed', 'cancelled', 'overdue'];
     $paymentStatusOptions = ['pending', 'partially_paid', 'paid', 'failed', 'refunded'];
     $questionnaireSubmissions = $consultation->questionnaireSubmissions;
+    $questionnaireTemplates = app(\App\Services\QuestionnaireTemplateService::class);
+    $pendingQuestionnaireCount = $questionnaireSubmissions->filter(fn ($submission) => $submission->status !== 'submitted' || ($questionnaireTemplates->requiresAgreement($submission->template_key) && ! $submission->agreement_accepted))->count();
+    $canSendQuestionnaireReminder = $consultation->payment_status === 'paid'
+        && $questionnaireTemplates->requiresQuestionnaire($consultation)
+        && (($questionnaireSubmissions->isEmpty() && $consultation->participants->isNotEmpty()) || $pendingQuestionnaireCount > 0);
     @endphp
 <div style="--admin-brand: {{ $app['color'] }}; --admin-brand-soft: {{ $app['soft'] }};">
     <div class="-mt-1 mb-5 flex flex-wrap items-start justify-between gap-4">
@@ -70,15 +78,26 @@
     <section class="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <h3 class="sr-only">Admin Actions</h3>
         <span class="sr-only">Regenerate Meeting Link</span>
-        @if($unpaidPaymentCount > 0)
-        <span class="sr-only">Send Payment Links</span>
-        <form class="action-card action-card-primary min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]" method="post" action="{{ route('admin.consultations.reminder', $consultation) }}">
-            @csrf
+        @if($unpaidPaymentCount > 0 || $canSendQuestionnaireReminder)
+        <article class="action-card action-card-primary min-h-48 rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_rgba(17,24,39,0.06)]">
             <div class="action-card-icon grid h-12 w-12 place-items-center rounded-lg"><i data-lucide="bell" class="h-7 w-7"></i></div>
             <h3 class="mt-4 font-bold">Send Reminder</h3>
-            <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Send Payment Reminder for unpaid participants.</p>
-            <button class="action-card-button mt-auto h-10 w-full rounded-lg text-sm font-bold">Send Reminder</button>
-        </form>
+            <p class="mt-3 text-sm font-semibold leading-6 text-gray-500">Send pending payment or questionnaire reminder emails.</p>
+            <div class="mt-auto grid gap-2">
+                @if($unpaidPaymentCount > 0)
+                <form method="post" action="{{ route('admin.consultations.reminder', $consultation) }}">
+                    @csrf
+                    <button class="action-card-button h-10 w-full rounded-lg text-sm font-bold">Payment Reminder</button>
+                </form>
+                @endif
+                @if($canSendQuestionnaireReminder)
+                <form method="post" action="{{ route('admin.consultations.questionnaire-reminder', $consultation) }}">
+                    @csrf
+                    <button class="action-card-button h-10 w-full rounded-lg text-sm font-bold">Questionnaire Reminder</button>
+                </form>
+                @endif
+            </div>
+        </article>
         @endif
 
         @if($consultation->starts_at && ! $isFreeIntroCall)
@@ -193,7 +212,7 @@
                 </div>
                 <div class="sr-only">Outlook Calendar</div>
                 <div class="sr-only">Zoom</div>
-                <div class="sr-only">Professional {{ $consultation->professional?->name ?: 'Not assigned' }}</div>
+                <div class="sr-only">Mediator {{ $consultation->professional?->name ?: 'Not assigned' }}</div>
             </dl>
         </article>
         <article class="rounded-lg border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
@@ -334,8 +353,13 @@
                     <div class="mt-3 flex flex-wrap gap-2">
                         <span class="status-badge {{ $submissionStatus['badge'] }}">{{ $submissionStatus['label'] }}</span>
                         @if($submissionTemplate['requires_agreement'] ?? false)
-                        <span class="status-badge {{ $submission->agreement_accepted ? 'status-badge-paid' : 'status-badge-pending' }}">
-                            {{ $submission->agreement_accepted ? 'Agreement Accepted' : 'Agreement Pending' }}
+                        <span class="status-badge {{ $submission->agreement_accepted ? 'status-badge-paid' : 'status-badge-pending' }} gap-1">
+                            @if($submission->agreement_accepted)
+                            <i data-lucide="check-circle" class="h-3.5 w-3.5"></i>
+                            Agreement Checked
+                            @else
+                            Agreement Pending
+                            @endif
                         </span>
                         @endif
                     </div>
@@ -371,11 +395,17 @@
                     </div>
                     @endif
                 </div>
-                <div class="flex items-start justify-end">
+                <div class="flex flex-col items-start justify-end gap-2 sm:flex-row lg:flex-col">
                     @if($submission->status === 'submitted')
                     <a class="inline-flex h-10 items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.consultations.questionnaires.pdf', [$consultation, $submission]) }}">
                         <i data-lucide="download" class="h-4 w-4"></i>
-                        PDF
+                        Questionnaire PDF
+                    </a>
+                    @endif
+                    @if(($submissionTemplate['requires_agreement'] ?? false) && $submission->agreement_accepted)
+                    <a class="inline-flex h-10 items-center gap-2 rounded-lg border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#111827] hover:bg-[#F7F8FC]" href="{{ route('admin.consultations.questionnaires.agreement-pdf', [$consultation, $submission]) }}">
+                        <i data-lucide="file-check-2" class="h-4 w-4"></i>
+                        Agreement PDF
                     </a>
                     @endif
                 </div>

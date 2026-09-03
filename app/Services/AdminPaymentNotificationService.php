@@ -19,12 +19,12 @@ class AdminPaymentNotificationService
         );
     }
 
-    public function sendPaymentReminders(Consultation $consultation): int
+    public function sendPaymentReminders(Consultation $consultation, string $action = 'manual_payment_reminder'): int
     {
         return $this->sendToUnpaidRequests(
             $consultation,
             ConsultationPaymentReminderMail::class,
-            'manual_payment_reminder'
+            $action
         );
     }
 
@@ -74,9 +74,7 @@ class AdminPaymentNotificationService
                     'template' => $mailable,
                     'payment_request_uuid' => $paymentRequest->id,
                 ],
-                'message' => $action === 'manual_payment_reminder'
-                    ? 'Manual reminder email sent to unpaid payer.'
-                    : 'Payment link email sent to unpaid payer.',
+                'message' => $this->sentMessage($action),
             ]);
             $sent++;
         }
@@ -97,5 +95,14 @@ class AdminPaymentNotificationService
     {
         return $paymentRequest->participant?->email
             ?: $paymentRequest->consultation?->primary_email;
+    }
+
+    private function sentMessage(string $action): string
+    {
+        return match ($action) {
+            'manual_payment_reminder' => 'Manual reminder email sent to unpaid payer.',
+            'automatic_payment_reminder' => 'Automatic payment reminder email sent to unpaid payer.',
+            default => 'Payment link email sent to unpaid payer.',
+        };
     }
 }

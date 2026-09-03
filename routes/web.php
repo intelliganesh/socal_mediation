@@ -45,8 +45,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('consultations', [ConsultationAdminController::class, 'index'])->name('consultations.index');
         Route::get('consultations/{consultation}', [ConsultationAdminController::class, 'show'])->name('consultations.show');
         Route::get('consultations/{consultation}/questionnaires/{submission}/pdf', [ConsultationAdminController::class, 'downloadQuestionnairePdf'])->name('consultations.questionnaires.pdf');
+        Route::get('consultations/{consultation}/questionnaires/{submission}/agreement-pdf', [ConsultationAdminController::class, 'downloadAgreementPdf'])->name('consultations.questionnaires.agreement-pdf');
         Route::post('consultations/{consultation}/payment-links', [ConsultationAdminController::class, 'sendPaymentLinks'])->name('consultations.payment-links');
         Route::post('consultations/{consultation}/reminder', [ConsultationAdminController::class, 'sendReminder'])->name('consultations.reminder');
+        Route::post('consultations/{consultation}/questionnaire-reminder', [ConsultationAdminController::class, 'sendQuestionnaireReminder'])->name('consultations.questionnaire-reminder');
         Route::post('consultations/{consultation}/zoom-link', [ConsultationAdminController::class, 'resendZoomLink'])->name('consultations.zoom-link');
         Route::post('consultations/{consultation}/regenerate-zoom', [ConsultationAdminController::class, 'regenerateZoomLink'])->name('consultations.regenerate-zoom');
         Route::post('consultations/{consultation}/statuses', [ConsultationAdminController::class, 'updateStatuses'])->name('consultations.statuses');
