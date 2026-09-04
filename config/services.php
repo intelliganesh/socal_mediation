@@ -75,10 +75,8 @@ return [
         'client_id' => env('OUTLOOK_CLIENT_ID'),
         'client_secret' => env('OUTLOOK_CLIENT_SECRET'),
         'login_base_url' => env('OUTLOOK_LOGIN_BASE_URL', 'https://login.microsoftonline.com'),
-        'socal_user_id' => env('OUTLOOK_SOCAL_USER_ID'),
-        'socal_calendar_id' => env('OUTLOOK_SOCAL_CALENDAR_ID'),
-        'legal_user_id' => env('OUTLOOK_LEGAL_USER_ID'),
-        'legal_calendar_id' => env('OUTLOOK_LEGAL_CALENDAR_ID'),
+        'user_id' => env('OUTLOOK_USER_ID'),
+        'calendar_id' => env('OUTLOOK_CALENDAR_ID'),
         'base_url' => env('OUTLOOK_BASE_URL', 'https://graph.microsoft.com/v1.0'),
     ],
 

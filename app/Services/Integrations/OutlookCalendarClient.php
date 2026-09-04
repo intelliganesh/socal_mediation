@@ -22,8 +22,6 @@ class OutlookCalendarClient
 
     private const TRACKING_PROPERTY_ID = 'String {66f5a359-4659-4f37-9155-f5af87172f73} Name SMCTrackingId';
 
-    private const CALENDAR_APPLICATIONS = ['socal', 'legal'];
-
     private const ACTIVE_CONSULTATION_STATUSES = ['scheduled'];
 
     private const OUTLOOK_TIMEZONES = [
@@ -64,6 +62,7 @@ class OutlookCalendarClient
         $this->assertEnabled();
 
         [$windowStart, $windowEnd] = $this->rollingSyncWindow();
+        $deleted = $this->deleteOldDualTrackedEvents();
         $from ??= $windowStart;
         $until ??= $windowEnd;
         $fromDatabase = $from->timezone(config('app.booking_timezone'))->format('Y-m-d H:i:s');
@@ -102,7 +101,6 @@ class OutlookCalendarClient
             $synced++;
         }
 
-        $deleted = 0;
         ExternalCalendarEvent::query()
             ->where('provider', 'outlook')
             ->where(function ($query) {
@@ -139,85 +137,79 @@ class OutlookCalendarClient
     private function syncWindow(CarbonImmutable $start, CarbonImmutable $end): int
     {
         $count = 0;
+        $activeExternalIds = [];
+        $trackedEvents = ExternalCalendarEvent::query()
+            ->where('provider', 'outlook')
+            ->where(function ($query) {
+                $query->where('external_id', 'like', 'consultation-%')
+                    ->orWhere('external_id', 'like', 'free-intro-participant-%');
+            })
+            ->get()
+            ->filter(fn (ExternalCalendarEvent $event) => filled($event->metadata['outlook_event_id'] ?? null))
+            ->keyBy(fn (ExternalCalendarEvent $event) => $event->metadata['outlook_event_id']);
 
-        foreach (self::CALENDAR_APPLICATIONS as $application) {
-            $activeExternalIds = [];
-            $trackedEvents = ExternalCalendarEvent::query()
-                ->where('provider', 'outlook')
-                ->where('application', $application)
-                ->where(function ($query) {
-                    $query->where('external_id', 'like', 'consultation-%')
-                        ->orWhere('external_id', 'like', 'free-intro-participant-%');
-                })
-                ->get()
-                ->filter(fn (ExternalCalendarEvent $event) => filled($event->metadata['outlook_event_id'] ?? null))
-                ->keyBy(fn (ExternalCalendarEvent $event) => $event->metadata['outlook_event_id']);
-
-            foreach ($this->calendarView($application, $start, $end) as $event) {
-                if (($event['isCancelled'] ?? false) || ! ($event['showAs'] ?? null) || ($event['showAs'] ?? 'busy') === 'free') {
-                    continue;
-                }
-
-                $trackedEvent = $trackedEvents->get($event['id'] ?? '');
-                $consultationId = $this->consultationIdFromOutlookEvent($event)
-                    ?? ($trackedEvent?->metadata['consultation_uuid'] ?? null);
-                $participantId = $this->participantIdFromOutlookEvent($event)
-                    ?? ($trackedEvent?->metadata['participant_id'] ?? null);
-
-                if ($consultationId !== null) {
-                    $stillExists = $this->consultationStillExists($consultationId);
-
-                    if (! $stillExists) {
-                        $this->deleteEvent($application, $event['id']);
-                        $trackedEvent?->delete();
-                    }
-
-                    continue;
-                }
-
-                if ($participantId !== null) {
-                    $stillExists = $this->participantSlotStillExists($participantId);
-
-                    if (! $stillExists) {
-                        $this->deleteEvent($application, $event['id']);
-                        $trackedEvent?->delete();
-                    }
-
-                    continue;
-                }
-
-                $activeExternalIds[] = $event['id'];
-
-                ExternalCalendarEvent::updateOrCreate([
-                    'provider' => 'outlook',
-                    'external_id' => $event['id'],
-                    'application' => $application,
-                ], [
-                    'application' => $application,
-                    'title' => $event['subject'] ?? 'Outlook busy event',
-                    'starts_at' => $this->graphDateTime(data_get($event, 'start.dateTime'), data_get($event, 'start.timeZone')),
-                    'ends_at' => $this->graphDateTime(data_get($event, 'end.dateTime'), data_get($event, 'end.timeZone')),
-                    'is_busy' => true,
-                    'metadata' => [
-                        'outlook_web_link' => $event['webLink'] ?? null,
-                        'synced_window_start' => $start->toDateString(),
-                        'synced_window_end' => $end->toDateString(),
-                    ],
-                ]);
-
-                $count++;
+        foreach ($this->calendarView($start, $end) as $event) {
+            if (($event['isCancelled'] ?? false) || ! ($event['showAs'] ?? null) || ($event['showAs'] ?? 'busy') === 'free') {
+                continue;
             }
 
-            ExternalCalendarEvent::query()
-                ->where('provider', 'outlook')
-                ->where('application', $application)
-                ->where('external_id', 'not like', 'consultation-%')
-                ->where('external_id', 'not like', 'free-intro-participant-%')
-                ->where('starts_at', '<', $end->format('Y-m-d H:i:s'))
-                ->where('ends_at', '>', $start->format('Y-m-d H:i:s'))
-                ->when($activeExternalIds !== [], fn ($query) => $query->whereNotIn('external_id', $activeExternalIds))
-                ->delete();
+            $trackedEvent = $trackedEvents->get($event['id'] ?? '');
+            $consultationId = $this->consultationIdFromOutlookEvent($event)
+                ?? ($trackedEvent?->metadata['consultation_uuid'] ?? null);
+            $participantId = $this->participantIdFromOutlookEvent($event)
+                ?? ($trackedEvent?->metadata['participant_id'] ?? null);
+
+            if ($consultationId !== null) {
+                $stillExists = $this->consultationStillExists($consultationId);
+
+                if (! $stillExists) {
+                    $this->deleteEvent('shared', $event['id']);
+                    $trackedEvent?->delete();
+                }
+
+                continue;
+            }
+
+            if ($participantId !== null) {
+                $stillExists = $this->participantSlotStillExists($participantId);
+
+                if (! $stillExists) {
+                    $this->deleteEvent('shared', $event['id']);
+                    $trackedEvent?->delete();
+                }
+
+                continue;
+            }
+
+            $activeExternalIds[] = $event['id'];
+
+            ExternalCalendarEvent::updateOrCreate([
+                'provider' => 'outlook',
+                'external_id' => $event['id'],
+            ], [
+                'application' => null,
+                'title' => $event['subject'] ?? 'Outlook busy event',
+                'starts_at' => $this->graphDateTime(data_get($event, 'start.dateTime'), data_get($event, 'start.timeZone')),
+                'ends_at' => $this->graphDateTime(data_get($event, 'end.dateTime'), data_get($event, 'end.timeZone')),
+                'is_busy' => true,
+                'metadata' => [
+                    'outlook_web_link' => $event['webLink'] ?? null,
+                    'synced_window_start' => $start->toDateString(),
+                    'synced_window_end' => $end->toDateString(),
+                ],
+            ]);
+
+            $count++;
         }
+
+        ExternalCalendarEvent::query()
+            ->where('provider', 'outlook')
+            ->where('external_id', 'not like', 'consultation-%')
+            ->where('external_id', 'not like', 'free-intro-participant-%')
+            ->where('starts_at', '<', $end->format('Y-m-d H:i:s'))
+            ->where('ends_at', '>', $start->format('Y-m-d H:i:s'))
+            ->when($activeExternalIds !== [], fn ($query) => $query->whereNotIn('external_id', $activeExternalIds))
+            ->delete();
 
         $this->deleteOutlookBusyRowsOutsideWindow($start, $end);
 
@@ -260,23 +252,11 @@ class OutlookCalendarClient
             throw new \DomainException('Consultation must be scheduled before syncing to Outlook.');
         }
 
-        $syncedEvents = collect();
-        $errors = [];
-
-        foreach (self::CALENDAR_APPLICATIONS as $calendarApplication) {
-            try {
-                $syncedEvents->push($this->syncConsultationToCalendar($consultation, $calendarApplication, $source));
-            } catch (\Throwable $exception) {
-                $errors[] = Str::headline($calendarApplication).': '.$exception->getMessage();
-            }
+        try {
+            return $this->syncConsultationToCalendar($consultation, $source);
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException('Outlook consultation sync failed: '.$exception->getMessage(), previous: $exception);
         }
-
-        if ($errors !== []) {
-            throw new \RuntimeException('Outlook consultation sync failed for '.implode(' | ', $errors));
-        }
-
-        return $syncedEvents->firstWhere('application', $consultation->application)
-            ?? $syncedEvents->first();
     }
 
     public function recreateConsultationEvent(Consultation $consultation, string $source = 'reschedule_sync'): ExternalCalendarEvent
@@ -298,23 +278,11 @@ class OutlookCalendarClient
             return null;
         }
 
-        $syncedEvents = collect();
-        $errors = [];
-
-        foreach (self::CALENDAR_APPLICATIONS as $calendarApplication) {
-            try {
-                $syncedEvents->push($this->syncParticipantSlotToCalendar($participant, $calendarApplication, $source));
-            } catch (\Throwable $exception) {
-                $errors[] = Str::headline($calendarApplication).': '.$exception->getMessage();
-            }
+        try {
+            return $this->syncParticipantSlotToCalendar($participant, $source);
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException('Outlook participant slot sync failed: '.$exception->getMessage(), previous: $exception);
         }
-
-        if ($errors !== []) {
-            throw new \RuntimeException('Outlook participant slot sync failed for '.implode(' | ', $errors));
-        }
-
-        return $syncedEvents->firstWhere('application', $consultation->application)
-            ?? $syncedEvents->first();
     }
 
     private function isReadyForOutlook(Consultation $consultation): bool
@@ -351,7 +319,7 @@ class OutlookCalendarClient
         $this->assertEnabled();
 
         $start = CarbonImmutable::now(config('app.booking_timezone'))->addDays(7)->setTime(8, 0);
-        $event = $this->createEvent($application, [
+        $event = $this->createEvent([
             'subject' => 'Codex Outlook Sync Smoke Test',
             'body' => [
                 'contentType' => 'Text',
@@ -374,7 +342,7 @@ class OutlookCalendarClient
     public function deleteEvent(string $application, string $eventId): void
     {
         $this->assertEnabled();
-        $calendarUrl = $this->calendarUrl($application);
+        $calendarUrl = $this->calendarUrl();
 
         $response = Http::withToken($this->accessToken())
             ->acceptJson()
@@ -416,24 +384,20 @@ class OutlookCalendarClient
         }
     }
 
-    private function syncConsultationToCalendar(
-        Consultation $consultation,
-        string $calendarApplication,
-        string $source,
-    ): ExternalCalendarEvent {
+    private function syncConsultationToCalendar(Consultation $consultation, string $source): ExternalCalendarEvent
+    {
         $payload = $this->consultationEventPayload($consultation);
-        $externalId = $this->trackedConsultationExternalId($consultation, $calendarApplication);
+        $externalId = $this->trackedConsultationExternalId($consultation);
         $existing = ExternalCalendarEvent::query()
             ->where('provider', 'outlook')
             ->where('external_id', $externalId)
             ->first();
 
         if (! $existing) {
-            $legacyExternalId = 'consultation-'.$consultation->id;
             $existing = ExternalCalendarEvent::query()
                 ->where('provider', 'outlook')
-                ->where('external_id', $legacyExternalId)
-                ->where('application', $calendarApplication)
+                ->where('metadata->consultation_uuid', $consultation->id)
+                ->whereNotNull('metadata->outlook_event_id')
                 ->first();
 
             if ($existing) {
@@ -443,16 +407,16 @@ class OutlookCalendarClient
 
         if ($existing?->metadata['outlook_event_id'] ?? false) {
             try {
-                $event = $this->patchEvent($calendarApplication, $existing->metadata['outlook_event_id'], $payload);
+                $event = $this->patchEvent($existing->metadata['outlook_event_id'], $payload);
             } catch (\RuntimeException $exception) {
                 if (! str_contains($exception->getMessage(), '"ErrorItemNotFound"')) {
                     throw $exception;
                 }
 
-                $event = $this->createEvent($calendarApplication, $payload);
+                $event = $this->createEvent($payload);
             }
         } else {
-            $event = $this->createEvent($calendarApplication, $payload);
+            $event = $this->createEvent($payload);
         }
 
         return ExternalCalendarEvent::updateOrCreate([
@@ -460,7 +424,7 @@ class OutlookCalendarClient
             'external_id' => $externalId,
         ], [
             'professional_id' => $consultation->professional_id,
-            'application' => $calendarApplication,
+            'application' => $consultation->application,
             'title' => $payload['subject'],
             'starts_at' => $consultation->starts_at,
             'ends_at' => $consultation->ends_at,
@@ -468,7 +432,7 @@ class OutlookCalendarClient
             'metadata' => [
                 'consultation_uuid' => $consultation->id,
                 'consultation_application' => $consultation->application,
-                'calendar_application' => $calendarApplication,
+                'calendar_application' => 'shared',
                 'outlook_event_id' => $event['id'] ?? null,
                 'outlook_web_link' => $event['webLink'] ?? null,
                 'outlook_response' => $this->eventResponsePayload($event),
@@ -478,13 +442,10 @@ class OutlookCalendarClient
         ]);
     }
 
-    private function syncParticipantSlotToCalendar(
-        ConsultationParticipant $participant,
-        string $calendarApplication,
-        string $source,
-    ): ExternalCalendarEvent {
+    private function syncParticipantSlotToCalendar(ConsultationParticipant $participant, string $source): ExternalCalendarEvent
+    {
         $payload = $this->participantSlotEventPayload($participant);
-        $externalId = $this->trackedParticipantSlotExternalId($participant, $calendarApplication);
+        $externalId = $this->trackedParticipantSlotExternalId($participant);
         $existing = ExternalCalendarEvent::query()
             ->where('provider', 'outlook')
             ->where('external_id', $externalId)
@@ -492,16 +453,16 @@ class OutlookCalendarClient
 
         if ($existing?->metadata['outlook_event_id'] ?? false) {
             try {
-                $event = $this->patchEvent($calendarApplication, $existing->metadata['outlook_event_id'], $payload);
+                $event = $this->patchEvent($existing->metadata['outlook_event_id'], $payload);
             } catch (\RuntimeException $exception) {
                 if (! str_contains($exception->getMessage(), '"ErrorItemNotFound"')) {
                     throw $exception;
                 }
 
-                $event = $this->createEvent($calendarApplication, $payload);
+                $event = $this->createEvent($payload);
             }
         } else {
-            $event = $this->createEvent($calendarApplication, $payload);
+            $event = $this->createEvent($payload);
         }
 
         $consultation = $participant->consultation;
@@ -511,7 +472,7 @@ class OutlookCalendarClient
             'external_id' => $externalId,
         ], [
             'professional_id' => $consultation->professional_id,
-            'application' => $calendarApplication,
+            'application' => $consultation->application,
             'title' => $payload['subject'],
             'starts_at' => $participant->scheduled_starts_at,
             'ends_at' => $participant->scheduled_ends_at,
@@ -520,7 +481,7 @@ class OutlookCalendarClient
                 'consultation_uuid' => $consultation->id,
                 'participant_id' => $participant->id,
                 'consultation_application' => $consultation->application,
-                'calendar_application' => $calendarApplication,
+                'calendar_application' => 'shared',
                 'outlook_event_id' => $event['id'] ?? null,
                 'outlook_web_link' => $event['webLink'] ?? null,
                 'outlook_response' => $this->eventResponsePayload($event),
@@ -534,25 +495,25 @@ class OutlookCalendarClient
     {
         $outlookEventId = $event->metadata['outlook_event_id'] ?? null;
         if ($outlookEventId) {
-            $this->deleteEvent($event->application, $outlookEventId);
+            $this->deleteEvent((string) ($event->application ?? 'shared'), $outlookEventId);
         }
 
         $event->delete();
     }
 
-    private function trackedConsultationExternalId(Consultation $consultation, string $calendarApplication): string
+    private function trackedConsultationExternalId(Consultation $consultation): string
     {
-        return 'consultation-'.$consultation->id.'-'.$calendarApplication;
+        return 'consultation-'.$consultation->id;
     }
 
-    private function trackedParticipantSlotExternalId(ConsultationParticipant $participant, string $calendarApplication): string
+    private function trackedParticipantSlotExternalId(ConsultationParticipant $participant): string
     {
-        return 'free-intro-participant-'.$participant->id.'-'.$calendarApplication;
+        return 'free-intro-participant-'.$participant->id;
     }
 
-    private function calendarView(string $application, CarbonImmutable $start, CarbonImmutable $end): array
+    private function calendarView(CarbonImmutable $start, CarbonImmutable $end): array
     {
-        $calendarUrl = $this->calendarUrl($application);
+        $calendarUrl = $this->calendarUrl();
         $events = [];
         $windowQuery = [
             'startDateTime' => $start->toIso8601String(),
@@ -598,9 +559,9 @@ class OutlookCalendarClient
         return $scheme.$host.$port.$path.'?'.http_build_query($existingQuery, '', '&', PHP_QUERY_RFC3986).$fragment;
     }
 
-    private function createEvent(string $application, array $payload): array
+    private function createEvent(array $payload): array
     {
-        $calendarUrl = $this->calendarUrl($application);
+        $calendarUrl = $this->calendarUrl();
 
         $response = Http::withToken($this->accessToken())
             ->acceptJson()
@@ -613,9 +574,9 @@ class OutlookCalendarClient
         return $response->json();
     }
 
-    private function patchEvent(string $application, string $eventId, array $payload): array
+    private function patchEvent(string $eventId, array $payload): array
     {
-        $calendarUrl = $this->calendarUrl($application);
+        $calendarUrl = $this->calendarUrl();
 
         $response = Http::withToken($this->accessToken())
             ->acceptJson()
@@ -708,7 +669,8 @@ class OutlookCalendarClient
         ExternalCalendarEvent::query()
             ->where('provider', 'outlook')
             ->where(function ($query) use ($participant) {
-                $query->where('external_id', 'like', 'free-intro-participant-'.$participant->id.'-%')
+                $query->where('external_id', 'free-intro-participant-'.$participant->id)
+                    ->orWhere('external_id', 'like', 'free-intro-participant-'.$participant->id.'-%')
                     ->orWhere('metadata->participant_id', $participant->id);
             })
             ->get()
@@ -718,7 +680,7 @@ class OutlookCalendarClient
     private function trackedConsultationStillExists(ExternalCalendarEvent $event): bool
     {
         $consultationId = $event->metadata['consultation_uuid']
-            ?? str($event->external_id)->after('consultation-')->beforeLast('-')->toString();
+            ?? $this->consultationIdFromTrackedExternalId((string) $event->external_id);
 
         return $this->consultationStillExists($consultationId);
     }
@@ -743,9 +705,27 @@ class OutlookCalendarClient
     private function trackedParticipantSlotStillExists(ExternalCalendarEvent $event): bool
     {
         $participantId = $event->metadata['participant_id']
-            ?? str($event->external_id)->after('free-intro-participant-')->beforeLast('-')->toString();
+            ?? $this->participantIdFromTrackedExternalId((string) $event->external_id);
 
         return $this->participantSlotStillExists($participantId);
+    }
+
+    private function consultationIdFromTrackedExternalId(string $externalId): ?string
+    {
+        if (preg_match('/^consultation-([0-9a-f-]{36})(?:-(?:socal|legal))?$/i', $externalId, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches[1];
+    }
+
+    private function participantIdFromTrackedExternalId(string $externalId): ?int
+    {
+        if (preg_match('/^free-intro-participant-([0-9]+)(?:-(?:socal|legal))?$/', $externalId, $matches) !== 1) {
+            return null;
+        }
+
+        return (int) $matches[1];
     }
 
     private function participantSlotStillExists(null|int|string $participantId): bool
@@ -829,13 +809,13 @@ class OutlookCalendarClient
         ];
     }
 
-    private function calendarUrl(string $application): string
+    private function calendarUrl(): string
     {
-        $userId = config('services.outlook.'.$application.'_user_id');
-        $calendarId = config('services.outlook.'.$application.'_calendar_id');
+        $userId = config('services.outlook.user_id');
+        $calendarId = config('services.outlook.calendar_id');
 
         if (blank($userId)) {
-            throw new \DomainException("Outlook {$application} user id is not configured.");
+            throw new \DomainException('Outlook user id is not configured.');
         }
 
         $baseUrl = rtrim(config('services.outlook.base_url'), '/');
@@ -846,6 +826,34 @@ class OutlookCalendarClient
         }
 
         return $userPath.'/calendars/'.rawurlencode($calendarId);
+    }
+
+    private function deleteOldDualTrackedEvents(): int
+    {
+        $deleted = 0;
+
+        ExternalCalendarEvent::query()
+            ->where('provider', 'outlook')
+            ->where(function ($query) {
+                $query->where('external_id', 'like', 'consultation-%-socal')
+                    ->orWhere('external_id', 'like', 'consultation-%-legal')
+                    ->orWhere('external_id', 'like', 'free-intro-participant-%-socal')
+                    ->orWhere('external_id', 'like', 'free-intro-participant-%-legal');
+            })
+            ->get()
+            ->filter(fn (ExternalCalendarEvent $event) => $this->isOldDualTrackedEvent($event))
+            ->each(function (ExternalCalendarEvent $event) use (&$deleted) {
+                $this->deleteTrackedConsultationEvent($event);
+                $deleted++;
+            });
+
+        return $deleted;
+    }
+
+    private function isOldDualTrackedEvent(ExternalCalendarEvent $event): bool
+    {
+        return preg_match('/^consultation-[0-9a-f-]{36}-(socal|legal)$/i', (string) $event->external_id) === 1
+            || preg_match('/^free-intro-participant-[0-9]+-(socal|legal)$/', (string) $event->external_id) === 1;
     }
 
     private function graphDateTime(?string $dateTime, ?string $timezone): CarbonImmutable

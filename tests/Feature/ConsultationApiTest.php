@@ -204,7 +204,7 @@ class ConsultationApiTest extends TestCase
         ]);
     }
 
-    public function test_completing_consultation_immediately_creates_events_in_both_outlook_calendars(): void
+    public function test_completing_consultation_immediately_creates_event_in_shared_outlook_calendar(): void
     {
         $this->seed();
         Mail::fake();
@@ -215,21 +215,15 @@ class ConsultationApiTest extends TestCase
             'services.outlook.client_secret' => 'client-secret',
             'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
             'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
-            'services.outlook.socal_user_id' => 'socal@example.com',
-            'services.outlook.socal_calendar_id' => 'socal-calendar',
-            'services.outlook.legal_user_id' => 'legal@example.com',
-            'services.outlook.legal_calendar_id' => 'legal-calendar',
+            'services.outlook.user_id' => 'shared@example.com',
+            'services.outlook.calendar_id' => 'shared-calendar',
         ]);
 
         Http::fake([
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token']),
-            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events' => Http::response([
-                'id' => 'completion-socal-event-id',
-                'webLink' => 'https://outlook.office.com/completion-socal-event',
-            ], 201),
-            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events' => Http::response([
-                'id' => 'completion-legal-event-id',
-                'webLink' => 'https://outlook.office.com/completion-legal-event',
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events' => Http::response([
+                'id' => 'completion-shared-event-id',
+                'webLink' => 'https://outlook.office.com/completion-shared-event',
             ], 201),
         ]);
 
@@ -245,20 +239,16 @@ class ConsultationApiTest extends TestCase
         ])->assertCreated()->json('data.uuid');
 
         $this->postJson('/api/v1/consultations/'.$consultationId.'/complete', [
-            'starts_at' => '2026-10-19T13:00:00-07:00',
+            'starts_at' => '2026-11-19T13:00:00-07:00',
             'timezone' => 'America/Los_Angeles',
             'payment_mode' => 'full',
             'payment_method' => 'card',
         ])->assertOk();
 
-        foreach (['socal' => 'completion-socal-event-id', 'legal' => 'completion-legal-event-id'] as $application => $eventId) {
-            $this->assertDatabaseHas('external_calendar_events', [
-                'provider' => 'outlook',
-                'external_id' => 'consultation-'.$consultationId.'-'.$application,
-                'application' => $application,
-                'metadata->outlook_event_id' => $eventId,
-            ]);
-        }
+        $this->assertDatabaseMissing('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultationId,
+        ]);
 
         $this->assertDatabaseHas('integration_logs', [
             'loggable_type' => Consultation::class,
@@ -381,7 +371,7 @@ class ConsultationApiTest extends TestCase
         $this->postJson("/api/v1/consultations/{$consultationUuid}/complete", [
             'legal_service_name' => 'Business, Payment & Contract Disputes',
             'consultation_mode' => 'online',
-            'starts_at' => '2026-08-03T09:00:00-07:00',
+            'starts_at' => '2026-11-03T09:00:00-07:00',
             'timezone' => 'America/Los_Angeles',
             'payment_mode' => 'split',
             'payment_method' => 'card',
@@ -471,8 +461,8 @@ class ConsultationApiTest extends TestCase
             'services.outlook.client_secret' => 'secret',
             'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
             'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
-            'services.outlook.socal_user_id' => 'socal-user',
-            'services.outlook.legal_user_id' => 'legal-user',
+            'services.outlook.user_id' => 'shared-user',
+            'services.outlook.calendar_id' => 'shared-calendar',
         ]);
 
         $eventPayloads = [];
@@ -534,8 +524,8 @@ class ConsultationApiTest extends TestCase
             'services.outlook.client_secret' => 'secret',
             'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
             'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
-            'services.outlook.socal_user_id' => 'socal-user',
-            'services.outlook.legal_user_id' => 'legal-user',
+            'services.outlook.user_id' => 'shared-user',
+            'services.outlook.calendar_id' => 'shared-calendar',
         ]);
         $eventCreateRequests = 0;
         Http::fake(function ($request) use (&$eventCreateRequests) {
@@ -634,17 +624,12 @@ class ConsultationApiTest extends TestCase
         foreach ($allParticipants as $participant) {
             $this->assertDatabaseHas('external_calendar_events', [
                 'provider' => 'outlook',
-                'external_id' => 'free-intro-participant-'.$participant->id.'-socal',
+                'external_id' => 'free-intro-participant-'.$participant->id,
                 'application' => 'socal',
-            ]);
-            $this->assertDatabaseHas('external_calendar_events', [
-                'provider' => 'outlook',
-                'external_id' => 'free-intro-participant-'.$participant->id.'-legal',
-                'application' => 'legal',
             ]);
         }
 
-        $this->assertSame(6, $eventCreateRequests);
+        $this->assertSame(3, $eventCreateRequests);
     }
 
     public function test_free_intro_participant_slot_rejects_invalid_token(): void
@@ -935,7 +920,7 @@ class ConsultationApiTest extends TestCase
         ])->json('data.uuid');
 
         $this->postJson("/api/v1/consultations/{$consultationUuid}/complete", [
-            'starts_at' => '2026-08-03T09:00:00-07:00',
+            'starts_at' => '2026-12-15T09:00:00-07:00',
             'timezone' => 'America/Los_Angeles',
             'payment_mode' => 'split',
             'payment_method' => 'card',
@@ -979,7 +964,7 @@ class ConsultationApiTest extends TestCase
         ])->json('data.uuid');
 
         $complete = $this->postJson("/api/v1/consultations/{$consultationUuid}/complete", [
-            'starts_at' => '2026-08-03T09:00:00-07:00',
+            'starts_at' => '2026-12-15T09:00:00-07:00',
             'timezone' => 'America/Los_Angeles',
             'payment_mode' => 'full',
             'payment_method' => 'card',
@@ -1390,31 +1375,20 @@ class ConsultationApiTest extends TestCase
             'services.outlook.client_secret' => 'client-secret',
             'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
             'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
-            'services.outlook.socal_user_id' => 'socal@example.com',
-            'services.outlook.socal_calendar_id' => 'socal-calendar',
-            'services.outlook.legal_user_id' => 'legal@example.com',
-            'services.outlook.legal_calendar_id' => 'legal-calendar',
+            'services.outlook.user_id' => 'shared@example.com',
+            'services.outlook.calendar_id' => 'shared-calendar',
         ]);
 
         Http::fake([
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
-            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events' => Http::response([
-                'id' => 'simulated-payment-socal-event-id',
-                'webLink' => 'https://outlook.office.com/simulated-payment-socal-event',
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events' => Http::response([
+                'id' => 'simulated-payment-shared-event-id',
+                'webLink' => 'https://outlook.office.com/simulated-payment-shared-event',
                 'subject' => 'Simulated paid booking',
             ], 201),
-            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events' => Http::response([
-                'id' => 'simulated-payment-legal-event-id',
-                'webLink' => 'https://outlook.office.com/simulated-payment-legal-event',
-                'subject' => 'Simulated paid booking',
-            ], 201),
-            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events/simulated-payment-socal-event-id' => Http::response([
-                'id' => 'simulated-payment-socal-event-id',
-                'webLink' => 'https://outlook.office.com/simulated-payment-socal-event',
-            ]),
-            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events/simulated-payment-legal-event-id' => Http::response([
-                'id' => 'simulated-payment-legal-event-id',
-                'webLink' => 'https://outlook.office.com/simulated-payment-legal-event',
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events/simulated-payment-shared-event-id' => Http::response([
+                'id' => 'simulated-payment-shared-event-id',
+                'webLink' => 'https://outlook.office.com/simulated-payment-shared-event',
             ]),
         ]);
 
@@ -1436,7 +1410,7 @@ class ConsultationApiTest extends TestCase
         ])->assertCreated()->json('data.uuid');
 
         $complete = $this->postJson('/api/v1/consultations/'.$consultationUuid.'/complete', [
-            'starts_at' => '2026-08-17T09:00:00-07:00',
+            'starts_at' => '2026-11-17T09:00:00-07:00',
             'timezone' => 'America/Los_Angeles',
             'payment_mode' => 'split',
             'payment_method' => 'card',
@@ -1464,6 +1438,15 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('data.payment_progress.paid', 1)
             ->assertJsonPath('data.zoom_join_url', null);
 
+        QuestionnaireSubmission::query()
+            ->where('consultation_id', $consultationUuid)
+            ->update([
+                'status' => 'submitted',
+                'submitted_at' => now(),
+                'agreement_accepted' => true,
+                'agreement_accepted_at' => now(),
+            ]);
+
         Mail::assertNotSent(ConsultationZoomLinkMail::class);
 
         $this->postJson('/api/v1/testing/payments/'.$finalPayment['id'].'/complete', [], $headers)
@@ -1482,14 +1465,12 @@ class ConsultationApiTest extends TestCase
             'action' => 'payment_confirmation',
             'status' => 'paid',
         ]);
-        foreach (['socal', 'legal'] as $application) {
-            $this->assertDatabaseHas('external_calendar_events', [
-                'provider' => 'outlook',
-                'external_id' => 'consultation-'.$consultationUuid.'-'.$application,
-                'application' => $application,
-                'is_busy' => true,
-            ]);
-        }
+        $this->assertDatabaseHas('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultationUuid,
+            'application' => 'socal',
+            'is_busy' => true,
+        ]);
 
         $this->postJson('/api/v1/testing/payments/'.$finalPayment['id'].'/complete', [], $headers)
             ->assertOk()
@@ -2207,10 +2188,8 @@ class ConsultationApiTest extends TestCase
             'services.outlook.client_secret' => 'client-secret',
             'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
             'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
-            'services.outlook.socal_user_id' => 'socal@example.com',
-            'services.outlook.socal_calendar_id' => 'socal-calendar',
-            'services.outlook.legal_user_id' => 'legal@example.com',
-            'services.outlook.legal_calendar_id' => 'legal-calendar',
+            'services.outlook.user_id' => 'shared@example.com',
+            'services.outlook.calendar_id' => 'shared-calendar',
         ]);
 
         Http::fake([
@@ -2218,23 +2197,14 @@ class ConsultationApiTest extends TestCase
                 ->push('<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>split-first-txn</ssl_txn_id></txn>', 200)
                 ->push('<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>split-final-txn</ssl_txn_id></txn>', 200),
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
-            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events' => Http::response([
-                'id' => 'automatic-paid-socal-outlook-event-id',
-                'webLink' => 'https://outlook.office.com/automatic-paid-socal-event',
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events' => Http::response([
+                'id' => 'automatic-paid-shared-outlook-event-id',
+                'webLink' => 'https://outlook.office.com/automatic-paid-shared-event',
                 'subject' => 'Synced booking',
             ], 201),
-            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events' => Http::response([
-                'id' => 'automatic-paid-legal-outlook-event-id',
-                'webLink' => 'https://outlook.office.com/automatic-paid-legal-event',
-                'subject' => 'Synced booking',
-            ], 201),
-            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events/automatic-paid-socal-outlook-event-id' => Http::response([
-                'id' => 'automatic-paid-socal-outlook-event-id',
-                'webLink' => 'https://outlook.office.com/automatic-paid-socal-event',
-            ]),
-            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events/automatic-paid-legal-outlook-event-id' => Http::response([
-                'id' => 'automatic-paid-legal-outlook-event-id',
-                'webLink' => 'https://outlook.office.com/automatic-paid-legal-event',
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events/automatic-paid-shared-outlook-event-id' => Http::response([
+                'id' => 'automatic-paid-shared-outlook-event-id',
+                'webLink' => 'https://outlook.office.com/automatic-paid-shared-event',
             ]),
         ]);
 
@@ -2246,7 +2216,7 @@ class ConsultationApiTest extends TestCase
         $complete = $this->postJson("/api/v1/consultations/{$consultationUuid}/complete", [
             'legal_service_name' => 'Business, Payment & Contract Disputes',
             'consultation_mode' => 'online',
-            'starts_at' => '2026-08-06T09:00:00-07:00',
+            'starts_at' => '2026-11-06T09:00:00-07:00',
             'timezone' => 'America/Los_Angeles',
             'payment_mode' => 'split',
             'payment_method' => 'card',
@@ -2276,6 +2246,15 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('data.status', 'payment_pending')
             ->assertJsonPath('data.payment_status', 'partially_paid')
             ->assertJsonPath('data.zoom_join_url', null);
+
+        QuestionnaireSubmission::query()
+            ->where('consultation_id', $consultationUuid)
+            ->update([
+                'status' => 'submitted',
+                'submitted_at' => now(),
+                'agreement_accepted' => true,
+                'agreement_accepted_at' => now(),
+            ]);
 
         Mail::assertNotSent(ConsultationZoomLinkMail::class);
         $this->assertDatabaseMissing('integration_logs', [
@@ -2311,14 +2290,12 @@ class ConsultationApiTest extends TestCase
             'action' => 'automatic_payment_sync',
             'status' => 'synced',
         ]);
-        foreach (['socal', 'legal'] as $application) {
-            $this->assertDatabaseHas('external_calendar_events', [
-                'provider' => 'outlook',
-                'external_id' => 'consultation-'.$consultationUuid.'-'.$application,
-                'application' => $application,
-                'is_busy' => true,
-            ]);
-        }
+        $this->assertDatabaseHas('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultationUuid,
+            'application' => 'socal',
+            'is_busy' => true,
+        ]);
 
         $this->postJson('/api/v1/payments/converge/webhook', [
             'payment_request_id' => $finalPayment['id'],
@@ -2340,10 +2317,8 @@ class ConsultationApiTest extends TestCase
             'services.outlook.client_secret' => 'client-secret',
             'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
             'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
-            'services.outlook.socal_user_id' => 'socal@example.com',
-            'services.outlook.socal_calendar_id' => 'socal-calendar',
-            'services.outlook.legal_user_id' => 'legal@example.com',
-            'services.outlook.legal_calendar_id' => 'legal-calendar',
+            'services.outlook.user_id' => 'shared@example.com',
+            'services.outlook.calendar_id' => 'shared-calendar',
         ]);
 
         $consultation = Consultation::where('booking_number', 'SAMPLE-04')->firstOrFail();
@@ -2376,16 +2351,11 @@ class ConsultationApiTest extends TestCase
 
         Http::fake([
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
-            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events/old-outlook-event-id' => Http::response([
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events/old-outlook-event-id' => Http::response([
                 'id' => 'old-outlook-event-id',
-                'webLink' => 'https://outlook.office.com/rescheduled-socal-event',
+                'webLink' => 'https://outlook.office.com/rescheduled-shared-event',
                 'subject' => 'Rescheduled booking',
             ]),
-            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events' => Http::response([
-                'id' => 'new-rescheduled-legal-outlook-event-id',
-                'webLink' => 'https://outlook.office.com/rescheduled-legal-event',
-                'subject' => 'Rescheduled booking',
-            ], 201),
         ]);
 
         $this->postJson('/api/v1/consultations/'.$consultation->id.'/reschedule', [
@@ -2403,15 +2373,13 @@ class ConsultationApiTest extends TestCase
         $this->assertNotSame($oldZoomUrl, $consultation->zoom_join_url);
 
         Mail::assertSent(ConsultationZoomLinkMail::class);
-        foreach (['socal' => 'old-outlook-event-id', 'legal' => 'new-rescheduled-legal-outlook-event-id'] as $application => $eventId) {
-            $this->assertDatabaseHas('external_calendar_events', [
-                'provider' => 'outlook',
-                'external_id' => 'consultation-'.$consultation->id.'-'.$application,
-                'application' => $application,
-                'metadata->outlook_event_id' => $eventId,
-                'is_busy' => true,
-            ]);
-        }
+        $this->assertDatabaseHas('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultation->id,
+            'application' => $consultation->application,
+            'metadata->outlook_event_id' => 'old-outlook-event-id',
+            'is_busy' => true,
+        ]);
         $this->assertDatabaseHas('integration_logs', [
             'loggable_type' => Consultation::class,
             'loggable_id' => $consultation->id,

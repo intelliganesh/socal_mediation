@@ -81,17 +81,17 @@ class IntegrationToggleTest extends TestCase
             'services.outlook.client_secret' => 'client-secret',
             'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
             'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
-            'services.outlook.socal_user_id' => 'socal@example.com',
-            'services.outlook.socal_calendar_id' => 'socal-calendar',
+            'services.outlook.user_id' => 'shared@example.com',
+            'services.outlook.calendar_id' => 'shared-calendar',
         ]);
 
         Http::fake([
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
-            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events' => Http::response([
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events' => Http::response([
                 'id' => 'event-id',
                 'webLink' => 'https://outlook.office.com/event',
             ], 201),
-            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events/event-id' => Http::response(null, 204),
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events/event-id' => Http::response(null, 204),
         ]);
 
         $outlook = app(OutlookCalendarClient::class);
@@ -106,16 +106,16 @@ class IntegrationToggleTest extends TestCase
     {
         config([
             'services.outlook.enabled' => true,
-            'services.outlook.socal_user_id' => null,
+            'services.outlook.user_id' => null,
         ]);
 
         $this->expectException(\DomainException::class);
-        $this->expectExceptionMessage('Outlook socal user id is not configured.');
+        $this->expectExceptionMessage('Outlook user id is not configured.');
 
         app(OutlookCalendarClient::class)->createSmokeTestEvent('socal');
     }
 
-    public function test_consultation_is_created_updated_and_deleted_in_both_outlook_calendars(): void
+    public function test_consultation_is_created_updated_and_deleted_in_shared_outlook_calendar(): void
     {
         $this->seed();
         config([
@@ -125,27 +125,18 @@ class IntegrationToggleTest extends TestCase
             'services.outlook.client_secret' => 'client-secret',
             'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
             'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
-            'services.outlook.socal_user_id' => 'socal@example.com',
-            'services.outlook.socal_calendar_id' => 'socal-calendar',
-            'services.outlook.legal_user_id' => 'legal@example.com',
-            'services.outlook.legal_calendar_id' => 'legal-calendar',
+            'services.outlook.user_id' => 'shared@example.com',
+            'services.outlook.calendar_id' => 'shared-calendar',
         ]);
 
         Http::fake([
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token']),
-            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events' => Http::response([
-                'id' => 'socal-event-id',
-                'webLink' => 'https://outlook.office.com/socal-event',
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events' => Http::response([
+                'id' => 'shared-event-id',
+                'webLink' => 'https://outlook.office.com/shared-event',
             ], 201),
-            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events' => Http::response([
-                'id' => 'legal-event-id',
-                'webLink' => 'https://outlook.office.com/legal-event',
-            ], 201),
-            'graph.microsoft.com/v1.0/users/socal%40example.com/calendars/socal-calendar/events/socal-event-id' => Http::sequence()
-                ->push(['id' => 'socal-event-id', 'webLink' => 'https://outlook.office.com/socal-event'], 200)
-                ->push(null, 204),
-            'graph.microsoft.com/v1.0/users/legal%40example.com/calendars/legal-calendar/events/legal-event-id' => Http::sequence()
-                ->push(['id' => 'legal-event-id', 'webLink' => 'https://outlook.office.com/legal-event'], 200)
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events/shared-event-id' => Http::sequence()
+                ->push(['id' => 'shared-event-id', 'webLink' => 'https://outlook.office.com/shared-event'], 200)
                 ->push(null, 204),
         ]);
 
@@ -164,27 +155,24 @@ class IntegrationToggleTest extends TestCase
         });
         $outlook = app(OutlookCalendarClient::class);
 
-        $outlook->syncConsultation($consultation, 'dual_calendar_create');
+        $outlook->syncConsultation($consultation, 'shared_calendar_create');
 
-        foreach (['socal' => 'socal-event-id', 'legal' => 'legal-event-id'] as $application => $eventId) {
-            $this->assertDatabaseHas('external_calendar_events', [
-                'provider' => 'outlook',
-                'external_id' => 'consultation-'.$consultation->id.'-'.$application,
-                'application' => $application,
-                'metadata->outlook_event_id' => $eventId,
-            ]);
-        }
+        $this->assertDatabaseHas('external_calendar_events', [
+            'provider' => 'outlook',
+            'external_id' => 'consultation-'.$consultation->id,
+            'application' => $consultation->application,
+            'metadata->outlook_event_id' => 'shared-event-id',
+            'metadata->calendar_application' => 'shared',
+        ]);
 
         $consultation->update([
             'starts_at' => $consultation->starts_at->addDay(),
             'ends_at' => $consultation->ends_at->addDay(),
         ]);
-        $outlook->recreateConsultationEvent($consultation->refresh()->load(['type', 'professional']), 'dual_calendar_reschedule');
+        $outlook->recreateConsultationEvent($consultation->refresh()->load(['type', 'professional']), 'shared_calendar_reschedule');
 
         Http::assertSent(fn ($request) => $request->method() === 'PATCH'
-            && str_ends_with($request->url(), '/calendars/socal-calendar/events/socal-event-id'));
-        Http::assertSent(fn ($request) => $request->method() === 'PATCH'
-            && str_ends_with($request->url(), '/calendars/legal-calendar/events/legal-event-id'));
+            && str_ends_with($request->url(), '/calendars/shared-calendar/events/shared-event-id'));
 
         $outlook->deleteConsultationEvent($consultation);
 
@@ -193,9 +181,7 @@ class IntegrationToggleTest extends TestCase
             ->where('metadata->consultation_uuid', $consultation->id)
             ->count());
         Http::assertSent(fn ($request) => $request->method() === 'DELETE'
-            && str_ends_with($request->url(), '/calendars/socal-calendar/events/socal-event-id'));
-        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
-            && str_ends_with($request->url(), '/calendars/legal-calendar/events/legal-event-id'));
+            && str_ends_with($request->url(), '/calendars/shared-calendar/events/shared-event-id'));
     }
 
     public function test_outlook_sync_preserves_kolkata_wall_clock_time_for_consultations_and_participant_slots(): void
@@ -210,10 +196,8 @@ class IntegrationToggleTest extends TestCase
             'services.outlook.client_secret' => 'client-secret',
             'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
             'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
-            'services.outlook.socal_user_id' => 'socal@example.com',
-            'services.outlook.socal_calendar_id' => 'socal-calendar',
-            'services.outlook.legal_user_id' => 'legal@example.com',
-            'services.outlook.legal_calendar_id' => 'legal-calendar',
+            'services.outlook.user_id' => 'shared@example.com',
+            'services.outlook.calendar_id' => 'shared-calendar',
         ]);
 
         $eventPayloads = [];
