@@ -974,6 +974,17 @@ class ConsultationApiTest extends TestCase
             ->json('data');
 
         $providerReference = $complete['payment_requests'][0]['provider_reference'];
+        $consultation = Consultation::with('participants')->findOrFail($consultationUuid);
+        $consultation->participants->each(function ($participant) use ($consultation) {
+            app(QuestionnaireWorkflowService::class)
+                ->ensureSubmission($consultation, $participant)
+                ->update([
+                    'status' => 'submitted',
+                    'submitted_at' => now(),
+                    'agreement_accepted' => true,
+                    'agreement_accepted_at' => now(),
+                ]);
+        });
 
         $this->postJson('/api/v1/payments/converge/webhook', [
             'provider_reference' => $providerReference,
@@ -1438,14 +1449,17 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('data.payment_progress.paid', 1)
             ->assertJsonPath('data.zoom_join_url', null);
 
-        QuestionnaireSubmission::query()
-            ->where('consultation_id', $consultationUuid)
-            ->update([
-                'status' => 'submitted',
-                'submitted_at' => now(),
-                'agreement_accepted' => true,
-                'agreement_accepted_at' => now(),
-            ]);
+        $consultation = Consultation::with('participants')->findOrFail($consultationUuid);
+        $consultation->participants->each(function ($participant) use ($consultation) {
+            app(QuestionnaireWorkflowService::class)
+                ->ensureSubmission($consultation, $participant)
+                ->update([
+                    'status' => 'submitted',
+                    'submitted_at' => now(),
+                    'agreement_accepted' => true,
+                    'agreement_accepted_at' => now(),
+                ]);
+        });
 
         Mail::assertNotSent(ConsultationZoomLinkMail::class);
 
@@ -2247,14 +2261,17 @@ class ConsultationApiTest extends TestCase
             ->assertJsonPath('data.payment_status', 'partially_paid')
             ->assertJsonPath('data.zoom_join_url', null);
 
-        QuestionnaireSubmission::query()
-            ->where('consultation_id', $consultationUuid)
-            ->update([
-                'status' => 'submitted',
-                'submitted_at' => now(),
-                'agreement_accepted' => true,
-                'agreement_accepted_at' => now(),
-            ]);
+        $consultation = Consultation::with('participants')->findOrFail($consultationUuid);
+        $consultation->participants->each(function ($participant) use ($consultation) {
+            app(QuestionnaireWorkflowService::class)
+                ->ensureSubmission($consultation, $participant)
+                ->update([
+                    'status' => 'submitted',
+                    'submitted_at' => now(),
+                    'agreement_accepted' => true,
+                    'agreement_accepted_at' => now(),
+                ]);
+        });
 
         Mail::assertNotSent(ConsultationZoomLinkMail::class);
         $this->assertDatabaseMissing('integration_logs', [
