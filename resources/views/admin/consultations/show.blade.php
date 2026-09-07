@@ -353,9 +353,13 @@
                     <div class="mt-3 flex flex-wrap gap-2">
                         <span class="status-badge {{ $submissionStatus['badge'] }}">{{ $submissionStatus['label'] }}</span>
                         @if($submissionTemplate['requires_agreement'] ?? false)
-                        <span class="status-badge {{ $submission->agreement_accepted ? 'status-badge-paid' : 'status-badge-pending' }} gap-1">
+                        <span class="inline-flex items-center gap-2 rounded-full border {{ $submission->agreement_accepted ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-800' }} px-3 py-1 text-xs font-bold">
+                            <span class="grid h-4 w-4 place-items-center rounded border {{ $submission->agreement_accepted ? 'border-green-600 bg-green-600 text-white' : 'border-amber-500 bg-white text-transparent' }} text-[10px] leading-none">
+                                @if($submission->agreement_accepted)
+                                &#10003;
+                                @endif
+                            </span>
                             @if($submission->agreement_accepted)
-                            <i data-lucide="check-circle" class="h-3.5 w-3.5"></i>
                             Agreement Checked
                             @else
                             Agreement Pending

@@ -60,7 +60,7 @@
             'icon' => $iconPath([$iconPrefix.'_phone', 'phone']),
         ],
         'offline', 'in_person' => [
-            'label' => 'Location Address',
+            'label' => 'Location',
             'value' => config('app.consultation_contact.location_address.'.($consultation?->application ?? 'socal')),
             'icon' => $iconPath([$iconPrefix.'_inperson', 'inperson']),
         ],

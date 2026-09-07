@@ -4,6 +4,7 @@ namespace App\Mail;
 
 use App\Models\Consultation;
 use App\Models\ConsultationParticipant;
+use App\Services\QuestionnairePdfService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -36,5 +37,19 @@ class ConsultationZoomLinkMail extends Mailable
         return new Content(
             view: 'emails.consultation-zoom-link'
         );
+    }
+
+    public function attachments(): array
+    {
+        $submission = $this->participant->questionnaireSubmissions()
+            ->where('consultation_id', $this->consultation->id)
+            ->where('status', 'submitted')
+            ->first();
+
+        if (! $submission) {
+            return [];
+        }
+
+        return app(QuestionnairePdfService::class)->mailAttachmentsForParticipant($submission);
     }
 }

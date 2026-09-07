@@ -1115,15 +1115,93 @@ class ConsultationApiTest extends TestCase
             }
         }
 
-        Mail::assertSent(ConsultationZoomLinkMail::class, fn (ConsultationZoomLinkMail $mail) => $mail->isReschedule
-            && $mail->envelope()->subject === 'Your rescheduled consultation Zoom meeting link'
-            && str_contains($mail->render(), 'Consultation Rescheduled')
-            && str_contains($mail->render(), 'updated Zoom meeting link'));
+        $releaseMail = Mail::sent(ConsultationZoomLinkMail::class)
+            ->first(fn (ConsultationZoomLinkMail $mail) => $mail->participant->email === 'confirm.payer@example.com');
+        $this->assertNotNull($releaseMail);
+        $attachments = $releaseMail->attachments();
+        $this->assertCount(2, $attachments);
+        $this->assertSame('application/pdf', $attachments[0]->mime);
+        $this->assertStringEndsWith('-questionnaire.pdf', (string) $attachments[0]->as);
+        $this->assertStringStartsWith('%PDF', $attachments[0]->attachWith(
+            fn () => null,
+            fn ($data) => $data()
+        ));
+        $this->assertSame('application/pdf', $attachments[1]->mime);
+        $this->assertStringEndsWith('-agreement.pdf', (string) $attachments[1]->as);
+        $this->assertStringStartsWith('%PDF', $attachments[1]->attachWith(
+            fn () => null,
+            fn ($data) => $data()
+        ));
+        Mail::assertSent(ConsultationZoomLinkMail::class, fn (ConsultationZoomLinkMail $mail) => ! $mail->isReschedule
+            && $mail->envelope()->subject === 'Your consultation Zoom meeting link');
         $this->assertDatabaseHas('questionnaire_submissions', [
             'id' => $submissions->first()->id,
             'status' => 'submitted',
             'agreement_accepted' => true,
         ]);
+    }
+
+    public function test_legal_phone_questionnaire_release_confirmation_attaches_intake_pdf(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config([
+            'services.outlook.enabled' => false,
+            'services.zoom.enabled' => false,
+        ]);
+
+        $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
+        $consultation = Consultation::create([
+            'booking_number' => 'LEGAL-ATTACH-1',
+            'consultation_type_id' => $type->id,
+            'legal_service_name' => 'Professional Legal Consultation',
+            'application' => 'legal',
+            'status' => 'paid',
+            'payment_status' => 'paid',
+            'consultation_mode' => 'phone',
+            'timezone' => 'America/Los_Angeles',
+            'starts_at' => CarbonImmutable::parse('2026-11-18 10:00:00', 'America/Los_Angeles'),
+            'ends_at' => CarbonImmutable::parse('2026-11-18 11:00:00', 'America/Los_Angeles'),
+            'primary_first_name' => 'Legal',
+            'primary_last_name' => 'Client',
+            'primary_email' => 'legal.attach@example.test',
+            'primary_phone_country' => '+1',
+            'primary_phone' => '(555) 010-8888',
+            'total_amount_cents' => $type->price_cents,
+            'currency' => 'USD',
+            'payment_mode' => 'full',
+        ]);
+        $participant = $consultation->participants()->create([
+            'first_name' => 'Legal',
+            'last_name' => 'Client',
+            'email' => 'legal.attach@example.test',
+            'phone_country' => '+1',
+            'phone' => '(555) 010-8888',
+            'is_primary' => true,
+            'should_pay' => true,
+            'share_amount_cents' => $type->price_cents,
+        ]);
+        $submission = app(QuestionnaireWorkflowService::class)->ensureSubmission($consultation, $participant);
+
+        $this->postJson('/api/v1/questionnaires/legal-initial-intake/'.$submission->token, [
+            'answers' => ['name' => 'Legal Client'],
+        ])->assertOk();
+
+        Mail::assertSent(ConsultationConfirmationMail::class, function (ConsultationConfirmationMail $mail) {
+            if ($mail->participant->email !== 'legal.attach@example.test') {
+                return false;
+            }
+
+            $attachments = $mail->attachments();
+
+            return count($attachments) === 1
+                && $attachments[0]->mime === 'application/pdf'
+                && str_ends_with((string) $attachments[0]->as, '-questionnaire.pdf')
+                && str_starts_with($attachments[0]->attachWith(
+                    fn () => null,
+                    fn ($data) => $data()
+                ), '%PDF');
+        });
     }
 
     public function test_questionnaire_api_selects_divorce_template_and_requires_socal_agreement(): void
