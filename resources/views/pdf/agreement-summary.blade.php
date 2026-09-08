@@ -51,7 +51,7 @@
             <tr><th>Participant</th><td>{{ $participantName }}</td></tr>
             <tr><th>Email</th><td>{{ $participant->email ?: 'Not provided' }}</td></tr>
             <tr><th>Phone</th><td>{{ trim(($participant->phone_country ?? '').' '.($participant->phone ?? '')) ?: 'Not provided' }}</td></tr>
-            <tr><th>Acceptance Status</th><td><span class="{{ $checked ? 'accepted' : 'pending' }}">{{ $checked ? 'Checked - Agreement accepted' : 'Not accepted' }}</span></td></tr>
+            {{-- <tr><th>Acceptance Status</th><td><span class="{{ $checked ? 'accepted' : 'pending' }}">{{ $checked ? 'Checked - Agreement accepted' : 'Not accepted' }}</span></td></tr> --}}
             <tr><th>Accepted At</th><td>{{ $submission->agreement_accepted_at?->format('M d, Y g:i A') ?? 'Not recorded' }}</td></tr>
             <tr><th>Agreement Version</th><td>{{ $submission->agreement_version ?: \App\Services\QuestionnaireTemplateService::AGREEMENT_VERSION }}</td></tr>
         </table>
@@ -77,10 +77,10 @@
             <h2>Confidentiality Statement</h2>
             <p><strong>By signing this agreement, the parties acknowledge that they have read and understand the information contained herein, acknowledge that California Evidence Code Sections 703.5 and 1115 through 1128, excluding 1125(a)(5) applies to this mediation, and acknowledge that it is the intention of the parties that any written settlement agreement prepared in the course of or pursuant to this mediation be admissible, once signed by the settling parties, as provided in the California Evidence Code.</strong></p>
             <div class="acceptance">
-                <span class="checkbox">{{ $checked ? 'X' : '' }}</span>
+                <span class="checkbox">{{ $checked ? '✓' : '' }}</span>
                 <span class="acceptance-text">By Accepting this agreement, the parties acknowledge that they have read and understand the information contained herein.</span>
             </div>
-            <p class="small">Acceptance metadata: IP {{ $submission->ip_address ?: 'not recorded' }}; user agent {{ $submission->user_agent ?: 'not recorded' }}.</p>
+            {{-- <p class="small">Acceptance metadata: IP {{ $submission->ip_address ?: 'not recorded' }}; user agent {{ $submission->user_agent ?: 'not recorded' }}.</p> --}}
         </div>
     </div>
 </body>

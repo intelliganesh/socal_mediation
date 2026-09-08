@@ -6,7 +6,7 @@
     $scheduledText = $scheduledAt ? $scheduledAt->timezone($timezone)->format('M d, Y - g:i A').' '.$timezone : 'the selected date and time';
     $applicationName = $consultation->application === 'legal' ? 'Law Office' : 'SoCal Mediation Center';
     $phoneNumber = config('app.consultation_contact.phone.'.($consultation->application ?? 'socal')) ?: 'the provided phone number';
-    $phoneIntro = 'Hello <strong>'.e($clientName).'</strong>, your consultation with <strong>'.e($professional).'</strong> has been '.($isReschedule ? 'rescheduled' : 'confirmed').'. <strong>'.e($professional).'</strong> from '.e($applicationName).' will contact you on '.e($scheduledText).' using '.e($phoneNumber).'. Please find your consultation details below.';
+    $phoneIntro = 'Hello <strong>'.e($clientName).'</strong>, your consultation with <strong>'.e($professional).'</strong> has been '.($isReschedule ? 'rescheduled' : 'confirmed').'. <strong>'.e($professional).'</strong> from '.e($applicationName).' will contact you on '.e($scheduledText).'. Please find your consultation details below.';
 @endphp
 
 @include('emails.partials.consultation-card', [

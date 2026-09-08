@@ -1280,6 +1280,129 @@ class ConsultationApiTest extends TestCase
         ]);
     }
 
+    public function test_questionnaire_email_copy_matches_application_and_participant_count(): void
+    {
+        $this->seed();
+        config([
+            'app.payment_redirect_urls.socal' => 'https://socal.example.test',
+            'app.payment_redirect_urls.legal' => 'https://legal.example.test',
+        ]);
+
+        $socalType = ConsultationType::where('application', 'socal')->where('price_cents', '>', 0)->firstOrFail();
+        $socalSingle = Consultation::create([
+            'booking_number' => 'SMC-FORMS-1',
+            'consultation_type_id' => $socalType->id,
+            'legal_service_name' => 'Business, Payment & Contract Disputes',
+            'application' => 'socal',
+            'status' => 'paid',
+            'payment_status' => 'paid',
+            'consultation_mode' => 'online',
+            'timezone' => 'America/Los_Angeles',
+            'starts_at' => CarbonImmutable::parse('2026-09-15 10:00:00', 'America/Los_Angeles'),
+            'ends_at' => CarbonImmutable::parse('2026-09-15 11:00:00', 'America/Los_Angeles'),
+            'primary_first_name' => 'Single',
+            'primary_last_name' => 'Participant',
+            'primary_email' => 'single.forms@example.test',
+            'primary_phone_country' => '+1',
+            'primary_phone' => '(555) 010-2200',
+            'total_amount_cents' => $socalType->price_cents,
+            'currency' => 'USD',
+            'payment_mode' => 'full',
+        ]);
+        $socalSingleParticipant = $socalSingle->participants()->create([
+            'first_name' => 'Single',
+            'last_name' => 'Participant',
+            'email' => 'single.forms@example.test',
+            'phone_country' => '+1',
+            'phone' => '(555) 010-2200',
+            'is_primary' => true,
+            'should_pay' => true,
+            'share_amount_cents' => $socalType->price_cents,
+        ]);
+        $socalSingleSubmission = app(QuestionnaireWorkflowService::class)->ensureSubmission($socalSingle, $socalSingleParticipant);
+        $socalSingleHtml = (new ConsultationQuestionnaireMail($socalSingleSubmission))->render();
+
+        $this->assertStringContainsString('Please complete <strong>the required agreement and mediation questionnaire</strong>.', $socalSingleHtml);
+        $this->assertStringContainsString('Forms Required', $socalSingleHtml);
+        $this->assertStringContainsString('Complete Questionnaire', $socalSingleHtml);
+        $this->assertStringContainsString('Accept Agreement', $socalSingleHtml);
+        $this->assertStringNotContainsString('Your booking will be confirmed once all required participants complete their forms.', $socalSingleHtml);
+        $this->assertStringNotContainsString('before your meeting details are released', $socalSingleHtml);
+        $this->assertStringNotContainsString('before your consultation details are released', $socalSingleHtml);
+
+        $socalMulti = $socalSingle->replicate(['booking_number', 'primary_email'])->fill([
+            'booking_number' => 'SMC-FORMS-2',
+            'primary_email' => 'multi.forms@example.test',
+        ]);
+        $socalMulti->save();
+        $socalMultiParticipant = $socalMulti->participants()->create([
+            'first_name' => 'Multi',
+            'last_name' => 'Participant',
+            'email' => 'multi.forms@example.test',
+            'phone_country' => '+1',
+            'phone' => '(555) 010-2201',
+            'is_primary' => true,
+            'should_pay' => true,
+            'share_amount_cents' => $socalType->price_cents,
+        ]);
+        $socalMulti->participants()->create([
+            'first_name' => 'Second',
+            'last_name' => 'Participant',
+            'email' => 'second.forms@example.test',
+            'phone_country' => '+1',
+            'phone' => '(555) 010-2202',
+            'is_primary' => false,
+            'should_pay' => false,
+            'share_amount_cents' => 0,
+        ]);
+        $socalMultiSubmission = app(QuestionnaireWorkflowService::class)->ensureSubmission($socalMulti, $socalMultiParticipant);
+        $socalMultiHtml = (new ConsultationQuestionnaireMail($socalMultiSubmission, true))->render();
+
+        $this->assertStringContainsString('Please complete <strong>any pending agreement or mediation questionnaire</strong>. Your booking will be confirmed once all required participants complete their forms.', $socalMultiHtml);
+        $this->assertStringContainsString('Consultation Rescheduled', $socalMultiHtml);
+
+        $legalType = ConsultationType::where('application', 'legal')->where('price_cents', '>', 0)->firstOrFail();
+        $legalConsultation = Consultation::create([
+            'booking_number' => 'SL-FORMS-1',
+            'consultation_type_id' => $legalType->id,
+            'legal_service_name' => 'Professional Legal Consultation',
+            'application' => 'legal',
+            'status' => 'paid',
+            'payment_status' => 'paid',
+            'consultation_mode' => 'phone',
+            'timezone' => 'America/Los_Angeles',
+            'starts_at' => CarbonImmutable::parse('2026-09-16 10:00:00', 'America/Los_Angeles'),
+            'ends_at' => CarbonImmutable::parse('2026-09-16 11:00:00', 'America/Los_Angeles'),
+            'primary_first_name' => 'Legal',
+            'primary_last_name' => 'Participant',
+            'primary_email' => 'legal.forms@example.test',
+            'primary_phone_country' => '+1',
+            'primary_phone' => '(555) 010-2203',
+            'total_amount_cents' => $legalType->price_cents,
+            'currency' => 'USD',
+            'payment_mode' => 'full',
+        ]);
+        $legalParticipant = $legalConsultation->participants()->create([
+            'first_name' => 'Legal',
+            'last_name' => 'Participant',
+            'email' => 'legal.forms@example.test',
+            'phone_country' => '+1',
+            'phone' => '(555) 010-2203',
+            'is_primary' => true,
+            'should_pay' => true,
+            'share_amount_cents' => $legalType->price_cents,
+        ]);
+        $legalSubmission = app(QuestionnaireWorkflowService::class)->ensureSubmission($legalConsultation, $legalParticipant);
+        $legalHtml = (new ConsultationQuestionnaireMail($legalSubmission))->render();
+
+        $this->assertStringContainsString('Please complete <strong>the required intake form</strong>.', $legalHtml);
+        $this->assertStringContainsString('Consultation Intake Form', $legalHtml);
+        $this->assertStringContainsString('Intake Required', $legalHtml);
+        $this->assertStringContainsString('Complete Intake Form', $legalHtml);
+        $this->assertStringNotContainsString('Accept Agreement', $legalHtml);
+        $this->assertStringNotContainsString('mediation questionnaire', $legalHtml);
+    }
+
     public function test_questionnaire_post_success_message_matches_application_and_mode(): void
     {
         $this->seed();

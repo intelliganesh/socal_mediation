@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Mail\AdminConsultationRescheduledMail;
+use App\Mail\ConsultationCancellationMail;
 use App\Mail\ConsultationConclusionMail;
 use App\Mail\ConsultationPaymentLinkMail;
 use App\Mail\ConsultationPaymentReminderMail;
@@ -920,6 +921,7 @@ class AdminPanelTest extends TestCase
     public function test_cancelling_from_status_controls_deletes_outlook_event_and_manual_sync_cannot_recreate_it(): void
     {
         $this->seed();
+        Mail::fake();
         config([
             'services.outlook.enabled' => true,
             'services.outlook.tenant_id' => 'tenant-id',
@@ -970,6 +972,17 @@ class AdminPanelTest extends TestCase
         $this->assertDatabaseMissing('external_calendar_events', [
             'provider' => 'outlook',
             'external_id' => 'consultation-'.$consultation->id,
+        ]);
+        Mail::assertSent(ConsultationCancellationMail::class, $consultation->participants()->whereNotNull('email')->count());
+        Mail::assertSent(ConsultationCancellationMail::class, fn (ConsultationCancellationMail $mail) => $mail->envelope()->subject === 'Your consultation has been cancelled'
+            && str_contains($mail->render(), 'Consultation Cancelled')
+            && str_contains($mail->render(), 'No further action is required for this booking.'));
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'mail',
+            'action' => 'manual_cancellation',
+            'status' => 'sent',
         ]);
         Http::assertSent(fn ($request) => $request->method() === 'DELETE'
             && str_ends_with($request->url(), '/events/cancelled-outlook-event-id'));
@@ -1245,6 +1258,30 @@ class AdminPanelTest extends TestCase
 
         $this->assertSame('cancelled', $scheduledConsultation->refresh()->status);
         $this->assertSame('pending', $scheduledConsultation->payment_status);
+    }
+
+    public function test_admin_cancel_button_sends_consultation_cancelled_email(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.cancel', $consultation))
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Consultation cancelled.');
+
+        $this->assertSame('cancelled', $consultation->refresh()->status);
+        Mail::assertSent(ConsultationCancellationMail::class, $consultation->participants()->whereNotNull('email')->count());
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultation->id,
+            'provider' => 'mail',
+            'action' => 'manual_cancellation',
+            'status' => 'sent',
+        ]);
     }
 
     public function test_reschedule_keeps_zoom_update_when_zoom_email_delivery_fails(): void

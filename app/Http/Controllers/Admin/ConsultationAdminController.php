@@ -8,6 +8,7 @@ use App\Models\ConsultationParticipant;
 use App\Models\IntegrationLog;
 use App\Models\PaymentRequest;
 use App\Models\QuestionnaireSubmission;
+use App\Services\AdminCancellationNotificationService;
 use App\Services\AdminConclusionNotificationService;
 use App\Services\AdminNewConsultationNotificationService;
 use App\Services\AdminPaymentNotificationService;
@@ -213,9 +214,10 @@ class ConsultationAdminController extends Controller
         return back()->with('status', 'Zoom meeting link regenerated.');
     }
 
-    public function cancel(Consultation $consultation, OutlookCalendarClient $outlook)
+    public function cancel(Consultation $consultation, OutlookCalendarClient $outlook, AdminCancellationNotificationService $cancellations)
     {
         $this->authorizeConsultation($consultation);
+        $oldStatus = $consultation->status;
         $consultation->update([
             'status' => 'cancelled',
         ]);
@@ -241,6 +243,10 @@ class ConsultationAdminController extends Controller
             } catch (\DomainException|\RuntimeException $exception) {
                 return back()->with('error', 'Consultation cancelled, but Outlook event deletion failed: '.$exception->getMessage());
             }
+        }
+
+        if ($oldStatus !== 'cancelled') {
+            $cancellations->sendCancellation($consultation->refresh());
         }
 
         return back()->with('status', 'Consultation cancelled.');
@@ -431,7 +437,13 @@ class ConsultationAdminController extends Controller
         return back()->with('status', 'This booking was synced to Outlook.');
     }
 
-    public function updateStatuses(Request $request, Consultation $consultation, OutlookCalendarClient $outlook, AdminConclusionNotificationService $conclusions)
+    public function updateStatuses(
+        Request $request,
+        Consultation $consultation,
+        OutlookCalendarClient $outlook,
+        AdminConclusionNotificationService $conclusions,
+        AdminCancellationNotificationService $cancellations
+    )
     {
         $this->authorizeConsultation($consultation);
         $data = $request->validate([
@@ -483,6 +495,10 @@ class ConsultationAdminController extends Controller
 
         if ($oldStatus !== 'completed' && $data['status'] === 'completed') {
             $conclusions->sendConclusion($consultation->refresh());
+        }
+
+        if ($oldStatus !== 'cancelled' && $data['status'] === 'cancelled') {
+            $cancellations->sendCancellation($consultation->refresh());
         }
 
         return back()->with('status', 'Consultation statuses updated.');
