@@ -34,7 +34,7 @@ class AvailabilityService
     {
         $endsAt = $startsAt->addMinutes($type->duration_minutes);
 
-        if (! $this->isConfiguredSlot($startsAt, $endsAt)) {
+        if (! $this->isConfiguredSlot($type, $startsAt, $endsAt)) {
             throw new \DomainException('Selected slot is outside the configured booking hours.');
         }
 
@@ -54,7 +54,7 @@ class AvailabilityService
         }
 
         $busyIntervals = $this->busyIntervalsForDay($day);
-        $slots = collect($this->configuredSlotStarts())
+        $slots = collect($this->configuredSlotStarts($type))
             ->map(function (string $time) use ($day, $busyIntervals) {
                 $startsAt = CarbonImmutable::parse($day->toDateString().' '.$time, $day->timezone);
                 $now = CarbonImmutable::now($day->timezone);
@@ -82,11 +82,11 @@ class AvailabilityService
         return ['date' => $day->toDateString(), 'slots' => $slots->all()];
     }
 
-    private function configuredSlotStarts(): array
+    private function configuredSlotStarts(ConsultationType $type): array
     {
         $start = CarbonImmutable::parse(config('app.booking_day_start', '09:00'));
         $end = CarbonImmutable::parse(config('app.booking_day_end', '17:00'));
-        $interval = 30;
+        $interval = $type->slug === 'socal-free-intro-call' && (int) $type->duration_minutes === 15 ? 15 : 30;
         $slots = [];
 
         for ($slot = $start; $slot->lessThan($end); $slot = $slot->addMinutes($interval)) {
@@ -96,7 +96,7 @@ class AvailabilityService
         return $slots;
     }
 
-    private function isConfiguredSlot(CarbonImmutable $startsAt, CarbonImmutable $endsAt): bool
+    private function isConfiguredSlot(ConsultationType $type, CarbonImmutable $startsAt, CarbonImmutable $endsAt): bool
     {
         $workdayEnd = CarbonImmutable::parse(
             $startsAt->toDateString().' '.config('app.booking_day_end', '17:00'),
@@ -106,7 +106,7 @@ class AvailabilityService
         return ! $startsAt->isWeekend()
         && $startsAt->second === 0 && $startsAt->micro === 0
         && $endsAt->lessThanOrEqualTo($workdayEnd)
-        && in_array($startsAt->format('H:i'), $this->configuredSlotStarts(), true);
+        && in_array($startsAt->format('H:i'), $this->configuredSlotStarts($type), true);
     }
 
     private function hasOverlap(CarbonImmutable $startsAt, CarbonImmutable $endsAt, ?int $professionalId, ?string $ignoreConsultationId = null, ?int $ignoreParticipantId = null): bool

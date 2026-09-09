@@ -49,7 +49,7 @@ class AvailabilityConfirmationTest extends TestCase
         $this->postJson('/api/v1/availability/confirm', [
             'consultation_type_id' => $type->id,
             'starts_at' => '2026-09-10T09:00:00+05:30',
-        ])->assertStatus(422)->assertJsonPath('message', 'The selected time does not have enough availability for this consultation. Please choose another start time.');
+        ])->assertStatus(422)->assertJsonPath('message', 'There is already a consultation scheduled during 9:00 AM to 1:00 PM. Please select another slot.');
 
         $count = Consultation::count();
         $this->postJson('/api/v1/availability/confirm', [
@@ -103,6 +103,35 @@ class AvailabilityConfirmationTest extends TestCase
                 'starts_at' => '2026-09-10T09:00:00+05:30',
             ])->assertOk()->assertJsonPath('data.ends_at', CarbonImmutable::parse('2026-09-10 09:00:00', 'Asia/Kolkata')->addMinutes($type->duration_minutes)->toIso8601String());
         }
+    }
+
+    public function test_only_free_intro_calls_use_fifteen_minute_start_intervals(): void
+    {
+        config(['app.booking_day_end' => '10:00']);
+        $intro = ConsultationType::where('slug', 'socal-free-intro-call')->firstOrFail();
+        $legal = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
+
+        foreach ([$intro, $legal] as $type) {
+            $slots = $this->getJson('/api/v1/availability?consultation_type_id='.$type->id.'&date=2026-09-10')
+                ->assertOk()->json('data.slots');
+            $this->assertSame(
+                $type->id === $intro->id ? ['09:00', '09:15', '09:30', '09:45'] : ['09:00', '09:30'],
+                array_column($slots, 'time')
+            );
+        }
+
+        foreach (['09:15', '09:45'] as $time) {
+            $this->postJson('/api/v1/availability/confirm', [
+                'consultation_type_id' => $intro->id,
+                'starts_at' => '2026-09-10T'.$time.':00+05:30',
+            ])->assertOk()->assertJsonPath('data.ends_at', CarbonImmutable::parse('2026-09-10 '.$time, 'Asia/Kolkata')->addMinutes(15)->toIso8601String());
+        }
+
+        config(['app.booking_day_end' => '17:00']);
+        $this->postJson('/api/v1/availability/confirm', [
+            'consultation_type_id' => $legal->id,
+            'starts_at' => '2026-09-10T09:15:00+05:30',
+        ])->assertUnprocessable();
     }
 
     private function busyEvent(string $start, string $end): void

@@ -629,7 +629,7 @@
                 "tags": [
                     "Consultations"
                 ],
-                "summary": "Return available start times at 30-minute intervals",
+                "summary": "Return available start times at 15-minute intervals for free intro calls and 30-minute intervals for other consultations",
                 "description": "Returns start times within BOOKING_DAY_START and BOOKING_DAY_END in BOOKING_TIMEZONE for the selected date or month. Past starts and starts within bookings, participant slots, or locally synced Outlook busy events are omitted. No end time or full-duration check is included. Call POST /v1/availability/confirm after selection. Outlook refresh remains scheduled/admin driven.",
                 "operationId": "dc46d90a1ee3cef5f47d540a7c896d01",
                 "parameters": [
@@ -794,7 +794,7 @@
                                         },
                                         "message": {
                                             "type": "string",
-                                            "example": "The selected time does not have enough availability for this consultation. Please choose another start time."
+                                            "example": "There is already a consultation scheduled during 9:00 AM to 1:00 PM. Please select another slot."
                                         }
                                     },
                                     "type": "object"

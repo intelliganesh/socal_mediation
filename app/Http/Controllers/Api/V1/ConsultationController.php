@@ -16,6 +16,7 @@ use App\Services\ConsultationCompletionService;
 use App\Services\ConsultationDraftService;
 use App\Services\ConsultationRescheduleService;
 use App\Services\FreeIntroCallWorkflowService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -254,7 +255,7 @@ class ConsultationController extends Controller
     #[OA\Get(
         path: '/v1/availability',
         tags: ['Consultations'],
-        summary: 'Return available start times at 30-minute intervals',
+        summary: 'Return available start times at 15-minute intervals for free intro calls and 30-minute intervals for other consultations',
         description: 'Returns start times within BOOKING_DAY_START and BOOKING_DAY_END in BOOKING_TIMEZONE for the selected date or month. Past starts and starts within bookings, participant slots, or locally synced Outlook busy events are omitted. No end time or full-duration check is included. Call POST /v1/availability/confirm after selection. Outlook refresh remains scheduled/admin driven.',
         parameters: [
             new OA\Parameter(name: 'consultation_type_id', in: 'query', required: true, schema: new OA\Schema(type: 'integer', example: 3)),
@@ -321,7 +322,7 @@ class ConsultationController extends Controller
             ])),
             new OA\Response(response: 422, description: 'Invalid input or unavailable interval', content: new OA\JsonContent(properties: [
                 new OA\Property(property: 'success', type: 'boolean', example: false),
-                new OA\Property(property: 'message', type: 'string', example: 'The selected time does not have enough availability for this consultation. Please choose another start time.'),
+                new OA\Property(property: 'message', type: 'string', example: 'There is already a consultation scheduled during 9:00 AM to 1:00 PM. Please select another slot.'),
             ])),
         ]
     )]
@@ -335,16 +336,26 @@ class ConsultationController extends Controller
         ]);
         $type = ConsultationType::findOrFail($data['consultation_type_id']);
         [$startsAt] = $dateTimes->startsAtFromRequest($data['starts_at']);
+        $endsAt = $startsAt->addMinutes($type->duration_minutes);
 
         try {
             $availability->assertAvailable($type, $startsAt, $data['professional_id'] ?? null);
         } catch (\DomainException $exception) {
-            return ApiResponse::error('The selected time does not have enough availability for this consultation. Please choose another start time.', 422);
+            return ApiResponse::error($this->availabilityConflictMessage($startsAt, $endsAt), 422);
         }
 
         return ApiResponse::success([
             'starts_at' => $startsAt->toIso8601String(),
-            'ends_at' => $startsAt->addMinutes($type->duration_minutes)->toIso8601String(),
+            'ends_at' => $endsAt->toIso8601String(),
         ], 'Selected time slot is available.');
+    }
+
+    private function availabilityConflictMessage(CarbonImmutable $startsAt, CarbonImmutable $endsAt): string
+    {
+        return sprintf(
+            'There is already a consultation scheduled during %s to %s. Please select another slot.',
+            $startsAt->format('g:i A'),
+            $endsAt->format('g:i A')
+        );
     }
 }
