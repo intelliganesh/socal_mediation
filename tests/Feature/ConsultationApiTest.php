@@ -2818,6 +2818,7 @@ class ConsultationApiTest extends TestCase
 
     public function test_availability_slots_are_generated_from_configured_business_hours(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         config([
             'app.booking_day_start' => '10:00',
             'app.booking_day_end' => '12:00',
@@ -2831,12 +2832,13 @@ class ConsultationApiTest extends TestCase
             ->json('data'))
             ->firstWhere('date', '2026-08-03')['slots'];
 
-        $this->assertSame(['10:00', '11:00'], collect($slots)->pluck('time')->all());
-        $this->assertSame(['starts_at', 'ends_at'], array_values(array_intersect(['starts_at', 'ends_at'], array_keys($slots[0]))));
+        $this->assertSame(['10:00', '10:30', '11:00', '11:30'], collect($slots)->pluck('time')->all());
+        $this->assertArrayNotHasKey('ends_at', $slots[0]);
     }
 
     public function test_availability_returns_slots_for_selected_date_in_configured_timezone(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         config([
             'app.booking_timezone' => 'Asia/Kolkata',
             'app.booking_day_start' => '10:00',
@@ -2851,7 +2853,7 @@ class ConsultationApiTest extends TestCase
             ->json('data');
 
         $this->assertSame('2026-08-03', $data['date']);
-        $this->assertSame(['10:00', '11:00'], collect($data['slots'])->pluck('time')->all());
+        $this->assertSame(['10:00', '10:30', '11:00', '11:30'], collect($data['slots'])->pluck('time')->all());
         $this->assertSame('2026-08-03T10:00:00+05:30', $data['slots'][0]['starts_at']);
     }
 
@@ -2872,11 +2874,12 @@ class ConsultationApiTest extends TestCase
             ->json('data');
 
         $this->assertSame('2026-08-13', $data['date']);
-        $this->assertSame([], $data['slots']);
+        $this->assertSame(['16:00', '16:30'], collect($data['slots'])->pluck('time')->all());
     }
 
-    public function test_availability_slot_spacing_uses_consultation_type_duration(): void
+    public function test_availability_slot_spacing_is_thirty_minutes_regardless_of_duration(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         config([
             'app.booking_day_start' => '09:00',
             'app.booking_day_end' => '17:00',
@@ -2896,8 +2899,9 @@ class ConsultationApiTest extends TestCase
             ->json('data'))
             ->firstWhere('date', '2026-08-03')['slots'];
 
-        $this->assertSame(['09:00', '13:00'], collect($halfDaySlots)->pluck('time')->all());
-        $this->assertSame(['09:00'], collect($fullDaySlots)->pluck('time')->all());
+        $expected = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'];
+        $this->assertSame($expected, collect($halfDaySlots)->pluck('time')->all());
+        $this->assertSame($expected, collect($fullDaySlots)->pluck('time')->all());
     }
 
     public function test_booking_datetime_keeps_selected_slot_wall_time_when_payload_has_browser_offset(): void
@@ -2914,8 +2918,9 @@ class ConsultationApiTest extends TestCase
         $this->assertSame('+05:30', $startsAt->format('P'));
     }
 
-    public function test_availability_marks_duration_based_overlaps_unavailable(): void
+    public function test_availability_hides_busy_start_times(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         config([
             'app.booking_day_start' => '09:00',
             'app.booking_day_end' => '17:00',
@@ -2934,12 +2939,13 @@ class ConsultationApiTest extends TestCase
             ->json('data'))
             ->firstWhere('date', '2026-08-03')['slots'];
 
-        $this->assertFalse(collect($slots)->firstWhere('time', '10:00')['available']);
+        $this->assertNull(collect($slots)->firstWhere('time', '10:00'));
         $this->assertTrue(collect($slots)->firstWhere('time', '11:00')['available']);
     }
 
     public function test_availability_blocks_two_application_bookings_and_outlook_events_even_with_professional_filter(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         config([
             'app.booking_day_start' => '09:00',
             'app.booking_day_end' => '13:00',
@@ -2967,13 +2973,14 @@ class ConsultationApiTest extends TestCase
             ->json('data'))
             ->firstWhere('date', '2026-08-03')['slots'];
 
-        $this->assertFalse(collect($slots)->firstWhere('time', '10:00')['available']);
-        $this->assertFalse(collect($slots)->firstWhere('time', '11:00')['available']);
+        $this->assertNull(collect($slots)->firstWhere('time', '10:00'));
+        $this->assertNull(collect($slots)->firstWhere('time', '11:00'));
         $this->assertTrue(collect($slots)->firstWhere('time', '12:00')['available']);
     }
 
     public function test_availability_blocks_existing_outlook_row_in_configured_booking_timezone(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         config([
             'app.timezone' => 'Asia/Kolkata',
             'app.booking_timezone' => 'Asia/Kolkata',
@@ -2997,13 +3004,14 @@ class ConsultationApiTest extends TestCase
             ->assertOk()
             ->json('data');
 
-        $this->assertFalse(collect($data['slots'])->firstWhere('time', '10:00')['available']);
-        $this->assertFalse(collect($data['slots'])->firstWhere('time', '10:15')['available']);
+        $this->assertNull(collect($data['slots'])->firstWhere('time', '10:00'));
+        $this->assertNull(collect($data['slots'])->firstWhere('time', '10:15'));
         $this->assertTrue(collect($data['slots'])->firstWhere('time', '10:30')['available']);
     }
 
     public function test_offline_legal_booking_blocks_socal_availability(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         config([
             'app.booking_day_start' => '10:00',
             'app.booking_day_end' => '11:00',
@@ -3023,11 +3031,12 @@ class ConsultationApiTest extends TestCase
             ->assertOk()
             ->json('data');
 
-        $this->assertFalse(collect($data['slots'])->firstWhere('time', '10:00')['available']);
+        $this->assertNull(collect($data['slots'])->firstWhere('time', '10:00'));
     }
 
     public function test_availability_uses_locally_synced_outlook_rows_without_inline_http_calls(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         config([
             'app.booking_day_start' => '09:00',
             'app.booking_day_end' => '12:00',
@@ -3060,8 +3069,8 @@ class ConsultationApiTest extends TestCase
             ->json('data'))
             ->firstWhere('date', '2026-08-04')['slots'];
 
-        $this->assertFalse(collect($slots)->firstWhere('time', '10:00')['available']);
-        $this->assertFalse(collect($slots)->firstWhere('time', '11:00')['available']);
+        $this->assertNull(collect($slots)->firstWhere('time', '10:00'));
+        $this->assertNull(collect($slots)->firstWhere('time', '11:00'));
         $this->assertDatabaseHas('external_calendar_events', [
             'provider' => 'outlook',
             'external_id' => 'socal-outlook-busy',
@@ -3079,6 +3088,7 @@ class ConsultationApiTest extends TestCase
 
     public function test_availability_uses_outlook_rows_in_configured_booking_timezone(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         config([
             'app.timezone' => 'Asia/Kolkata',
             'app.booking_timezone' => 'Asia/Kolkata',
@@ -3103,10 +3113,10 @@ class ConsultationApiTest extends TestCase
             ->assertOk()
             ->json('data');
 
-        $slot = collect($data['slots'])->firstWhere('time', '10:00');
+        $slot = collect($data['slots'])->firstWhere('time', '10:30');
 
-        $this->assertFalse($slot['available']);
-        $this->assertSame('2026-07-23T10:00:00+05:30', $slot['starts_at']);
+        $this->assertTrue($slot['available']);
+        $this->assertSame('2026-07-23T10:30:00+05:30', $slot['starts_at']);
         $this->assertDatabaseHas('external_calendar_events', [
             'provider' => 'outlook',
             'external_id' => 'team-catchup-utc',

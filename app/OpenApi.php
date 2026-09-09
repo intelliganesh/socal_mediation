@@ -91,8 +91,7 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'slots', type: 'array', items: new OA\Items(properties: [
             new OA\Property(property: 'time', type: 'string', example: '09:00'),
             new OA\Property(property: 'starts_at', type: 'string', format: 'date-time'),
-            new OA\Property(property: 'ends_at', type: 'string', format: 'date-time'),
-            new OA\Property(property: 'available', type: 'boolean', example: true),
+            new OA\Property(property: 'available', description: 'Always true. Busy start times are omitted; confirm the full duration before booking.', type: 'boolean', example: true),
         ])),
     ]
 )]

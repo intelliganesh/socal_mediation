@@ -34,7 +34,7 @@ class AvailabilityService
     {
         $endsAt = $startsAt->addMinutes($type->duration_minutes);
 
-        if (! $this->isConfiguredSlot($type, $startsAt, $endsAt)) {
+        if (! $this->isConfiguredSlot($startsAt, $endsAt)) {
             throw new \DomainException('Selected slot is outside the configured booking hours.');
         }
 
@@ -54,30 +54,26 @@ class AvailabilityService
         }
 
         $busyIntervals = $this->busyIntervalsForDay($day);
-        $slots = collect($this->configuredSlotStarts($type))
-            ->map(function (string $time) use ($type, $day, $busyIntervals) {
+        $slots = collect($this->configuredSlotStarts())
+            ->map(function (string $time) use ($day, $busyIntervals) {
                 $startsAt = CarbonImmutable::parse($day->toDateString().' '.$time, $day->timezone);
-                $endsAt = $startsAt->addMinutes($type->duration_minutes);
-                $workdayEnd = CarbonImmutable::parse(
-                    $day->toDateString().' '.config('app.booking_day_end', '17:00'),
-                    $day->timezone
-                );
+                $now = CarbonImmutable::now($day->timezone);
 
-                if ($endsAt->greaterThan($workdayEnd)) {
+                if ($startsAt->lessThanOrEqualTo($now)) {
                     return null;
                 }
 
-                $now = CarbonImmutable::now($day->timezone);
-
-                if ($startsAt->isSameDay($now) && $startsAt->lessThanOrEqualTo($now)) {
-                    return null;
+                foreach ($busyIntervals as $busyInterval) {
+                    if ($startsAt->greaterThanOrEqualTo($busyInterval['starts_at'])
+                        && $startsAt->lessThan($busyInterval['ends_at'])) {
+                        return null;
+                    }
                 }
 
                 return [
                     'time' => $startsAt->format('H:i'),
                     'starts_at' => $startsAt->toIso8601String(),
-                    'ends_at' => $endsAt->toIso8601String(),
-                    'available' => ! $this->intervalsOverlap($startsAt, $endsAt, $busyIntervals),
+                    'available' => true,
                 ];
             })
             ->filter()
@@ -86,11 +82,11 @@ class AvailabilityService
         return ['date' => $day->toDateString(), 'slots' => $slots->all()];
     }
 
-    private function configuredSlotStarts(ConsultationType $type): array
+    private function configuredSlotStarts(): array
     {
         $start = CarbonImmutable::parse(config('app.booking_day_start', '09:00'));
         $end = CarbonImmutable::parse(config('app.booking_day_end', '17:00'));
-        $interval = max(5, $type->duration_minutes);
+        $interval = 30;
         $slots = [];
 
         for ($slot = $start; $slot->lessThan($end); $slot = $slot->addMinutes($interval)) {
@@ -100,15 +96,17 @@ class AvailabilityService
         return $slots;
     }
 
-    private function isConfiguredSlot(ConsultationType $type, CarbonImmutable $startsAt, CarbonImmutable $endsAt): bool
+    private function isConfiguredSlot(CarbonImmutable $startsAt, CarbonImmutable $endsAt): bool
     {
         $workdayEnd = CarbonImmutable::parse(
             $startsAt->toDateString().' '.config('app.booking_day_end', '17:00'),
             $startsAt->timezone
         );
 
-        return $endsAt->lessThanOrEqualTo($workdayEnd)
-        && in_array($startsAt->format('H:i'), $this->configuredSlotStarts($type), true);
+        return ! $startsAt->isWeekend()
+        && $startsAt->second === 0 && $startsAt->micro === 0
+        && $endsAt->lessThanOrEqualTo($workdayEnd)
+        && in_array($startsAt->format('H:i'), $this->configuredSlotStarts(), true);
     }
 
     private function hasOverlap(CarbonImmutable $startsAt, CarbonImmutable $endsAt, ?int $professionalId, ?string $ignoreConsultationId = null, ?int $ignoreParticipantId = null): bool
@@ -188,23 +186,6 @@ class AvailabilityService
             'starts_at' => CarbonImmutable::parse($event->getRawOriginal($startKey), config('app.booking_timezone')),
             'ends_at' => CarbonImmutable::parse($event->getRawOriginal($endKey), config('app.booking_timezone')),
         ];
-    }
-
-    private function intervalsOverlap(CarbonImmutable $startsAt, CarbonImmutable $endsAt, array $busyIntervals): bool
-    {
-        $startsAtDatabase = $this->databaseDateTime($startsAt);
-        $endsAtDatabase = $this->databaseDateTime($endsAt);
-
-        foreach ($busyIntervals as $busyInterval) {
-            if (
-                $this->databaseDateTime($busyInterval['starts_at']) < $endsAtDatabase
-                && $this->databaseDateTime($busyInterval['ends_at']) > $startsAtDatabase
-            ) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function databaseDateTime(CarbonImmutable $dateTime): string

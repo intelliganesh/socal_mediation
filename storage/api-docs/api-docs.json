@@ -629,8 +629,8 @@
                 "tags": [
                     "Consultations"
                 ],
-                "summary": "Return duration-based available slots for a consultation type and month",
-                "description": "The day window comes from BOOKING_DAY_START and BOOKING_DAY_END in BOOKING_TIMEZONE. Slot spacing comes from the selected consultation type duration, and each slot is marked unavailable when it overlaps any application booking or locally synced Outlook busy event. Outlook is refreshed by the scheduled/admin sync, not inline during this read API.",
+                "summary": "Return available start times at 30-minute intervals",
+                "description": "Returns start times within BOOKING_DAY_START and BOOKING_DAY_END in BOOKING_TIMEZONE for the selected date or month. Past starts and starts within bookings, participant slots, or locally synced Outlook busy events are omitted. No end time or full-duration check is included. Call POST /v1/availability/confirm after selection. Outlook refresh remains scheduled/admin driven.",
                 "operationId": "dc46d90a1ee3cef5f47d540a7c896d01",
                 "parameters": [
                     {
@@ -645,7 +645,8 @@
                     {
                         "name": "date",
                         "in": "query",
-                        "required": true,
+                        "description": "Required unless month is provided.",
+                        "required": false,
                         "schema": {
                             "type": "string",
                             "format": "date",
@@ -698,6 +699,108 @@
                     },
                     "422": {
                         "description": "Validation failed"
+                    }
+                }
+            }
+        },
+        "/v1/availability/confirm": {
+            "post": {
+                "tags": [
+                    "Consultations"
+                ],
+                "summary": "Check the full consultation duration for a selected start time",
+                "description": "Calculates the end time from the consultation type duration and checks working hours and all shared booking and synced Outlook conflicts. Does not reserve the slot. Uses the same configured BOOKING_TIMEZONE wall-time handling as booking; timezone is accepted for compatibility.",
+                "operationId": "553a4b1f621c2f30c7af77e8f285cb72",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "consultation_type_id",
+                                    "starts_at"
+                                ],
+                                "properties": {
+                                    "consultation_type_id": {
+                                        "type": "integer",
+                                        "example": 3
+                                    },
+                                    "starts_at": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2026-09-10T12:00:00+05:30"
+                                    },
+                                    "timezone": {
+                                        "type": "string",
+                                        "example": "Asia/Kolkata",
+                                        "nullable": true
+                                    },
+                                    "professional_id": {
+                                        "type": "integer",
+                                        "example": 1,
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Full interval is available",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Selected time slot is available."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "starts_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "example": "2026-09-10T12:00:00+05:30"
+                                                },
+                                                "ends_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "example": "2026-09-10T16:00:00+05:30"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Invalid input or unavailable interval",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "The selected time does not have enough availability for this consultation. Please choose another start time."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -812,6 +915,21 @@
                                             "properties": {
                                                 "token": {
                                                     "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "John Smith",
+                                                    "nullable": true
+                                                },
+                                                "email": {
+                                                    "type": "string",
+                                                    "example": "john@example.com",
+                                                    "nullable": true
+                                                },
+                                                "phone": {
+                                                    "type": "string",
+                                                    "example": "+1 (555) 010-0001",
+                                                    "nullable": true
                                                 },
                                                 "questionnaire_completed": {
                                                     "type": "boolean",
@@ -1111,7 +1229,27 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Questionnaire submitted"
+                        "description": "Questionnaire submitted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     },
                     "404": {
                         "description": "Questionnaire token not found"
@@ -1157,6 +1295,21 @@
                                             "properties": {
                                                 "token": {
                                                     "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "John Smith",
+                                                    "nullable": true
+                                                },
+                                                "email": {
+                                                    "type": "string",
+                                                    "example": "john@example.com",
+                                                    "nullable": true
+                                                },
+                                                "phone": {
+                                                    "type": "string",
+                                                    "example": "+1 (555) 010-0001",
+                                                    "nullable": true
                                                 },
                                                 "questionnaire_completed": {
                                                     "type": "boolean",
@@ -1300,7 +1453,27 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Questionnaire submitted"
+                        "description": "Questionnaire submitted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     },
                     "404": {
                         "description": "Questionnaire token not found"
@@ -1346,6 +1519,21 @@
                                             "properties": {
                                                 "token": {
                                                     "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "John Smith",
+                                                    "nullable": true
+                                                },
+                                                "email": {
+                                                    "type": "string",
+                                                    "example": "john@example.com",
+                                                    "nullable": true
+                                                },
+                                                "phone": {
+                                                    "type": "string",
+                                                    "example": "+1 (555) 010-0001",
+                                                    "nullable": true
                                                 },
                                                 "questionnaire_completed": {
                                                     "type": "boolean",
@@ -1459,7 +1647,27 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Questionnaire submitted"
+                        "description": "Questionnaire submitted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Your intake form has been submitted successfully. After your consultation is confirmed, you will receive your consultation details and Zoom meeting link by email."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     },
                     "404": {
                         "description": "Questionnaire token not found"
@@ -1974,11 +2182,8 @@
                                     "type": "string",
                                     "format": "date-time"
                                 },
-                                "ends_at": {
-                                    "type": "string",
-                                    "format": "date-time"
-                                },
                                 "available": {
+                                    "description": "Always true. Busy start times are omitted; confirm the full duration before booking.",
                                     "type": "boolean",
                                     "example": true
                                 }

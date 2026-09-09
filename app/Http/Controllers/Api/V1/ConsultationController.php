@@ -11,6 +11,7 @@ use App\Models\ConsultationParticipant;
 use App\Models\ConsultationType;
 use App\Services\ApiResponse;
 use App\Services\AvailabilityService;
+use App\Services\BookingDateTimeService;
 use App\Services\ConsultationCompletionService;
 use App\Services\ConsultationDraftService;
 use App\Services\ConsultationRescheduleService;
@@ -253,11 +254,11 @@ class ConsultationController extends Controller
     #[OA\Get(
         path: '/v1/availability',
         tags: ['Consultations'],
-        summary: 'Return duration-based available slots for a consultation type and month',
-        description: 'The day window comes from BOOKING_DAY_START and BOOKING_DAY_END in BOOKING_TIMEZONE. Slot spacing comes from the selected consultation type duration, and each slot is marked unavailable when it overlaps any application booking or locally synced Outlook busy event. Outlook is refreshed by the scheduled/admin sync, not inline during this read API.',
+        summary: 'Return available start times at 30-minute intervals',
+        description: 'Returns start times within BOOKING_DAY_START and BOOKING_DAY_END in BOOKING_TIMEZONE for the selected date or month. Past starts and starts within bookings, participant slots, or locally synced Outlook busy events are omitted. No end time or full-duration check is included. Call POST /v1/availability/confirm after selection. Outlook refresh remains scheduled/admin driven.',
         parameters: [
             new OA\Parameter(name: 'consultation_type_id', in: 'query', required: true, schema: new OA\Schema(type: 'integer', example: 3)),
-            new OA\Parameter(name: 'date', in: 'query', required: true, schema: new OA\Schema(type: 'string', format: 'date', example: '2026-08-14')),
+            new OA\Parameter(name: 'date', in: 'query', required: false, description: 'Required unless month is provided.', schema: new OA\Schema(type: 'string', format: 'date', example: '2026-08-14')),
             new OA\Parameter(name: 'month', in: 'query', required: false, description: 'Legacy fallback. Prefer date for selected-day availability.', schema: new OA\Schema(type: 'string', example: '2026-08')),
             new OA\Parameter(name: 'professional_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer', example: 1)),
         ],
@@ -296,5 +297,54 @@ class ConsultationController extends Controller
             $month,
             $request->integer('professional_id') ?: null
         ));
+    }
+
+    #[OA\Post(
+        path: '/v1/availability/confirm',
+        tags: ['Consultations'],
+        summary: 'Check the full consultation duration for a selected start time',
+        description: 'Calculates the end time from the consultation type duration and checks working hours and all shared booking and synced Outlook conflicts. Does not reserve the slot. Uses the same configured BOOKING_TIMEZONE wall-time handling as booking; timezone is accepted for compatibility.',
+        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(required: ['consultation_type_id', 'starts_at'], properties: [
+            new OA\Property(property: 'consultation_type_id', type: 'integer', example: 3),
+            new OA\Property(property: 'starts_at', type: 'string', format: 'date-time', example: '2026-09-10T12:00:00+05:30'),
+            new OA\Property(property: 'timezone', type: 'string', nullable: true, example: 'Asia/Kolkata'),
+            new OA\Property(property: 'professional_id', type: 'integer', nullable: true, example: 1),
+        ])),
+        responses: [
+            new OA\Response(response: 200, description: 'Full interval is available', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: true),
+                new OA\Property(property: 'message', type: 'string', example: 'Selected time slot is available.'),
+                new OA\Property(property: 'data', type: 'object', properties: [
+                    new OA\Property(property: 'starts_at', type: 'string', format: 'date-time', example: '2026-09-10T12:00:00+05:30'),
+                    new OA\Property(property: 'ends_at', type: 'string', format: 'date-time', example: '2026-09-10T16:00:00+05:30'),
+                ]),
+            ])),
+            new OA\Response(response: 422, description: 'Invalid input or unavailable interval', content: new OA\JsonContent(properties: [
+                new OA\Property(property: 'success', type: 'boolean', example: false),
+                new OA\Property(property: 'message', type: 'string', example: 'The selected time does not have enough availability for this consultation. Please choose another start time.'),
+            ])),
+        ]
+    )]
+    public function confirmAvailability(Request $request, AvailabilityService $availability, BookingDateTimeService $dateTimes)
+    {
+        $data = $request->validate([
+            'consultation_type_id' => ['required', 'integer', 'exists:consultation_types,id'],
+            'starts_at' => ['required', 'date'],
+            'timezone' => ['nullable', 'timezone:all'],
+            'professional_id' => ['nullable', 'integer', 'exists:professionals,id'],
+        ]);
+        $type = ConsultationType::findOrFail($data['consultation_type_id']);
+        [$startsAt] = $dateTimes->startsAtFromRequest($data['starts_at']);
+
+        try {
+            $availability->assertAvailable($type, $startsAt, $data['professional_id'] ?? null);
+        } catch (\DomainException $exception) {
+            return ApiResponse::error('The selected time does not have enough availability for this consultation. Please choose another start time.', 422);
+        }
+
+        return ApiResponse::success([
+            'starts_at' => $startsAt->toIso8601String(),
+            'ends_at' => $startsAt->addMinutes($type->duration_minutes)->toIso8601String(),
+        ], 'Selected time slot is available.');
     }
 }
