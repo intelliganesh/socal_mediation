@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesApplicationMailFrom;
 use App\Models\PaymentRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -11,7 +12,7 @@ use Illuminate\Queue\SerializesModels;
 
 class ConsultationPaymentReminderMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, UsesApplicationMailFrom;
 
     public function __construct(
         public PaymentRequest $paymentRequest,
@@ -23,6 +24,7 @@ class ConsultationPaymentReminderMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: $this->applicationFrom($this->paymentRequest->consultation),
             subject: $this->isReschedule
                 ? 'Rescheduled consultation: complete your payment'
                 : 'Reminder: complete your consultation payment'

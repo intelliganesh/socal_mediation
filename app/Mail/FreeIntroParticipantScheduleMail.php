@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesApplicationMailFrom;
 use App\Models\ConsultationParticipant;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -11,7 +12,7 @@ use Illuminate\Queue\SerializesModels;
 
 class FreeIntroParticipantScheduleMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, UsesApplicationMailFrom;
 
     public function __construct(public ConsultationParticipant $participant)
     {
@@ -21,6 +22,7 @@ class FreeIntroParticipantScheduleMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: $this->applicationFrom($this->participant->consultation),
             subject: 'Select your 15-minute intro call slot'
         );
     }

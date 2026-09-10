@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesApplicationMailFrom;
 use App\Models\Consultation;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -11,7 +12,7 @@ use Illuminate\Queue\SerializesModels;
 
 class AdminNewConsultationRequestMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, UsesApplicationMailFrom;
 
     public function __construct(public Consultation $consultation)
     {
@@ -21,6 +22,7 @@ class AdminNewConsultationRequestMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: $this->applicationFrom($this->consultation),
             subject: 'New consultation request: '.$this->consultation->booking_number
         );
     }

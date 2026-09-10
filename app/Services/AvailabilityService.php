@@ -47,6 +47,15 @@ class AvailabilityService
         }
     }
 
+    public function earliestOverlap(CarbonImmutable $startsAt, CarbonImmutable $endsAt): ?array
+    {
+        return collect($this->busyIntervalsForDay($startsAt))
+            ->filter(fn (array $interval) => $interval['starts_at']->lessThan($endsAt)
+                && $interval['ends_at']->greaterThan($startsAt))
+            ->sortBy(fn (array $interval) => $interval['starts_at']->timestamp)
+            ->first();
+    }
+
     private function daySlots(ConsultationType $type, CarbonImmutable $day, ?int $professionalId): array
     {
         if ($day->isWeekend()) {

@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesApplicationMailFrom;
 use App\Models\QuestionnaireSubmission;
 use App\Services\QuestionnaireTemplateService;
 use App\Services\QuestionnaireWorkflowService;
@@ -13,7 +14,7 @@ use Illuminate\Queue\SerializesModels;
 
 class ConsultationQuestionnaireMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, UsesApplicationMailFrom;
 
     public string $questionnaireUrl;
 
@@ -34,6 +35,7 @@ class ConsultationQuestionnaireMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: $this->applicationFrom($this->submission->consultation),
             subject: $this->isReschedule
                 ? 'Rescheduled consultation: complete your questionnaire'
                 : 'Please complete your consultation questionnaire'

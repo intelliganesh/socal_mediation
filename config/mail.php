@@ -117,4 +117,9 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    'application_from_names' => [
+        'socal' => env('SOCAL_MAIL_FROM_NAME', 'SoCal Mediation Center'),
+        'legal' => env('LEGAL_MAIL_FROM_NAME', 'Law Office of Steve Lopez'),
+    ],
+
 ];

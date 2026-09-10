@@ -54,11 +54,11 @@
 
     $modeIcon=$iconPath([$iconPrefix.'_'.$modeIconSuffix, $iconPrefix, 'video']);
     $modeDetail = match ($consultation?->consultation_mode) {
-        'phone' => [
-            'label' => 'Phone Number',
-            'value' => config('app.consultation_contact.phone.'.($consultation?->application ?? 'socal')),
-            'icon' => $iconPath([$iconPrefix.'_phone', 'phone']),
-        ],
+        // 'phone' => [
+        //     'label' => 'Phone Number',
+        //     'value' => config('app.consultation_contact.phone.'.($consultation?->application ?? 'socal')),
+        //     'icon' => $iconPath([$iconPrefix.'_phone', 'phone']),
+        // ],
         'offline', 'in_person' => [
             'label' => 'Location',
             'value' => config('app.consultation_contact.location_address.'.($consultation?->application ?? 'socal')),

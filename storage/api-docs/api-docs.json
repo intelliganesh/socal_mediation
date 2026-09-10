@@ -794,7 +794,7 @@
                                         },
                                         "message": {
                                             "type": "string",
-                                            "example": "There is already a consultation scheduled during 9:00 AM to 1:00 PM. Please select another slot."
+                                            "example": "Another appointment from 10:00 AM to 10:30 AM conflicts with your selected time, 9:00 AM to 1:00 PM. Please choose another start time."
                                         }
                                     },
                                     "type": "object"

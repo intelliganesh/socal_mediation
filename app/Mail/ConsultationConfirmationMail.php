@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesApplicationMailFrom;
 use App\Models\Consultation;
 use App\Models\ConsultationParticipant;
 use App\Services\QuestionnairePdfService;
@@ -13,7 +14,7 @@ use Illuminate\Queue\SerializesModels;
 
 class ConsultationConfirmationMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use Queueable, SerializesModels, UsesApplicationMailFrom;
 
     public function __construct(
         public Consultation $consultation,
@@ -26,6 +27,7 @@ class ConsultationConfirmationMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: $this->applicationFrom($this->consultation),
             subject: $this->isReschedule
                 ? 'Your consultation has been rescheduled'
                 : 'Your consultation is confirmed'

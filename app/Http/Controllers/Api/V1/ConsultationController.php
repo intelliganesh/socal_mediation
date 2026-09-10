@@ -322,7 +322,7 @@ class ConsultationController extends Controller
             ])),
             new OA\Response(response: 422, description: 'Invalid input or unavailable interval', content: new OA\JsonContent(properties: [
                 new OA\Property(property: 'success', type: 'boolean', example: false),
-                new OA\Property(property: 'message', type: 'string', example: 'There is already a consultation scheduled during 9:00 AM to 1:00 PM. Please select another slot.'),
+                new OA\Property(property: 'message', type: 'string', example: 'Another appointment from 10:00 AM to 10:30 AM conflicts with your selected time, 9:00 AM to 1:00 PM. Please choose another start time.'),
             ])),
         ]
     )]
@@ -341,7 +341,11 @@ class ConsultationController extends Controller
         try {
             $availability->assertAvailable($type, $startsAt, $data['professional_id'] ?? null);
         } catch (\DomainException $exception) {
-            return ApiResponse::error($this->availabilityConflictMessage($startsAt, $endsAt), 422);
+            $overlap = $exception->getMessage() === 'This time slot is no longer available. Please choose another slot.'
+                ? $availability->earliestOverlap($startsAt, $endsAt)
+                : null;
+
+            return ApiResponse::error($this->availabilityConflictMessage($startsAt, $endsAt, $overlap), 422);
         }
 
         return ApiResponse::success([
@@ -350,10 +354,16 @@ class ConsultationController extends Controller
         ], 'Selected time slot is available.');
     }
 
-    private function availabilityConflictMessage(CarbonImmutable $startsAt, CarbonImmutable $endsAt): string
+    private function availabilityConflictMessage(CarbonImmutable $startsAt, CarbonImmutable $endsAt, ?array $overlap): string
     {
+        if ($overlap === null) {
+            return 'The selected start time is not available. Please choose another start time.';
+        }
+
         return sprintf(
-            'There is already a consultation scheduled during %s to %s. Please select another slot.',
+            'Another appointment from %s to %s conflicts with your selected time, %s to %s. Please choose another start time.',
+            $overlap['starts_at']->format('g:i A'),
+            $overlap['ends_at']->format('g:i A'),
             $startsAt->format('g:i A'),
             $endsAt->format('g:i A')
         );

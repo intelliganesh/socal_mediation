@@ -31,6 +31,7 @@ class AvailabilityConfirmationTest extends TestCase
     public function test_start_can_be_listed_but_full_duration_conflicts_and_confirmation_does_not_reserve(): void
     {
         $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
+        $this->busyEvent('10:00', '10:30');
         $this->busyEvent('11:00', '12:00');
         $this->busyEvent('16:00', '17:00');
 
@@ -39,6 +40,7 @@ class AvailabilityConfirmationTest extends TestCase
         $times = array_column($slots, 'time');
         $this->assertContains('09:00', $times);
         $this->assertContains('12:00', $times);
+        $this->assertNotContains('10:00', $times);
         $this->assertNotContains('11:00', $times);
         $this->assertNotContains('11:30', $times);
         foreach ($slots as $slot) {
@@ -49,7 +51,7 @@ class AvailabilityConfirmationTest extends TestCase
         $this->postJson('/api/v1/availability/confirm', [
             'consultation_type_id' => $type->id,
             'starts_at' => '2026-09-10T09:00:00+05:30',
-        ])->assertStatus(422)->assertJsonPath('message', 'There is already a consultation scheduled during 9:00 AM to 1:00 PM. Please select another slot.');
+        ])->assertStatus(422)->assertJsonPath('message', 'Another appointment from 10:00 AM to 10:30 AM conflicts with your selected time, 9:00 AM to 1:00 PM. Please choose another start time.');
 
         $count = Consultation::count();
         $this->postJson('/api/v1/availability/confirm', [
@@ -79,7 +81,9 @@ class AvailabilityConfirmationTest extends TestCase
             $this->postJson('/api/v1/availability/confirm', [
                 'consultation_type_id' => $type->id,
                 'starts_at' => $start,
-            ])->assertStatus(422)->assertJsonPath('success', false);
+            ])->assertStatus(422)
+                ->assertJsonPath('success', false)
+                ->assertJsonPath('message', 'The selected start time is not available. Please choose another start time.');
         }
 
         $this->postJson('/api/v1/availability/confirm', [
