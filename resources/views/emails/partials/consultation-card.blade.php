@@ -64,6 +64,11 @@
             'value' => config('app.consultation_contact.location_address.'.($consultation?->application ?? 'socal')),
             'icon' => $iconPath([$iconPrefix.'_inperson', 'inperson']),
         ],
+        'online' => [
+            'label' => 'Zoom Meeting',
+            'value' => config('app.consultation_contact.location_address.'.($consultation?->application ?? 'socal')),
+            'icon' => $iconPath([$iconPrefix.'_link', 'link']),
+        ],
         default => null,
     };
 @endphp
@@ -167,9 +172,9 @@
                                     </td>
                                     <td width="50%" valign="top" style="padding:0 0 22px 18px;">
                                         @if($zoomUrl)
-                                            <div style="font-size:12px;color:#374151;margin-bottom:7px;">Zoom Meeting</div>
+                                            <div style="font-size:12px;color:#374151;margin-bottom:7px;">{{ $modeDetail['label'] }}</div>
                                             <a href="{{ $zoomUrl }}" style="color:{{ $brandColor }};font-size:14px;font-weight:700;text-decoration:none;">
-                                                <img src="{{ asset('admin-icons/video.svg') }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
+                                                <img src="{{ asset($modeDetail['icon']) }}" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;vertical-align:-2px;margin-right:7px;">
                                                 Click here to join zoom meeting
                                                 <p style="font-size:8px">{{ $zoomUrl }}</p>
                                             </a>
