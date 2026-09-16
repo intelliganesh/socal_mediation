@@ -58,7 +58,7 @@ class AvailabilityService
 
     private function daySlots(ConsultationType $type, CarbonImmutable $day, ?int $professionalId): array
     {
-        if ($day->isWeekend()) {
+        if ($day->isSunday()) {
             return ['date' => $day->toDateString(), 'slots' => []];
         }
 
@@ -112,7 +112,7 @@ class AvailabilityService
             $startsAt->timezone
         );
 
-        return ! $startsAt->isWeekend()
+        return ! $startsAt->isSunday()
         && $startsAt->second === 0 && $startsAt->micro === 0
         && $endsAt->lessThanOrEqualTo($workdayEnd)
         && in_array($startsAt->format('H:i'), $this->configuredSlotStarts($type), true);

@@ -1240,7 +1240,7 @@
                                         },
                                         "message": {
                                             "type": "string",
-                                            "example": "Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email."
+                                            "example": "Your mediation questionnaire has been submitted successfully. After confirmation, you will receive your consultation details and Zoom meeting link by email."
                                         },
                                         "data": {
                                             "type": "object"
@@ -1464,7 +1464,7 @@
                                         },
                                         "message": {
                                             "type": "string",
-                                            "example": "Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email."
+                                            "example": "Your mediation questionnaire has been submitted successfully. After confirmation, you will receive your consultation details and Zoom meeting link by email."
                                         },
                                         "data": {
                                             "type": "object"

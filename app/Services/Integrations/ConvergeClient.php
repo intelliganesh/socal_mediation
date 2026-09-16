@@ -63,12 +63,22 @@ class ConvergeClient
         }
 
         if ($response->failed()) {
+            \Log::info('Converge Hosted Payment Request', [
+                'url'    => $url,
+                'status' => $response->status(),
+                'body'   => $response->body(),
+            ]);
             throw new \RuntimeException('Converge hosted payment token request failed: ' . $response->body());
         }
 
         $token = trim($response->body());
 
         if ($token === '' || str_starts_with(strtolower($token), 'error')) {
+            \Log::info('Converge Hosted Payment Requeste3e23', [
+                'url'    => $url,
+                'status' => $response->status(),
+                'body'   => $response->body(),
+            ]);
             throw new \RuntimeException('Converge hosted payment token request failed: ' . $response->body());
         }
 
@@ -156,9 +166,7 @@ class ConvergeClient
             'ssl_transaction_type' => 'txnquery',
         ];
 
-        $transactionId = $callbackPayload['ssl_txn_id']
-            ?? $payment->transaction_id
-            ?? data_get($payment->metadata, 'converge_transaction_id');
+        $transactionId = $callbackPayload['ssl_txn_id'] ?? $payment->transaction_id ?? data_get($payment->metadata, 'converge_transaction_id');
         $invoiceNumber = $payment->metadata['invoice_number'] ?? null;
 
         if (filled($transactionId)) {
@@ -244,14 +252,13 @@ class ConvergeClient
 
     private function validateTransaction(array $transaction, PaymentRequest $payment): array
     {
-        $expectedTransactionId = $payment->transaction_id
-            ?? data_get($payment->metadata, 'converge_transaction_id');
+        $expectedTransactionId = $payment->transaction_id ?? data_get($payment->metadata, 'converge_transaction_id');
 
         if (filled($expectedTransactionId)
             && isset($transaction['ssl_txn_id'])
             && (string) $transaction['ssl_txn_id'] !== (string) $expectedTransactionId) {
             return [
-                'errorCode' => 'transaction_id_mismatch',
+                'errorCode'    => 'transaction_id_mismatch',
                 'errorMessage' => 'Converge transaction ID does not match the returned payment transaction.',
             ];
         }

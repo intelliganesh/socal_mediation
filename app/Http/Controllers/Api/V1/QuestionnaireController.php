@@ -112,7 +112,7 @@ class QuestionnaireController extends Controller
         responses: [
             new OA\Response(response: 200, description: 'Questionnaire submitted', content: new OA\JsonContent(properties: [
                 new OA\Property(property: 'success', type: 'boolean', example: true),
-                new OA\Property(property: 'message', type: 'string', example: 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email.'),
+                new OA\Property(property: 'message', type: 'string', example: 'Your mediation questionnaire has been submitted successfully. After confirmation, you will receive your consultation details and Zoom meeting link by email.'),
                 new OA\Property(property: 'data', type: 'object'),
             ])),
             new OA\Response(response: 404, description: 'Questionnaire token not found'),
@@ -186,7 +186,7 @@ class QuestionnaireController extends Controller
         responses: [
             new OA\Response(response: 200, description: 'Questionnaire submitted', content: new OA\JsonContent(properties: [
                 new OA\Property(property: 'success', type: 'boolean', example: true),
-                new OA\Property(property: 'message', type: 'string', example: 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email.'),
+                new OA\Property(property: 'message', type: 'string', example: 'Your mediation questionnaire has been submitted successfully. After confirmation, you will receive your consultation details and Zoom meeting link by email.'),
                 new OA\Property(property: 'data', type: 'object'),
             ])),
             new OA\Response(response: 404, description: 'Questionnaire token not found'),
@@ -422,6 +422,9 @@ class QuestionnaireController extends Controller
     private function questionnaireSuccessMessage(Consultation $consultation): string
     {
         $mode = $consultation->consultation_mode ?: 'online';
+        $participantRequirement = $this->hasMultipleParticipants($consultation)
+            ? ' Your booking will be confirmed once all required participants have completed their questionnaires.'
+            : '';
 
         if ($consultation->application === 'legal') {
             return match ($mode) {
@@ -432,9 +435,18 @@ class QuestionnaireController extends Controller
         }
 
         return match ($mode) {
-            'phone' => 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details by email, and the mediator will call you at the phone number provided during booking at your selected consultation time.',
-            'offline' => 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details, including the office location, by email.',
-            default => 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email.',
+            'phone' => 'Your mediation questionnaire has been submitted successfully.'.$participantRequirement.' After confirmation, you will receive your consultation details by email, and the mediator will call you at the phone number provided during booking at your selected consultation time.',
+            'offline' => 'Your mediation questionnaire has been submitted successfully.'.$participantRequirement.' After confirmation, you will receive your consultation details, including the office location, by email.',
+            default => 'Your mediation questionnaire has been submitted successfully.'.$participantRequirement.' After confirmation, you will receive your consultation details and Zoom meeting link by email.',
         };
+    }
+
+    private function hasMultipleParticipants(Consultation $consultation): bool
+    {
+        $participantCount = $consultation->relationLoaded('participants')
+            ? $consultation->participants->count()
+            : $consultation->participants()->count();
+
+        return $participantCount > 1;
     }
 }

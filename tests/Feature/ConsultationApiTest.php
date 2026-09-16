@@ -1415,21 +1415,21 @@ class ConsultationApiTest extends TestCase
                 'mode' => 'online',
                 'service' => 'Divorce & Family Matters',
                 'endpoint' => 'socal-divorce-intake',
-                'expected' => 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email.',
+                'expected' => 'Your mediation questionnaire has been submitted successfully. After confirmation, you will receive your consultation details and Zoom meeting link by email.',
             ],
             [
                 'application' => 'socal',
                 'mode' => 'phone',
                 'service' => 'Business, Payment & Contract Disputes',
                 'endpoint' => 'socal-party-mediation',
-                'expected' => 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details by email, and the mediator will call you at the phone number provided during booking at your selected consultation time.',
+                'expected' => 'Your mediation questionnaire has been submitted successfully. After confirmation, you will receive your consultation details by email, and the mediator will call you at the phone number provided during booking at your selected consultation time.',
             ],
             [
                 'application' => 'socal',
                 'mode' => 'offline',
                 'service' => 'Business, Payment & Contract Disputes',
                 'endpoint' => 'socal-party-mediation',
-                'expected' => 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details, including the office location, by email.',
+                'expected' => 'Your mediation questionnaire has been submitted successfully. After confirmation, you will receive your consultation details, including the office location, by email.',
             ],
             [
                 'application' => 'legal',
@@ -1496,6 +1496,63 @@ class ConsultationApiTest extends TestCase
                 ->assertJsonPath('data.uuid', $consultation->id)
                 ->assertJsonMissingPath('data.questionnaire_progress');
         }
+    }
+
+    public function test_questionnaire_post_success_message_mentions_required_participants_only_for_multiple_participants(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config(['services.outlook.enabled' => false]);
+
+        $type = ConsultationType::where('application', 'socal')->where('price_cents', '>', 0)->firstOrFail();
+        $consultation = Consultation::create([
+            'booking_number' => 'MSG-MULTI',
+            'consultation_type_id' => $type->id,
+            'legal_service_name' => 'Business, Payment & Contract Disputes',
+            'application' => 'socal',
+            'status' => 'payment_pending',
+            'payment_status' => 'pending',
+            'consultation_mode' => 'online',
+            'timezone' => 'America/Los_Angeles',
+            'starts_at' => CarbonImmutable::parse('2026-09-25 10:00:00', 'America/Los_Angeles'),
+            'ends_at' => CarbonImmutable::parse('2026-09-25 11:00:00', 'America/Los_Angeles'),
+            'primary_first_name' => 'Message',
+            'primary_last_name' => 'Primary',
+            'primary_email' => 'message.primary@example.test',
+            'primary_phone_country' => '+1',
+            'primary_phone' => '(555) 010-3000',
+            'total_amount_cents' => $type->price_cents,
+            'currency' => 'USD',
+            'payment_mode' => 'full',
+        ]);
+        $primary = $consultation->participants()->create([
+            'first_name' => 'Message',
+            'last_name' => 'Primary',
+            'email' => 'message.primary@example.test',
+            'phone_country' => '+1',
+            'phone' => '(555) 010-3000',
+            'is_primary' => true,
+            'should_pay' => true,
+            'share_amount_cents' => $type->price_cents,
+        ]);
+        $consultation->participants()->create([
+            'first_name' => 'Message',
+            'last_name' => 'Participant',
+            'email' => 'message.participant@example.test',
+            'phone_country' => '+1',
+            'phone' => '(555) 010-3001',
+            'is_primary' => false,
+            'should_pay' => false,
+            'share_amount_cents' => 0,
+        ]);
+
+        $submission = app(QuestionnaireWorkflowService::class)->ensureSubmission($consultation, $primary);
+
+        $this->postJson('/api/v1/questionnaires/socal-party-mediation/'.$submission->token, [
+            'answers' => ['name' => 'Message Primary'],
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Your mediation questionnaire has been submitted successfully. Your booking will be confirmed once all required participants have completed their questionnaires. After confirmation, you will receive your consultation details and Zoom meeting link by email.');
     }
 
     public function test_disabled_converge_gateway_does_not_create_a_payment_link(): void

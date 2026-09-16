@@ -74,10 +74,10 @@ class AvailabilityConfirmationTest extends TestCase
         app(AvailabilityService::class)->assertAvailable($type, CarbonImmutable::parse('2026-09-10 12:00:00', 'Asia/Kolkata'));
     }
 
-    public function test_confirmation_checks_hours_past_starts_weekends_and_thirty_minute_grid(): void
+    public function test_confirmation_checks_hours_past_starts_sundays_and_thirty_minute_grid(): void
     {
         $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
-        foreach (['2026-09-10T14:00:00', '2026-08-31T09:00:00', '2026-09-12T09:00:00', '2026-09-10T09:15:00', '2026-09-10T09:30:01'] as $start) {
+        foreach (['2026-09-10T14:00:00', '2026-08-31T09:00:00', '2026-09-13T09:00:00', '2026-09-10T09:15:00', '2026-09-10T09:30:01'] as $start) {
             $this->postJson('/api/v1/availability/confirm', [
                 'consultation_type_id' => $type->id,
                 'starts_at' => $start,
@@ -93,6 +93,22 @@ class AvailabilityConfirmationTest extends TestCase
 
         $this->getJson('/api/v1/availability?consultation_type_id='.$type->id.'&date=2026-08-31')
             ->assertOk()->assertJsonPath('data.slots', []);
+    }
+
+    public function test_saturdays_are_available_for_booking(): void
+    {
+        $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
+
+        $slots = $this->getJson('/api/v1/availability?consultation_type_id='.$type->id.'&date=2026-09-12')
+            ->assertOk()
+            ->json('data.slots');
+
+        $this->assertContains('09:00', array_column($slots, 'time'));
+
+        $this->postJson('/api/v1/availability/confirm', [
+            'consultation_type_id' => $type->id,
+            'starts_at' => '2026-09-12T09:00:00+05:30',
+        ])->assertOk()->assertJsonPath('data.ends_at', '2026-09-12T13:00:00+05:30');
     }
 
     public function test_confirmation_validates_inputs_and_uses_selected_type_duration(): void
