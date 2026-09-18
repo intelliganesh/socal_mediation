@@ -34,7 +34,10 @@ class OutlookCalendarClient
         'America/Phoenix' => 'US Mountain Standard Time',
     ];
 
-    public function __construct(private readonly QuestionnaireTemplateService $questionnaireTemplates) {}
+    public function __construct(
+        private readonly QuestionnaireTemplateService $questionnaireTemplates,
+        private readonly MicrosoftGraphTokenProvider $tokenProvider,
+    ) {}
 
     public function syncAllConsultations(): array
     {
@@ -344,7 +347,7 @@ class OutlookCalendarClient
         $this->assertEnabled();
         $calendarUrl = $this->calendarUrl();
 
-        $response = Http::withToken($this->accessToken())
+        $response = Http::withToken($this->tokenProvider->accessToken())
             ->acceptJson()
             ->delete($calendarUrl.'/events/'.$eventId);
 
@@ -523,7 +526,7 @@ class OutlookCalendarClient
         $nextUrl = $this->calendarViewUrl($calendarUrl.'/calendarView', $windowQuery + ['$top' => 100]);
 
         do {
-            $response = Http::withToken($this->accessToken())
+            $response = Http::withToken($this->tokenProvider->accessToken())
                 ->acceptJson()
                 ->get($nextUrl);
 
@@ -563,7 +566,7 @@ class OutlookCalendarClient
     {
         $calendarUrl = $this->calendarUrl();
 
-        $response = Http::withToken($this->accessToken())
+        $response = Http::withToken($this->tokenProvider->accessToken())
             ->acceptJson()
             ->post($calendarUrl.'/events', $payload);
 
@@ -578,7 +581,7 @@ class OutlookCalendarClient
     {
         $calendarUrl = $this->calendarUrl();
 
-        $response = Http::withToken($this->accessToken())
+        $response = Http::withToken($this->tokenProvider->accessToken())
             ->acceptJson()
             ->patch($calendarUrl.'/events/'.$eventId, $payload);
 
@@ -873,27 +876,4 @@ class OutlookCalendarClient
         }
     }
 
-    private function accessToken(): string
-    {
-        foreach (['tenant_id', 'client_id', 'client_secret'] as $key) {
-            if (blank(config('services.outlook.'.$key))) {
-                throw new \RuntimeException('Outlook is enabled but OUTLOOK_'.strtoupper($key).' is not configured.');
-            }
-        }
-
-        $response = Http::asForm()
-            ->acceptJson()
-            ->post(rtrim(config('services.outlook.login_base_url'), '/').'/'.config('services.outlook.tenant_id').'/oauth2/v2.0/token', [
-                'client_id' => config('services.outlook.client_id'),
-                'client_secret' => config('services.outlook.client_secret'),
-                'grant_type' => 'client_credentials',
-                'scope' => 'https://graph.microsoft.com/.default',
-            ]);
-
-        if ($response->failed()) {
-            throw new \RuntimeException('Outlook access token request failed: '.$response->body());
-        }
-
-        return $response->json('access_token');
-    }
 }

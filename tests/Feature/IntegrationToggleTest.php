@@ -99,7 +99,7 @@ class IntegrationToggleTest extends TestCase
         $outlook->deleteEvent('socal', $eventId);
 
         $this->assertSame('event-id', $eventId);
-        Http::assertSentCount(4);
+        Http::assertSentCount(3);
     }
 
     public function test_outlook_requires_calendar_owner_user_id_when_enabled(): void

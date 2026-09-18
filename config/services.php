@@ -75,6 +75,7 @@ return [
         'client_id' => env('OUTLOOK_CLIENT_ID'),
         'client_secret' => env('OUTLOOK_CLIENT_SECRET'),
         'login_base_url' => env('OUTLOOK_LOGIN_BASE_URL', 'https://login.microsoftonline.com'),
+        'mailbox_id' => env('OUTLOOK_MAILBOX_ID'),
         'user_id' => env('OUTLOOK_USER_ID'),
         'calendar_id' => env('OUTLOOK_CALENDAR_ID'),
         'base_url' => env('OUTLOOK_BASE_URL', 'https://graph.microsoft.com/v1.0'),

@@ -221,10 +221,9 @@ OUTLOOK_TENANT_ID=
 OUTLOOK_CLIENT_ID=
 OUTLOOK_CLIENT_SECRET=
 OUTLOOK_LOGIN_BASE_URL=https://login.microsoftonline.com
-OUTLOOK_SOCAL_USER_ID=
-OUTLOOK_SOCAL_CALENDAR_ID=
-OUTLOOK_LEGAL_USER_ID=
-OUTLOOK_LEGAL_CALENDAR_ID=
+OUTLOOK_MAILBOX_ID=
+OUTLOOK_USER_ID=
+OUTLOOK_CALENDAR_ID=
 OUTLOOK_BASE_URL=https://graph.microsoft.com/v1.0
 ```
 
@@ -237,7 +236,25 @@ meeting:write:meeting
 meeting:write:meeting:admin
 ```
 
-For Outlook app-only sync, set `OUTLOOK_SOCAL_USER_ID` and `OUTLOOK_LEGAL_USER_ID` to the mailbox user principal name or Microsoft Graph user id that owns each calendar. The calendar id values identify the specific calendars under those users. Both mailbox/calendar pairs are required: each consultation is mirrored to both calendars when created, rescheduled, synchronized, or cancelled.
+For Outlook app-only sync, set `OUTLOOK_USER_ID` to the mailbox user principal name or Microsoft Graph user id that owns the shared calendar. `OUTLOOK_CALENDAR_ID` identifies the calendar under that user.
+
+To send all application email through Microsoft Graph, grant the same Entra
+application the Microsoft Graph `Mail.Send` application permission and tenant admin
+consent. Restrict its Exchange Online access to the configured sender mailbox, then
+configure production with:
+
+```env
+MAIL_MAILER=microsoft-graph
+OUTLOOK_MAILBOX_ID=info@example.com
+MAIL_FROM_ADDRESS=info@example.com
+MAIL_FROM_NAME="Configured Microsoft 365 Display Name"
+```
+
+`OUTLOOK_MAILBOX_ID` accepts the mailbox user principal name or Microsoft Graph user
+id. `MAIL_FROM_ADDRESS` must be that mailbox's email address. Graph mail uses the same
+tenant, client id, and client secret as calendar sync, but does not require
+`OUTLOOK_SYNC_ENABLED`. Failures are logged and are not automatically retried through
+SMTP. Set `MAIL_MAILER=smtp` explicitly for a manual rollback.
 
 Local email defaults to the log mailer:
 
