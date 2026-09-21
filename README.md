@@ -250,8 +250,9 @@ MAIL_FROM_ADDRESS=info@example.com
 MAIL_FROM_NAME="Configured Microsoft 365 Display Name"
 ```
 
-`OUTLOOK_MAILBOX_ID` accepts the mailbox user principal name or Microsoft Graph user
-id. `MAIL_FROM_ADDRESS` must be that mailbox's email address. Graph mail uses the same
+`OUTLOOK_MAILBOX_ID` accepts the sending mailbox user principal name or Microsoft Graph user
+id. `OUTLOOK_USER_ID` independently selects the mailbox that owns the shared calendar.
+`MAIL_FROM_ADDRESS` must be the sending mailbox's email address. Graph mail uses the same
 tenant, client id, and client secret as calendar sync, but does not require
 `OUTLOOK_SYNC_ENABLED`. Failures are logged and are not automatically retried through
 SMTP. Set `MAIL_MAILER=smtp` explicitly for a manual rollback.

@@ -29,6 +29,7 @@ class MicrosoftGraphMailTransportTest extends TestCase
             'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
             'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
             'services.outlook.mailbox_id' => 'sender@example.com',
+            'services.outlook.user_id' => 'calendar-owner@example.com',
             'mail.from.address' => 'sender@example.com',
             'mail.from.name' => 'Shared Office',
         ]);
@@ -38,10 +39,10 @@ class MicrosoftGraphMailTransportTest extends TestCase
     {
         Mail::purge('microsoft-graph');
 
-        $this->assertInstanceOf(
-            MicrosoftGraphTransport::class,
-            Mail::mailer('microsoft-graph')->getSymfonyTransport(),
-        );
+        $transport = Mail::mailer('microsoft-graph')->getSymfonyTransport();
+
+        $this->assertInstanceOf(MicrosoftGraphTransport::class, $transport);
+        $this->assertSame('microsoft-graph://sender%40example.com', (string) $transport);
     }
 
     public function test_it_sends_complete_mime_with_recipients_and_attachment(): void
