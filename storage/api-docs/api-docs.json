@@ -1858,6 +1858,100 @@
                 }
             }
         },
+        "/v1/website-forms": {
+            "post": {
+                "tags": [
+                    "Website Forms"
+                ],
+                "summary": "Submit a public website form",
+                "operationId": "b27af924af4546f1a32d90fe03abcf5e",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "application",
+                                    "name",
+                                    "email",
+                                    "phone",
+                                    "message"
+                                ],
+                                "properties": {
+                                    "application": {
+                                        "type": "string",
+                                        "example": "socal",
+                                        "enum": [
+                                            "socal",
+                                            "legal"
+                                        ]
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "example": "Jordan Smith"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "jordan@example.com"
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "+1 555 010 0200"
+                                    },
+                                    "message": {
+                                        "type": "string",
+                                        "example": "I would like more information about mediation."
+                                    },
+                                    "extra_fields": {
+                                        "description": "Additional website-specific fields keyed by their frontend field names.",
+                                        "type": "object",
+                                        "example": {
+                                            "preferred_contact_method": "email",
+                                            "company": "Example LLC"
+                                        },
+                                        "nullable": true,
+                                        "additionalProperties": {}
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Website form submitted",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Your message has been submitted successfully."
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/WebsiteForm"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    },
+                    "429": {
+                        "description": "Too many requests"
+                    }
+                }
+            }
+        },
         "/v1/payments/converge/return": {
             "post": {
                 "tags": [
@@ -1931,6 +2025,49 @@
                     "data": {
                         "type": "object",
                         "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "WebsiteForm": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 42
+                    },
+                    "application": {
+                        "type": "string",
+                        "example": "socal",
+                        "enum": [
+                            "socal",
+                            "legal"
+                        ]
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Jordan Smith"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "example": "jordan@example.com"
+                    },
+                    "phone": {
+                        "type": "string",
+                        "example": "+1 555 010 0200"
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "I would like more information about mediation."
+                    },
+                    "extra_fields": {
+                        "type": "object",
+                        "nullable": true,
+                        "additionalProperties": {}
+                    },
+                    "submitted_at": {
+                        "type": "string",
+                        "format": "date-time"
                     }
                 },
                 "type": "object"
@@ -2199,6 +2336,9 @@
     "tags": [
         {
             "name": "Consultations"
+        },
+        {
+            "name": "Website Forms"
         },
         {
             "name": "Payments"

@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\ConsultationAdminController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\WebsiteFormAdminController;
 use App\Http\Controllers\Payments\ConvergeCheckoutController;
 use Illuminate\Support\Facades\Route;
 
@@ -44,6 +45,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/', DashboardController::class)->name('dashboard');
         Route::get('consultations', [ConsultationAdminController::class, 'index'])->name('consultations.index');
         Route::get('consultations/{consultation}', [ConsultationAdminController::class, 'show'])->name('consultations.show');
+        Route::get('website-forms', [WebsiteFormAdminController::class, 'index'])->name('website-forms.index');
+        Route::get('website-forms/{websiteForm}', [WebsiteFormAdminController::class, 'show'])->name('website-forms.show');
         Route::get('consultations/{consultation}/questionnaires/{submission}/pdf', [ConsultationAdminController::class, 'downloadQuestionnairePdf'])->name('consultations.questionnaires.pdf');
         Route::get('consultations/{consultation}/questionnaires/{submission}/agreement-pdf', [ConsultationAdminController::class, 'downloadAgreementPdf'])->name('consultations.questionnaires.agreement-pdf');
         Route::post('consultations/{consultation}/payment-links', [ConsultationAdminController::class, 'sendPaymentLinks'])->name('consultations.payment-links');

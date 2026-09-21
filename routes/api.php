@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\ConsultationController;
 use App\Http\Controllers\Api\V1\PaymentWebhookController;
 use App\Http\Controllers\Api\V1\QuestionnaireController;
 use App\Http\Controllers\Api\V1\SimulatedPaymentController;
+use App\Http\Controllers\Api\V1\WebsiteFormController;
 use App\Http\Controllers\Payments\ConvergeCheckoutController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,7 @@ Route::prefix('v1')->group(function () {
     Route::get('legal-services', [CatalogController::class, 'legalServices']);
     Route::get('availability', [ConsultationController::class, 'availability']);
     Route::post('availability/confirm', [ConsultationController::class, 'confirmAvailability']);
+    Route::post('website-forms', [WebsiteFormController::class, 'store'])->middleware('throttle:10,1');
 
     Route::post('consultations/draft', [ConsultationController::class, 'store']);
     Route::get('consultations/{consultation}/reschedule-status', [ConsultationController::class, 'rescheduleStatus']);

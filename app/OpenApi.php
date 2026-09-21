@@ -12,6 +12,7 @@ use OpenApi\Attributes as OA;
 #[OA\Server(url: '/api', description: 'Application API')]
 #[OA\Tag(name: 'Catalog')]
 #[OA\Tag(name: 'Consultations')]
+#[OA\Tag(name: 'Website Forms')]
 #[OA\Tag(name: 'Payments')]
 #[OA\Tag(name: 'Testing', description: 'Non-production endpoints enabled only for integration testing.')]
 #[OA\Schema(
@@ -20,6 +21,19 @@ use OpenApi\Attributes as OA;
         new OA\Property(property: 'success', type: 'boolean', example: true),
         new OA\Property(property: 'message', type: 'string', example: 'OK'),
         new OA\Property(property: 'data', type: 'object', nullable: true),
+    ]
+)]
+#[OA\Schema(
+    schema: 'WebsiteForm',
+    properties: [
+        new OA\Property(property: 'id', type: 'integer', example: 42),
+        new OA\Property(property: 'application', type: 'string', enum: ['socal', 'legal'], example: 'socal'),
+        new OA\Property(property: 'name', type: 'string', example: 'Jordan Smith'),
+        new OA\Property(property: 'email', type: 'string', format: 'email', example: 'jordan@example.com'),
+        new OA\Property(property: 'phone', type: 'string', example: '+1 555 010 0200'),
+        new OA\Property(property: 'message', type: 'string', example: 'I would like more information about mediation.'),
+        new OA\Property(property: 'extra_fields', type: 'object', nullable: true, additionalProperties: new OA\AdditionalProperties),
+        new OA\Property(property: 'submitted_at', type: 'string', format: 'date-time'),
     ]
 )]
 #[OA\Schema(
