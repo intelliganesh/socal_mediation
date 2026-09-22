@@ -42,11 +42,11 @@
         $navItems = [
             ['label' => 'Dashboard', 'icon' => 'layout-dashboard', 'href' => route('admin.dashboard'), 'active' => request()->routeIs('admin.dashboard')],
             ['label' => 'Consultations', 'icon' => 'calendar-days', 'href' => route('admin.consultations.index'), 'active' => request()->routeIs('admin.consultations.*')],
-            ['label' => 'Website Forms', 'icon' => 'inbox', 'href' => route('admin.website-forms.index'), 'active' => request()->routeIs('admin.website-forms.*')],
             ['label' => 'Calendar', 'icon' => 'calendar', 'href' => route('admin.calendar.index'), 'active' => request()->routeIs('admin.calendar.*')],
+            ['label' => 'Website Forms', 'icon' => 'inbox', 'href' => route('admin.website-forms.index'), 'active' => request()->routeIs('admin.website-forms.*')],
             ...($currentUser?->isGlobalAdmin() ? [['label' => 'Users', 'icon' => 'users', 'href' => route('admin.users.index'), 'active' => request()->routeIs('admin.users.*')]] : []),
             ...($currentUser?->isGlobalAdmin() ? [['label' => 'Settings', 'icon' => 'settings', 'href' => route('admin.settings.edit'), 'active' => request()->routeIs('admin.settings.*')]] : []),
-            ['label' => 'API Documentation', 'icon' => 'clipboard-list', 'href' => url('/api/documentation'), 'active' => false, 'external' => true, 'aria' => 'API Documentation'],
+            // ['label' => 'API Documentation', 'icon' => 'clipboard-list', 'href' => url('/api/documentation'), 'active' => false, 'external' => true, 'aria' => 'API Documentation'],
         ];
         $userName = $brand['profileName'] ?: ($currentUser?->name ?: 'John Davis');
         $initials = collect(explode(' ', $userName))->filter()->map(fn ($part) => Str::substr($part, 0, 1))->take(2)->implode('') ?: 'JD';
