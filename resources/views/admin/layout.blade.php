@@ -6,6 +6,16 @@
     <title>{{ $title ?? 'Socal Admin' }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    @php
+        $favicon = match (auth()->user()?->application) {
+            'socal' => 'smc.ico',
+            'legal' => 'sl.ico',
+            default => 'smc_sl.ico',
+        };
+    @endphp
+    <link rel="icon" type="image/x-icon" href="{{ asset('admin-icons/'.$favicon) }}">
+
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])

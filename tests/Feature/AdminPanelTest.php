@@ -28,6 +28,38 @@ class AdminPanelTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_admin_favicon_matches_user_application_access(): void
+    {
+        $this->seed();
+
+        $globalAdmin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $socalAdmin = User::create([
+            'name' => 'SoCal Admin',
+            'email' => 'socal.favicon@example.com',
+            'password' => 'password123',
+            'role' => 'admin',
+            'application' => 'socal',
+        ]);
+        $legalAdmin = User::create([
+            'name' => 'Legal Admin',
+            'email' => 'legal.favicon@example.com',
+            'password' => 'password123',
+            'role' => 'admin',
+            'application' => 'legal',
+        ]);
+
+        foreach ([
+            [$globalAdmin, 'smc_sl.ico'],
+            [$socalAdmin, 'smc.ico'],
+            [$legalAdmin, 'sl.ico'],
+        ] as [$user, $icon]) {
+            $this->actingAs($user)
+                ->get(route('admin.dashboard'))
+                ->assertOk()
+                ->assertSee('href="'.asset('admin-icons/'.$icon).'"', false);
+        }
+    }
+
     public function test_admin_panel_links_to_api_documentation(): void
     {
         $this->seed();
