@@ -50,11 +50,12 @@ class ConvergeClient
 
     private function requestHostedPaymentToken(array $payload): string
     {
+        $url = $this->hostedPaymentTokenEndpoint();
         $response = Http::asForm()
             ->accept('*/*')
             ->connectTimeout(10)
             ->timeout((int) config('services.converge.http_timeout_seconds', 90))
-            ->post($this->hostedPaymentTokenEndpoint(), $payload);
+            ->post($url, $payload);
 
         if ($response->forbidden()) {
             throw new \RuntimeException(
@@ -74,7 +75,7 @@ class ConvergeClient
         $token = trim($response->body());
 
         if ($token === '' || str_starts_with(strtolower($token), 'error')) {
-            \Log::info('Converge Hosted Payment Requeste3e23', [
+            \Log::info('Converge Hosted Payment Request', [
                 'url'    => $url,
                 'status' => $response->status(),
                 'body'   => $response->body(),

@@ -1835,6 +1835,7 @@ class ConsultationApiTest extends TestCase
 
     public function test_enabled_converge_gateway_creates_fresh_hosted_payment_session_on_signed_checkout(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         $this->seed();
         Mail::fake();
         config([
@@ -1895,6 +1896,38 @@ class ConsultationApiTest extends TestCase
         $this->get($tamperedUrl)->assertForbidden();
     }
 
+    public function test_production_converge_gateway_uses_production_hosted_payment_endpoint(): void
+    {
+        $this->seed();
+        config([
+            'services.converge.enabled' => true,
+            'services.converge.mode' => 'production',
+            'services.converge.production_base_url' => 'https://api.convergepay.com',
+            'services.converge.account_id' => 'production-account-id',
+            'services.converge.user_id' => 'production-api-user',
+            'services.converge.pin' => 'production-secret-pin',
+        ]);
+
+        Http::fake([
+            'api.convergepay.com/hosted-payments/transaction_token' => Http::response('production-session-token', 200),
+        ]);
+
+        $payment = Consultation::where('booking_number', 'SAMPLE-03')
+            ->firstOrFail()
+            ->paymentRequests()
+            ->where('status', 'pending')
+            ->firstOrFail();
+
+        $session = app(ConvergeClient::class)->createHostedPaymentSession($payment);
+
+        $this->assertSame('production-session-token', $session['token']);
+        $this->assertSame('https://api.convergepay.com/hosted-payments/', $session['action']);
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.convergepay.com/hosted-payments/transaction_token'
+            && $request['ssl_account_id'] === 'production-account-id'
+            && $request['ssl_user_id'] === 'production-api-user'
+            && $request['ssl_pin'] === 'production-secret-pin');
+    }
+
     public function test_converge_session_creation_error_shows_retry_button(): void
     {
         $this->seed();
@@ -1933,6 +1966,10 @@ class ConsultationApiTest extends TestCase
             ->latest()
             ->firstOrFail();
 
+        $this->assertSame(
+            'Converge hosted payment token request failed: Gateway unavailable',
+            $failureLog->message,
+        );
         $response->assertSee('Support reference:')->assertSee('PAY-'.$failureLog->id);
     }
 
