@@ -66,7 +66,7 @@
         ],
         'online' => [
             'label' => 'Zoom Meeting',
-            'value' => config('app.consultation_contact.location_address.'.($consultation?->application ?? 'socal')),
+            'value' => null,
             'icon' => $iconPath([$iconPrefix.'_link', 'link']),
         ],
         default => null,

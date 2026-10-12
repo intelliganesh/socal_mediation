@@ -847,6 +847,27 @@ class ConsultationApiTest extends TestCase
         $this->assertStringContainsString('admin-icons/video.svg', $html);
     }
 
+    public function test_legal_payment_email_hides_zoom_details_until_a_meeting_link_exists(): void
+    {
+        $this->seed();
+        config(['app.consultation_contact.location_address.legal' => '8562 Florence Ave Ste B, Downey, CA 90240, United States']);
+
+        $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+        $consultation->update([
+            'consultation_mode' => 'online',
+            'zoom_join_url' => null,
+            'payment_status' => 'pending',
+        ]);
+        $paymentRequest = $consultation->paymentRequests()->where('status', 'pending')->firstOrFail();
+        $html = (new ConsultationPaymentLinkMail($paymentRequest->refresh()))->render();
+
+        $this->assertStringContainsString('Video Consultation', $html);
+        $this->assertStringContainsString('Payment Pending', $html);
+        $this->assertStringNotContainsString('Zoom Meeting', $html);
+        $this->assertStringNotContainsString('8562 Florence Ave Ste B', $html);
+        $this->assertStringNotContainsString('Click here to join zoom meeting', $html);
+    }
+
     public function test_legal_email_uses_law_firm_brand_and_type_icon(): void
     {
         $this->seed();
