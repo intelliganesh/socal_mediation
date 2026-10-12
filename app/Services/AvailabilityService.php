@@ -56,6 +56,46 @@ class AvailabilityService
             ->first();
     }
 
+    public function nextAvailableStart(ConsultationType $type, CarbonImmutable $after, ?int $professionalId = null): ?CarbonImmutable
+    {
+        $now = CarbonImmutable::now($after->timezone);
+        $searchEnd = $now->startOfDay()->addMonths(4)->endOfDay();
+
+        if ($after->greaterThanOrEqualTo($searchEnd)) {
+            return null;
+        }
+
+        $searchStart = $after->greaterThan($now) ? $after : $now;
+        $busyIntervals = $this->busyIntervalsForRange($searchStart->startOfDay(), $searchEnd);
+
+        for ($day = $searchStart->startOfDay(); $day->lessThanOrEqualTo($searchEnd); $day = $day->addDay()) {
+            if ($day->isSunday()) {
+                continue;
+            }
+
+            foreach ($this->configuredSlotStarts($type) as $time) {
+                $startsAt = CarbonImmutable::parse($day->toDateString().' '.$time, $day->timezone);
+                $endsAt = $startsAt->addMinutes($type->duration_minutes);
+
+                if ($startsAt->lessThanOrEqualTo($searchStart)
+                    || ! $this->isConfiguredSlot($type, $startsAt, $endsAt)) {
+                    continue;
+                }
+
+                $hasOverlap = collect($busyIntervals)->contains(
+                    fn (array $interval) => $interval['starts_at']->lessThan($endsAt)
+                        && $interval['ends_at']->greaterThan($startsAt)
+                );
+
+                if (! $hasOverlap) {
+                    return $startsAt;
+                }
+            }
+        }
+
+        return null;
+    }
+
     private function daySlots(ConsultationType $type, CarbonImmutable $day, ?int $professionalId): array
     {
         if ($day->isSunday()) {
@@ -158,6 +198,12 @@ class AvailabilityService
     {
         $rangeStart = CarbonImmutable::parse($day->toDateString().' '.config('app.booking_day_start', '09:00'), $day->timezone);
         $rangeEnd = CarbonImmutable::parse($day->toDateString().' '.config('app.booking_day_end', '17:00'), $day->timezone);
+
+        return $this->busyIntervalsForRange($rangeStart, $rangeEnd);
+    }
+
+    private function busyIntervalsForRange(CarbonImmutable $rangeStart, CarbonImmutable $rangeEnd): array
+    {
         $rangeStartDatabase = $this->databaseDateTime($rangeStart);
         $rangeEndDatabase = $this->databaseDateTime($rangeEnd);
 

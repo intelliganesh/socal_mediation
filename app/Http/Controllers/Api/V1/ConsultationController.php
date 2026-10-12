@@ -321,7 +321,7 @@ class ConsultationController extends Controller
                     ])),
             new OA\Response(response: 422, description: 'Invalid input or unavailable interval', content: new OA\JsonContent(properties: [
                         new OA\Property(property: 'success', type: 'boolean', example: false),
-                        new OA\Property(property: 'message', type: 'string', example: 'Another appointment from 10:00 AM to 10:30 AM conflicts with your selected time, 9:00 AM to 1:00 PM. Please choose another start time.'),
+                        new OA\Property(property: 'message', type: 'string', example: 'Another appointment from 10:00 AM to 10:30 AM conflicts with your selected time, 9:00 AM to 1:00 PM. Please choose another start time. The next available start time is Sep 10, 2026 at 12:00 PM.'),
                     ])),
         ]
     )]
@@ -343,8 +343,16 @@ class ConsultationController extends Controller
             $overlap = $exception->getMessage() === 'This time slot is no longer available. Please choose another slot.'
                 ? $availability->earliestOverlap($startsAt, $endsAt)
                 : null;
+            $nextAvailableStart = $availability->nextAvailableStart(
+                $type,
+                $startsAt,
+                $data['professional_id'] ?? null
+            );
 
-            return ApiResponse::error($this->availabilityConflictMessage($startsAt, $endsAt, $overlap), 422);
+            return ApiResponse::error(
+                $this->availabilityConflictMessage($startsAt, $endsAt, $overlap, $nextAvailableStart),
+                422
+            );
         }
 
         return ApiResponse::success([
@@ -353,18 +361,27 @@ class ConsultationController extends Controller
         ], 'Selected time slot is available.');
     }
 
-    private function availabilityConflictMessage(CarbonImmutable $startsAt, CarbonImmutable $endsAt, ?array $overlap): string
+    private function availabilityConflictMessage(
+        CarbonImmutable $startsAt,
+        CarbonImmutable $endsAt,
+        ?array $overlap,
+        ?CarbonImmutable $nextAvailableStart
+    ): string
     {
-        if ($overlap === null) {
-            return 'The selected time cannot accommodate the full consultation duration. Please select an earlier start time.';
+        $message = $overlap === null
+            ? 'The selected start time is not available. Please choose another start time.'
+            : sprintf(
+                'Another appointment from %s to %s conflicts with your selected time, %s to %s. Please choose another start time.',
+                $overlap['starts_at']->format('g:i A'),
+                $overlap['ends_at']->format('g:i A'),
+                $startsAt->format('g:i A'),
+                $endsAt->format('g:i A')
+            );
+
+        if ($nextAvailableStart === null) {
+            return $message;
         }
 
-        return sprintf(
-            'Another appointment from %s to %s conflicts with your selected time, %s to %s. Please choose another start time.',
-            $overlap['starts_at']->format('g:i A'),
-            $overlap['ends_at']->format('g:i A'),
-            $startsAt->format('g:i A'),
-            $endsAt->format('g:i A')
-        );
+        return $message.' The next available start time is '.$nextAvailableStart->format('M d, Y').' at '.$nextAvailableStart->format('g:i A').'.';
     }
 }

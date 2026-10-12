@@ -51,7 +51,7 @@ class AvailabilityConfirmationTest extends TestCase
         $this->postJson('/api/v1/availability/confirm', [
             'consultation_type_id' => $type->id,
             'starts_at' => '2026-09-10T09:00:00+05:30',
-        ])->assertStatus(422)->assertJsonPath('message', 'Another appointment from 10:00 AM to 10:30 AM conflicts with your selected time, 9:00 AM to 1:00 PM. Please choose another start time.');
+        ])->assertStatus(422)->assertJsonPath('message', 'Another appointment from 10:00 AM to 10:30 AM conflicts with your selected time, 9:00 AM to 1:00 PM. Please choose another start time. The next available start time is Sep 10, 2026 at 12:00 PM.');
 
         $count = Consultation::count();
         $this->postJson('/api/v1/availability/confirm', [
@@ -78,12 +78,16 @@ class AvailabilityConfirmationTest extends TestCase
     {
         $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
         foreach (['2026-09-10T14:00:00', '2026-08-31T09:00:00', '2026-09-13T09:00:00', '2026-09-10T09:15:00', '2026-09-10T09:30:01'] as $start) {
-            $this->postJson('/api/v1/availability/confirm', [
+            $response = $this->postJson('/api/v1/availability/confirm', [
                 'consultation_type_id' => $type->id,
                 'starts_at' => $start,
             ])->assertStatus(422)
-                ->assertJsonPath('success', false)
-                ->assertJsonPath('message', 'The selected start time is not available. Please choose another start time.');
+                ->assertJsonPath('success', false);
+
+            $this->assertStringStartsWith(
+                'The selected start time is not available. Please choose another start time. The next available start time is ',
+                $response->json('message')
+            );
         }
 
         $this->postJson('/api/v1/availability/confirm', [
@@ -152,6 +156,25 @@ class AvailabilityConfirmationTest extends TestCase
             'consultation_type_id' => $legal->id,
             'starts_at' => '2026-09-10T09:15:00+05:30',
         ])->assertUnprocessable();
+    }
+
+    public function test_conflict_message_suggests_next_start_using_selected_type_duration_and_interval(): void
+    {
+        $this->busyEvent('09:15', '09:45');
+        $intro = ConsultationType::where('slug', 'socal-free-intro-call')->firstOrFail();
+        $legal = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
+
+        $this->postJson('/api/v1/availability/confirm', [
+            'consultation_type_id' => $intro->id,
+            'starts_at' => '2026-09-10T09:15:00+05:30',
+        ])->assertUnprocessable()
+            ->assertJsonPath('message', 'Another appointment from 9:15 AM to 9:45 AM conflicts with your selected time, 9:15 AM to 9:30 AM. Please choose another start time. The next available start time is Sep 10, 2026 at 9:45 AM.');
+
+        $this->postJson('/api/v1/availability/confirm', [
+            'consultation_type_id' => $legal->id,
+            'starts_at' => '2026-09-10T09:30:00+05:30',
+        ])->assertUnprocessable()
+            ->assertJsonPath('message', 'Another appointment from 9:15 AM to 9:45 AM conflicts with your selected time, 9:30 AM to 10:30 AM. Please choose another start time. The next available start time is Sep 10, 2026 at 10:00 AM.');
     }
 
     private function busyEvent(string $start, string $end): void
