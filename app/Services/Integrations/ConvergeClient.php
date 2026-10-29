@@ -50,7 +50,7 @@ class ConvergeClient
 
     private function requestHostedPaymentToken(array $payload): string
     {
-        $url = $this->hostedPaymentTokenEndpoint();
+        $url      = $this->hostedPaymentTokenEndpoint();
         $response = Http::asForm()
             ->accept('*/*')
             ->connectTimeout(10)
