@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Mail\AdminConsultationRescheduledMail;
 use App\Mail\ConsultationCancellationMail;
 use App\Mail\ConsultationConclusionMail;
+use App\Mail\ConsultationConfirmationMail;
 use App\Mail\ConsultationPaymentLinkMail;
 use App\Mail\ConsultationPaymentReminderMail;
 use App\Mail\ConsultationQuestionnaireMail;
@@ -948,6 +949,106 @@ class AdminPanelTest extends TestCase
             'action' => 'manual_conclusion',
             'status' => 'sent',
         ]);
+    }
+
+    public function test_admin_marking_payment_paid_triggers_the_questionnaire_email_workflow(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+        $payment = $consultation->paymentRequests()->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.statuses', $consultation), [
+                'status' => 'paid',
+                'payment_status' => 'paid',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Consultation statuses updated.');
+
+        $this->assertSame('paid', $payment->refresh()->status);
+        $this->assertNotNull($payment->paid_at);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => PaymentRequest::class,
+            'loggable_id' => $payment->id,
+            'provider' => 'admin',
+            'action' => 'manual_payment_status_update',
+            'status' => 'paid',
+        ]);
+        Mail::assertSent(ConsultationQuestionnaireMail::class, 1);
+        Mail::assertNotSent(ConsultationZoomLinkMail::class);
+    }
+
+    public function test_admin_marking_payment_paid_releases_confirmation_when_forms_are_complete(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+        $participant = $consultation->participants()->firstOrFail();
+        app(QuestionnaireWorkflowService::class)
+            ->ensureSubmission($consultation, $participant)
+            ->update([
+                'status' => 'submitted',
+                'submitted_at' => now(),
+            ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.statuses', $consultation), [
+                'status' => 'scheduled',
+                'payment_status' => 'paid',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Consultation statuses updated.');
+
+        Mail::assertNotSent(ConsultationQuestionnaireMail::class);
+        Mail::assertSent(ConsultationConfirmationMail::class, 1);
+    }
+
+    public function test_admin_changing_consultation_to_paid_triggers_missing_questionnaire_email(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
+        $consultation->update(['payment_status' => 'paid']);
+        $consultation->paymentRequests()->update([
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.statuses', $consultation), [
+                'status' => 'paid',
+                'payment_status' => 'paid',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Consultation statuses updated.');
+
+        Mail::assertSent(ConsultationQuestionnaireMail::class, 1);
+        Mail::assertNotSent(ConsultationZoomLinkMail::class);
+    }
+
+    public function test_admin_saving_unchanged_paid_status_does_not_resend_workflow_emails(): void
+    {
+        $this->seed();
+        Mail::fake();
+
+        $admin = User::where('email', 'admin@socal.test')->firstOrFail();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-07')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('admin.consultations.statuses', $consultation), [
+                'status' => $consultation->status,
+                'payment_status' => $consultation->payment_status,
+            ])
+            ->assertRedirect();
+
+        Mail::assertNothingSent();
     }
 
     public function test_cancelling_from_status_controls_deletes_outlook_event_and_manual_sync_cannot_recreate_it(): void

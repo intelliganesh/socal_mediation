@@ -109,7 +109,7 @@ class PaymentReconciliationService
 
     public function syncPendingPayments(?Consultation $consultation = null, ?PaymentRequest $paymentRequest = null, ?int $limit = null, bool $dryRun = false): array
     {
-        if (! config('services.converge.payment_sync_enabled')) {
+        if (! config('services.converge.payment_sync_enabled') && $paymentRequest === null) {
             return ['checked' => 0, 'paid' => 0, 'failed' => 0, 'skipped' => 0, 'errors' => 0];
         }
 
@@ -297,7 +297,6 @@ class PaymentReconciliationService
             return PaymentRequest::query()
                 ->with('consultation')
                 ->where('provider', 'converge')
-                ->where('status', 'pending')
                 ->whereKey($paymentRequest->id);
         }
 

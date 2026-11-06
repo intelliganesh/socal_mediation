@@ -72,6 +72,22 @@ class QuestionnaireWorkflowService
         return $this->sendQuestionnaireLinks($consultation, $participants, $resendPending, $action);
     }
 
+    public function sendQuestionnairesAfterManualPayment(Consultation $consultation): int
+    {
+        if (! $this->templates->requiresQuestionnaire($consultation)) {
+            return 0;
+        }
+
+        $consultation->loadMissing('participants');
+
+        return $this->sendQuestionnaireLinks(
+            $consultation,
+            $consultation->participants,
+            false,
+            'manual_payment_status_update'
+        );
+    }
+
     public function sendQuestionnaireLinks(
         Consultation $consultation,
         Collection $participants,

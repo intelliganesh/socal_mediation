@@ -2424,9 +2424,9 @@ class ConsultationApiTest extends TestCase
         Http::assertSent(fn ($request) => str_contains((string) $request->body(), '%3Cssl_txn_id%3Ebackground-audit-txn%3C%2Fssl_txn_id%3E'));
 
         $this->artisan('payments:sync-converge', ['--payment-request' => $payment->id])
-            ->expectsOutputToContain('checked 0 payment(s)')
+            ->expectsOutputToContain('checked 1 payment(s): 1 paid, 0 failed, 0 skipped, 0 error(s).')
             ->assertExitCode(0);
-        $this->assertCount(1, Http::recorded()->filter(fn ($entry) => str_contains($entry[0]->url(), 'processxml.do')));
+        $this->assertCount(2, Http::recorded()->filter(fn ($entry) => str_contains($entry[0]->url(), 'processxml.do')));
     }
 
     public function test_converge_cron_marks_a_pending_decline_failed_and_stops_checking(): void
@@ -2463,10 +2463,15 @@ class ConsultationApiTest extends TestCase
         $this->assertNotNull($payment->last_status_check_at);
         $this->assertNotNull($payment->txnquery_response);
 
-        $this->artisan('payments:sync-converge', ['--payment-request' => $payment->id])
+        $this->artisan('payments:sync-converge', ['--consultation' => $payment->consultation_id])
             ->expectsOutputToContain('checked 0 payment(s)')
             ->assertExitCode(0);
-        $this->assertCount(1, Http::recorded()->filter(fn ($entry) => str_contains($entry[0]->url(), 'processxml.do')));
+
+        config(['services.converge.payment_sync_enabled' => false]);
+        $this->artisan('payments:sync-converge', ['--payment-request' => $payment->id])
+            ->expectsOutputToContain('checked 1 payment(s): 0 paid, 1 failed, 0 skipped, 0 error(s).')
+            ->assertExitCode(0);
+        $this->assertCount(2, Http::recorded()->filter(fn ($entry) => str_contains($entry[0]->url(), 'processxml.do')));
     }
 
     public function test_converge_lookup_uses_transaction_id_saved_from_an_earlier_return(): void

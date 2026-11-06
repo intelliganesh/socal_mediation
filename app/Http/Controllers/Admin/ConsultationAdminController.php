@@ -14,6 +14,7 @@ use App\Services\AdminNewConsultationNotificationService;
 use App\Services\AdminPaymentNotificationService;
 use App\Services\AdminZoomNotificationService;
 use App\Services\AvailabilityService;
+use App\Services\BookingFinalizer;
 use App\Services\Integrations\OutlookCalendarClient;
 use App\Services\Integrations\ZoomClient;
 use App\Services\PaymentReconciliationService;
@@ -442,9 +443,10 @@ class ConsultationAdminController extends Controller
         Consultation $consultation,
         OutlookCalendarClient $outlook,
         AdminConclusionNotificationService $conclusions,
-        AdminCancellationNotificationService $cancellations
-    )
-    {
+        AdminCancellationNotificationService $cancellations,
+        BookingFinalizer $finalizer,
+        QuestionnaireWorkflowService $questionnaires
+    ) {
         $this->authorizeConsultation($consultation);
         $data = $request->validate([
             'status' => ['required', 'string', 'in:draft,pending,payment_pending,paid,scheduled,rescheduled,in_progress,completed,cancelled,overdue'],
@@ -453,6 +455,12 @@ class ConsultationAdminController extends Controller
 
         $oldStatus = $consultation->status;
         $oldPaymentStatus = $consultation->payment_status;
+        $paymentBecamePaid = $oldPaymentStatus !== 'paid' && $data['payment_status'] === 'paid';
+        $isTerminalStatus = in_array($data['status'], ['completed', 'cancelled'], true);
+
+        if ($paymentBecamePaid) {
+            $finalizer->markPaidByAdmin($consultation, ! $isTerminalStatus);
+        }
 
         $consultation->update([
             'status' => $data['status'],
@@ -474,6 +482,22 @@ class ConsultationAdminController extends Controller
             ],
             'message' => 'Consultation and payment statuses updated from admin panel.',
         ]);
+
+        $statusBecameReleasable = $oldStatus !== $data['status']
+            && in_array($data['status'], ['paid', 'scheduled'], true);
+
+        if (! $isTerminalStatus
+            && $data['payment_status'] === 'paid'
+            && $statusBecameReleasable
+            && ! $paymentBecamePaid) {
+            $consultation = $consultation->refresh()->load(['participants', 'paymentRequests.participant']);
+            $questionnaires->sendQuestionnairesForPaidParticipants(
+                $consultation,
+                false,
+                'manual_status_update'
+            );
+            $questionnaires->releaseIfComplete($consultation);
+        }
 
         $statusChanged = $oldStatus !== $data['status']
             || $oldPaymentStatus !== $data['payment_status'];
