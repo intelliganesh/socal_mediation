@@ -457,13 +457,33 @@ class ConsultationAdminController extends Controller
         $oldPaymentStatus = $consultation->payment_status;
         $paymentBecamePaid = $oldPaymentStatus !== 'paid' && $data['payment_status'] === 'paid';
         $isTerminalStatus = in_array($data['status'], ['completed', 'cancelled'], true);
+        $shouldNormalizePaidStatus = ! $isTerminalStatus
+            && $data['payment_status'] === 'paid'
+            && in_array($data['status'], ['pending', 'payment_pending'], true);
 
         if ($paymentBecamePaid) {
             $finalizer->markPaidByAdmin($consultation, ! $isTerminalStatus);
+        } elseif ($shouldNormalizePaidStatus) {
+            $consultation = $consultation->refresh()->load(['participants', 'paymentRequests.participant']);
+            $questionnaires->sendQuestionnairesForPaidParticipants(
+                $consultation,
+                false,
+                'manual_status_update'
+            );
+            $questionnaires->releaseIfComplete($consultation);
+        }
+
+        if (($paymentBecamePaid || $shouldNormalizePaidStatus) && ! $isTerminalStatus) {
+            $workflowStatus = $consultation->refresh()->status;
+            $resolvedStatus = in_array($workflowStatus, ['scheduled', 'rescheduled'], true)
+                ? $workflowStatus
+                : 'paid';
+        } else {
+            $resolvedStatus = $data['status'];
         }
 
         $consultation->update([
-            'status' => $data['status'],
+            'status' => $resolvedStatus,
             'payment_status' => $data['payment_status'],
             'confirmed_at' => $data['payment_status'] === 'paid'
                 ? ($consultation->confirmed_at ?: now())
@@ -476,15 +496,15 @@ class ConsultationAdminController extends Controller
             'status' => 'updated',
             'request_payload' => [
                 'old_status' => $oldStatus,
-                'status' => $data['status'],
+                'status' => $resolvedStatus,
                 'old_payment_status' => $oldPaymentStatus,
                 'payment_status' => $data['payment_status'],
             ],
             'message' => 'Consultation and payment statuses updated from admin panel.',
         ]);
 
-        $statusBecameReleasable = $oldStatus !== $data['status']
-            && in_array($data['status'], ['paid', 'scheduled'], true);
+        $statusBecameReleasable = $oldStatus !== $resolvedStatus
+            && in_array($resolvedStatus, ['paid', 'scheduled'], true);
 
         if (! $isTerminalStatus
             && $data['payment_status'] === 'paid'
@@ -499,7 +519,7 @@ class ConsultationAdminController extends Controller
             $questionnaires->releaseIfComplete($consultation);
         }
 
-        $statusChanged = $oldStatus !== $data['status']
+        $statusChanged = $oldStatus !== $resolvedStatus
             || $oldPaymentStatus !== $data['payment_status'];
 
         if ($statusChanged && config('services.outlook.enabled')) {
@@ -517,11 +537,11 @@ class ConsultationAdminController extends Controller
             }
         }
 
-        if ($oldStatus !== 'completed' && $data['status'] === 'completed') {
+        if ($oldStatus !== 'completed' && $resolvedStatus === 'completed') {
             $conclusions->sendConclusion($consultation->refresh());
         }
 
-        if ($oldStatus !== 'cancelled' && $data['status'] === 'cancelled') {
+        if ($oldStatus !== 'cancelled' && $resolvedStatus === 'cancelled') {
             $cancellations->sendCancellation($consultation->refresh());
         }
 

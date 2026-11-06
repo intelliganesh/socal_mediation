@@ -31,7 +31,7 @@ class CompleteConsultationRequest extends FormRequest
             'timezone' => ['nullable', 'timezone:all'],
             'payment_mode' => ['nullable', 'in:full,split'],
             'payment_method' => ['nullable', 'in:card,ach'],
-            'payment_participant_emails' => ['nullable', 'array'],
+            'payment_participant_emails' => ['required_if:payment_mode,split', 'array', 'min:1'],
             'payment_participant_emails.*' => ['email', 'max:160'],
         ];
     }

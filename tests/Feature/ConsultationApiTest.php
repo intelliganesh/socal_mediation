@@ -359,6 +359,7 @@ class ConsultationApiTest extends TestCase
 
     public function test_it_completes_consultation_using_legal_service_name_and_sends_payment_links(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         $this->seed();
         Mail::fake();
         $this->enableConverge();
@@ -375,6 +376,10 @@ class ConsultationApiTest extends TestCase
             'timezone' => 'America/Los_Angeles',
             'payment_mode' => 'split',
             'payment_method' => 'card',
+            'payment_participant_emails' => [
+                'taylor.reed@example.com',
+                'morgan.reed@example.com',
+            ],
             'primary_client' => [
                 'first_name' => 'Taylor',
                 'last_name' => 'Reed',
@@ -705,6 +710,7 @@ class ConsultationApiTest extends TestCase
 
     public function test_split_payment_links_are_sent_only_to_selected_payment_participant_emails(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         $this->seed();
         Mail::fake();
         $this->enableConverge();
@@ -759,6 +765,44 @@ class ConsultationApiTest extends TestCase
         Mail::assertSent(ConsultationPaymentLinkMail::class, fn (ConsultationPaymentLinkMail $mail) => $mail->paymentRequest->participant->email === 'riley.selected@example.com');
         Mail::assertNotSent(ConsultationPaymentLinkMail::class, fn (ConsultationPaymentLinkMail $mail) => $mail->paymentRequest->participant->email === 'taylor.selected@example.com');
         Mail::assertNotSent(ConsultationPaymentLinkMail::class, fn (ConsultationPaymentLinkMail $mail) => $mail->paymentRequest->participant->email === 'jordan.skipped@example.com');
+    }
+
+    public function test_split_payment_requires_an_explicit_payer_list_and_sends_no_emails_when_missing(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
+        $this->seed();
+        Mail::fake();
+        $this->enableConverge();
+        $paymentRequestCount = PaymentRequest::count();
+
+        $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
+        $consultationUuid = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+        ])->json('data.uuid');
+
+        $this->postJson("/api/v1/consultations/{$consultationUuid}/complete", [
+            'legal_service_name' => 'Business, Payment & Contract Disputes',
+            'consultation_mode' => 'online',
+            'starts_at' => '2026-08-05T09:00:00-07:00',
+            'timezone' => 'America/Los_Angeles',
+            'payment_mode' => 'split',
+            'payment_method' => 'card',
+            'primary_client' => [
+                'first_name' => 'Primary',
+                'last_name' => 'Participant',
+                'email' => 'primary.participant@example.com',
+            ],
+            'participants' => [[
+                'first_name' => 'Other',
+                'last_name' => 'Participant',
+                'email' => 'other.participant@example.com',
+            ]],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('payment_participant_emails');
+
+        $this->assertDatabaseCount('payment_requests', $paymentRequestCount);
+        Mail::assertNotSent(ConsultationPaymentLinkMail::class);
     }
 
     public function test_full_payment_link_is_sent_to_primary_client(): void
@@ -917,6 +961,7 @@ class ConsultationApiTest extends TestCase
 
     public function test_it_completes_using_details_already_saved_on_draft(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         $this->seed();
 
         $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
@@ -945,6 +990,10 @@ class ConsultationApiTest extends TestCase
             'timezone' => 'America/Los_Angeles',
             'payment_mode' => 'split',
             'payment_method' => 'card',
+            'payment_participant_emails' => [
+                'miller123@gmail.com',
+                'morgan.miller@example.com',
+            ],
         ])
             ->assertOk()
             ->assertJsonPath('success', true)
@@ -1652,6 +1701,7 @@ class ConsultationApiTest extends TestCase
 
     public function test_simulated_split_payments_finalize_zoom_and_outlook_only_after_last_share(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         $this->seed();
         Mail::fake();
         config([
@@ -1704,6 +1754,10 @@ class ConsultationApiTest extends TestCase
             'timezone' => 'America/Los_Angeles',
             'payment_mode' => 'split',
             'payment_method' => 'card',
+            'payment_participant_emails' => [
+                'simulation.primary@example.com',
+                'simulation.participant@example.com',
+            ],
         ])->assertOk()->json('data');
 
         [$firstPayment, $finalPayment] = $complete['payment_requests'];
@@ -2508,6 +2562,7 @@ class ConsultationApiTest extends TestCase
 
     public function test_final_paid_webhook_sends_zoom_links_and_syncs_outlook_once(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         $this->seed();
         Mail::fake();
         config([
@@ -2555,6 +2610,10 @@ class ConsultationApiTest extends TestCase
             'timezone' => 'America/Los_Angeles',
             'payment_mode' => 'split',
             'payment_method' => 'card',
+            'payment_participant_emails' => [
+                'final.primary@example.com',
+                'final.participant@example.com',
+            ],
             'primary_client' => [
                 'first_name' => 'Final',
                 'last_name' => 'Primary',

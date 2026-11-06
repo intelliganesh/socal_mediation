@@ -962,7 +962,7 @@ class AdminPanelTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('admin.consultations.statuses', $consultation), [
-                'status' => 'paid',
+                'status' => 'payment_pending',
                 'payment_status' => 'paid',
             ])
             ->assertRedirect()
@@ -970,6 +970,8 @@ class AdminPanelTest extends TestCase
 
         $this->assertSame('paid', $payment->refresh()->status);
         $this->assertNotNull($payment->paid_at);
+        $this->assertSame('paid', $consultation->refresh()->status);
+        $this->assertSame('paid', $consultation->payment_status);
         $this->assertDatabaseHas('integration_logs', [
             'loggable_type' => PaymentRequest::class,
             'loggable_id' => $payment->id,
@@ -1008,14 +1010,17 @@ class AdminPanelTest extends TestCase
         Mail::assertSent(ConsultationConfirmationMail::class, 1);
     }
 
-    public function test_admin_changing_consultation_to_paid_triggers_missing_questionnaire_email(): void
+    public function test_admin_resaving_inconsistent_paid_consultation_normalizes_status_and_triggers_missing_email(): void
     {
         $this->seed();
         Mail::fake();
 
         $admin = User::where('email', 'admin@socal.test')->firstOrFail();
         $consultation = Consultation::where('booking_number', 'SAMPLE-08')->firstOrFail();
-        $consultation->update(['payment_status' => 'paid']);
+        $consultation->update([
+            'status' => 'payment_pending',
+            'payment_status' => 'paid',
+        ]);
         $consultation->paymentRequests()->update([
             'status' => 'paid',
             'paid_at' => now(),
@@ -1023,12 +1028,13 @@ class AdminPanelTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('admin.consultations.statuses', $consultation), [
-                'status' => 'paid',
+                'status' => 'payment_pending',
                 'payment_status' => 'paid',
             ])
             ->assertRedirect()
             ->assertSessionHas('status', 'Consultation statuses updated.');
 
+        $this->assertSame('paid', $consultation->refresh()->status);
         Mail::assertSent(ConsultationQuestionnaireMail::class, 1);
         Mail::assertNotSent(ConsultationZoomLinkMail::class);
     }

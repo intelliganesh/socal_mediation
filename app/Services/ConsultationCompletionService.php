@@ -163,7 +163,7 @@ class ConsultationCompletionService
         }
 
         if ($emails === []) {
-            return $consultation->participants->pluck('id')->all();
+            throw new \DomainException('Select at least one participant to make the split payment.');
         }
 
         $normalizedEmails = collect($emails)->map(fn (string $email) => strtolower($email))->all();

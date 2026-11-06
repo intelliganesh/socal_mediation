@@ -103,7 +103,7 @@ class ConsultationController extends Controller
                         property: 'payment_participant_emails',
                         type: 'array',
                         nullable: true,
-                        description: 'For split payments, omit this field to split across all participants, or pass selected participant emails.',
+                        description: 'Required for split payments. Pass only the email addresses of participants selected to pay.',
                         items: new OA\Items(type: 'string', format: 'email'),
                         example: ['client@example.com', 'other@example.com']
                     ),
