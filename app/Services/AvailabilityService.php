@@ -2,14 +2,18 @@
 
 namespace App\Services;
 
+use App\Exceptions\TimeSlotUnavailableException;
 use App\Models\Consultation;
 use App\Models\ConsultationParticipant;
 use App\Models\ConsultationType;
 use App\Models\ExternalCalendarEvent;
+use App\Services\Integrations\OutlookCalendarClient;
 use Carbon\CarbonImmutable;
 
 class AvailabilityService
 {
+    public function __construct(private readonly OutlookCalendarClient $outlook) {}
+
     public function monthAvailability(ConsultationType $type, string $month, ?int $professionalId = null): array
     {
         $timezone = config('app.booking_timezone');
@@ -30,8 +34,14 @@ class AvailabilityService
         return $this->daySlots($type, $day, $professionalId);
     }
 
-    public function assertAvailable(ConsultationType $type, CarbonImmutable $startsAt, ?int $professionalId = null, ?string $ignoreConsultationId = null, ?int $ignoreParticipantId = null): void
-    {
+    public function assertAvailable(
+        ConsultationType $type,
+        CarbonImmutable $startsAt,
+        ?int $professionalId = null,
+        ?string $ignoreConsultationId = null,
+        ?int $ignoreParticipantId = null,
+        bool $checkLiveOutlook = false,
+    ): void {
         $endsAt = $startsAt->addMinutes($type->duration_minutes);
 
         if (! $this->isConfiguredSlot($type, $startsAt, $endsAt)) {
@@ -43,7 +53,15 @@ class AvailabilityService
         }
 
         if ($this->hasOverlap($startsAt, $endsAt, $professionalId, $ignoreConsultationId, $ignoreParticipantId)) {
-            throw new \DomainException('This time slot is no longer available. Please choose another slot.');
+            throw new TimeSlotUnavailableException($this->earliestOverlap($startsAt, $endsAt));
+        }
+
+        if ($checkLiveOutlook) {
+            $outlookOverlap = $this->outlook->firstBusyOverlap($startsAt, $endsAt, $ignoreConsultationId);
+
+            if ($outlookOverlap !== null) {
+                throw new TimeSlotUnavailableException($outlookOverlap, true);
+            }
         }
     }
 

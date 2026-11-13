@@ -177,6 +177,59 @@ class AvailabilityConfirmationTest extends TestCase
             ->assertJsonPath('message', 'Another appointment from 9:15 AM to 9:45 AM conflicts with your selected time, 9:30 AM to 10:30 AM. Please choose another start time. The next available start time is Sep 10, 2026 at 10:00 AM.');
     }
 
+    public function test_confirmation_checks_the_selected_interval_live_in_outlook(): void
+    {
+        $this->enableOutlook();
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response([
+                'access_token' => 'graph-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/calendarView*' => Http::response([
+                'value' => [[
+                    'id' => 'new-client-event',
+                    'subject' => 'Client offline appointment',
+                    'showAs' => 'busy',
+                    'start' => ['dateTime' => '2026-09-10T12:45:00', 'timeZone' => 'Asia/Kolkata'],
+                    'end' => ['dateTime' => '2026-09-10T13:15:00', 'timeZone' => 'Asia/Kolkata'],
+                ]],
+            ]),
+        ]);
+        $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
+
+        $this->postJson('/api/v1/availability/confirm', [
+            'consultation_type_id' => $type->id,
+            'starts_at' => '2026-09-10T12:30:00+05:30',
+        ])->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'Another appointment from 12:45 PM to 1:15 PM conflicts with your selected time, 12:30 PM to 1:30 PM. Please choose another start time.'
+            );
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/calendarView')
+            && str_contains($request->url(), 'startDateTime=2026-09-10T12%3A30%3A00%2B05%3A30')
+            && str_contains($request->url(), 'endDateTime=2026-09-10T13%3A30%3A00%2B05%3A30'));
+    }
+
+    public function test_confirmation_fails_closed_when_live_outlook_cannot_be_checked(): void
+    {
+        $this->enableOutlook();
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response([
+                'access_token' => 'graph-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/calendarView*' => Http::response('Unavailable', 503),
+        ]);
+        $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
+
+        $this->postJson('/api/v1/availability/confirm', [
+            'consultation_type_id' => $type->id,
+            'starts_at' => '2026-09-10T12:30:00+05:30',
+        ])->assertStatus(503)
+            ->assertJsonPath('message', 'Calendar availability could not be verified. Please try again.');
+    }
+
     private function busyEvent(string $start, string $end): void
     {
         ExternalCalendarEvent::create([
@@ -187,6 +240,20 @@ class AvailabilityConfirmationTest extends TestCase
             'starts_at' => '2026-09-10 '.$start.':00',
             'ends_at' => '2026-09-10 '.$end.':00',
             'is_busy' => true,
+        ]);
+    }
+
+    private function enableOutlook(): void
+    {
+        config([
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.user_id' => 'shared@example.com',
+            'services.outlook.calendar_id' => 'shared-calendar',
         ]);
     }
 }

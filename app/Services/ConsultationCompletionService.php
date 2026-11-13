@@ -3,8 +3,11 @@
 namespace App\Services;
 
 use App\Exceptions\ConsultationAlreadyCompletedException;
+use App\Exceptions\OutlookAvailabilityUnavailableException;
 use App\Models\Consultation;
 use App\Services\Integrations\OutlookCalendarClient;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class ConsultationCompletionService
@@ -23,7 +26,48 @@ class ConsultationCompletionService
 
     public function complete(Consultation $consultation, array $data): Consultation
     {
-        $consultation = DB::transaction(function () use ($consultation, $data) {
+        [$requestedStartsAt] = $this->bookingDateTimes->startsAtFromRequest($data['starts_at']);
+        $lockKey = 'consultation-booking:'.$requestedStartsAt->format('Y-m-d');
+
+        try {
+            $consultation = Cache::lock($lockKey, 20)->block(
+                5,
+                fn () => $this->completeWithBookingLock($consultation, $data)
+            );
+        } catch (LockTimeoutException $exception) {
+            throw new \DomainException('This booking time is currently being checked. Please try again.', previous: $exception);
+        } catch (OutlookAvailabilityUnavailableException $exception) {
+            $consultation->integrationLogs()->create([
+                'provider' => 'outlook',
+                'action' => 'automatic_booking_hold',
+                'status' => 'failed',
+                'message' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        }
+
+        $freeIntroHandled = $this->freeIntroCalls->afterCompletion($consultation);
+
+        if (! $freeIntroHandled && $this->simulation->isActive()) {
+            $consultation->integrationLogs()->create([
+                'provider' => 'simulation',
+                'action' => 'automatic_payment_link',
+                'status' => 'skipped',
+                'message' => 'Payment-link email skipped because payment simulation is enabled.',
+            ]);
+        } elseif (! $freeIntroHandled) {
+            $this->notifications->sendPaymentLinks($consultation, 'automatic_payment_link');
+        }
+
+        $this->newRequestNotifications->sendForNewRequest($consultation);
+
+        return $consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests']);
+    }
+
+    private function completeWithBookingLock(Consultation $consultation, array $data): Consultation
+    {
+        return DB::transaction(function () use ($consultation, $data) {
             $consultation = Consultation::query()
                 ->lockForUpdate()
                 ->findOrFail($consultation->id);
@@ -40,7 +84,12 @@ class ConsultationCompletionService
             $type = $consultation->type;
             $professionalId = $data['professional_id'] ?? $consultation->professional_id;
 
-            $this->availability->assertAvailable($type, $startsAt, $professionalId);
+            $this->availability->assertAvailable(
+                $type,
+                $startsAt,
+                $professionalId,
+                checkLiveOutlook: true,
+            );
 
             $consultation->update([
                 'professional_id' => $professionalId,
@@ -61,62 +110,34 @@ class ConsultationCompletionService
                 $data['payment_participant_emails'] ?? []
             );
 
-            return $this->payments->createRequests(
+            $completedConsultation = $this->payments->createRequests(
                 $consultation,
                 $paymentMode,
                 $participantIds,
                 $data['payment_method'] ?? null
             )->load(['type', 'professional', 'participants', 'paymentRequests']);
+
+            if ($type->slug !== 'socal-free-intro-call' && config('services.outlook.enabled')) {
+                $this->createOutlookHold($completedConsultation);
+            }
+
+            return $completedConsultation;
         });
-
-        $freeIntroHandled = $this->freeIntroCalls->afterCompletion($consultation);
-
-        if (! $freeIntroHandled && $this->simulation->isActive()) {
-            $consultation->integrationLogs()->create([
-                'provider' => 'simulation',
-                'action' => 'automatic_payment_link',
-                'status' => 'skipped',
-                'message' => 'Payment-link email skipped because payment simulation is enabled.',
-            ]);
-        } elseif (! $freeIntroHandled) {
-            $this->notifications->sendPaymentLinks($consultation, 'automatic_payment_link');
-        }
-
-        if (! $freeIntroHandled) {
-            $this->syncToOutlook($consultation);
-        }
-
-        $this->newRequestNotifications->sendForNewRequest($consultation);
-
-        return $consultation->refresh()->load(['type', 'professional', 'participants', 'paymentRequests']);
     }
 
-    private function syncToOutlook(Consultation $consultation): void
+    private function createOutlookHold(Consultation $consultation): void
     {
-        if (! config('services.outlook.enabled')) {
-            return;
-        }
+        $syncedConsultation = $consultation->refresh()->load(['type', 'professional']);
+        $outlookEvent = $this->outlook->syncBookingHold($syncedConsultation);
 
-        try {
-            $syncedConsultation = $consultation->refresh()->load(['type', 'professional']);
-            $outlookEvent = $this->outlook->syncConsultation($syncedConsultation, 'automatic_completion_sync');
-
-            $consultation->integrationLogs()->create([
-                'provider' => 'outlook',
-                'action' => 'automatic_completion_sync',
-                'status' => 'synced',
-                'request_payload' => $this->outlook->consultationEventPayload($syncedConsultation),
-                'response_payload' => $outlookEvent?->metadata['outlook_response'] ?? $outlookEvent?->metadata,
-                'message' => 'Booking synced to both Outlook calendars after consultation completion.',
-            ]);
-        } catch (\Throwable $exception) {
-            $consultation->integrationLogs()->create([
-                'provider' => 'outlook',
-                'action' => 'automatic_completion_sync',
-                'status' => 'failed',
-                'message' => $exception->getMessage(),
-            ]);
-        }
+        $consultation->integrationLogs()->create([
+            'provider' => 'outlook',
+            'action' => 'automatic_booking_hold',
+            'status' => 'synced',
+            'request_payload' => $this->outlook->consultationEventPayload($syncedConsultation, true),
+            'response_payload' => $outlookEvent->metadata['outlook_response'] ?? $outlookEvent->metadata,
+            'message' => 'Busy Outlook hold created while the consultation awaits completion.',
+        ]);
     }
 
     private function mergeDraftDetails(Consultation $consultation, array $data): array

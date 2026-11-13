@@ -34,7 +34,8 @@ class MicrosoftGraphTokenProvider
             try {
                 $response = Http::asForm()
                     ->acceptJson()
-                    ->timeout(30)
+                    ->connectTimeout((int) config('services.outlook.live_connect_timeout_seconds', 2))
+                    ->timeout((int) config('services.outlook.live_timeout_seconds', 5))
                     ->post($this->tokenUrl(), [
                         'client_id' => config('services.outlook.client_id'),
                         'client_secret' => config('services.outlook.client_secret'),

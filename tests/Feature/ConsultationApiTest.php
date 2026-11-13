@@ -19,6 +19,7 @@ use App\Services\BookingDateTimeService;
 use App\Services\Integrations\ConvergeClient;
 use App\Services\QuestionnaireWorkflowService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -221,6 +222,9 @@ class ConsultationApiTest extends TestCase
 
         Http::fake([
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token']),
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/calendarView*' => Http::response([
+                'value' => [],
+            ]),
             'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events' => Http::response([
                 'id' => 'completion-shared-event-id',
                 'webLink' => 'https://outlook.office.com/completion-shared-event',
@@ -245,18 +249,129 @@ class ConsultationApiTest extends TestCase
             'payment_method' => 'card',
         ])->assertOk();
 
-        $this->assertDatabaseMissing('external_calendar_events', [
+        $this->assertDatabaseHas('external_calendar_events', [
             'provider' => 'outlook',
             'external_id' => 'consultation-'.$consultationId,
+            'title' => '[HOLD] '.Consultation::findOrFail($consultationId)->booking_number.' - '.$type->name,
+            'is_busy' => true,
         ]);
+        $this->assertTrue((bool) ExternalCalendarEvent::where('external_id', 'consultation-'.$consultationId)->firstOrFail()->metadata['is_hold']);
 
         $this->assertDatabaseHas('integration_logs', [
             'loggable_type' => Consultation::class,
             'loggable_id' => $consultationId,
             'provider' => 'outlook',
-            'action' => 'automatic_completion_sync',
+            'action' => 'automatic_booking_hold',
             'status' => 'synced',
         ]);
+    }
+
+    public function test_completion_rechecks_live_outlook_and_preserves_the_draft_on_conflict(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config([
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.user_id' => 'shared@example.com',
+            'services.outlook.calendar_id' => 'shared-calendar',
+        ]);
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response([
+                'access_token' => 'graph-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/calendarView*' => Http::response([
+                'value' => [[
+                    'id' => 'last-minute-client-event',
+                    'showAs' => 'busy',
+                    'start' => ['dateTime' => '2026-12-15T12:45:00', 'timeZone' => 'America/Los_Angeles'],
+                    'end' => ['dateTime' => '2026-12-15T13:15:00', 'timeZone' => 'America/Los_Angeles'],
+                ]],
+            ]),
+        ]);
+        $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
+        $consultationId = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'phone',
+            'primary_client' => [
+                'first_name' => 'Live',
+                'last_name' => 'Conflict',
+                'email' => 'live.conflict@example.com',
+            ],
+        ])->assertCreated()->json('data.uuid');
+
+        $this->postJson('/api/v1/consultations/'.$consultationId.'/complete', [
+            'starts_at' => '2026-12-15T12:30:00-08:00',
+            'timezone' => 'America/Los_Angeles',
+            'payment_mode' => 'full',
+            'payment_method' => 'card',
+        ])->assertUnprocessable();
+
+        $consultation = Consultation::findOrFail($consultationId);
+        $this->assertSame('draft', $consultation->status);
+        $this->assertNull($consultation->starts_at);
+        $this->assertSame(0, $consultation->paymentRequests()->count());
+        $this->assertDatabaseMissing('external_calendar_events', ['external_id' => 'consultation-'.$consultationId]);
+        Mail::assertNothingSent();
+    }
+
+    public function test_completion_fails_closed_and_preserves_the_draft_when_outlook_is_unavailable(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config([
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.user_id' => 'shared@example.com',
+            'services.outlook.calendar_id' => 'shared-calendar',
+        ]);
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response([
+                'access_token' => 'graph-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/calendarView*' => Http::response('Unavailable', 503),
+        ]);
+        $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
+        $consultationId = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'phone',
+            'primary_client' => [
+                'first_name' => 'Graph',
+                'last_name' => 'Unavailable',
+                'email' => 'graph.unavailable@example.com',
+            ],
+        ])->assertCreated()->json('data.uuid');
+
+        $this->postJson('/api/v1/consultations/'.$consultationId.'/complete', [
+            'starts_at' => '2026-12-15T14:00:00+05:30',
+            'timezone' => 'Asia/Kolkata',
+            'payment_mode' => 'full',
+            'payment_method' => 'card',
+        ])->assertStatus(503)
+            ->assertJsonPath('message', 'Calendar availability could not be verified. Please try again.');
+
+        $consultation = Consultation::findOrFail($consultationId);
+        $this->assertSame('draft', $consultation->status);
+        $this->assertNull($consultation->starts_at);
+        $this->assertSame(0, $consultation->paymentRequests()->count());
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultationId,
+            'provider' => 'outlook',
+            'action' => 'automatic_booking_hold',
+            'status' => 'failed',
+        ]);
+        Mail::assertNothingSent();
     }
 
     public function test_it_saves_details_form_fields_on_draft_without_completing_it(): void
@@ -1736,6 +1851,9 @@ class ConsultationApiTest extends TestCase
 
         Http::fake([
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/calendarView*' => Http::response([
+                'value' => [],
+            ]),
             'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events' => Http::response([
                 'id' => 'simulated-payment-shared-event-id',
                 'webLink' => 'https://outlook.office.com/simulated-payment-shared-event',
@@ -1774,6 +1892,11 @@ class ConsultationApiTest extends TestCase
                 'simulation.participant@example.com',
             ],
         ])->assertOk()->json('data');
+
+        Http::assertNotSent(fn ($request) => str_contains(
+            $request->url(),
+            '/VirtualMerchantDemo/processxml.do'
+        ));
 
         [$firstPayment, $finalPayment] = $complete['payment_requests'];
 
@@ -1832,6 +1955,7 @@ class ConsultationApiTest extends TestCase
             'external_id' => 'consultation-'.$consultationUuid,
             'application' => 'socal',
             'is_busy' => true,
+            'metadata->is_hold' => false,
         ]);
 
         $this->postJson('/api/v1/testing/payments/'.$finalPayment['id'].'/complete', [], $headers)
@@ -2312,7 +2436,7 @@ class ConsultationApiTest extends TestCase
         try {
             $second->update(['transaction_id' => 'database-unique-transaction']);
             $this->fail('The provider and transaction ID uniqueness constraint was not enforced.');
-        } catch (\Illuminate\Database\QueryException) {
+        } catch (QueryException) {
             $this->assertSame('database-unique-transaction', $first->fresh()->transaction_id);
             $this->assertNull($second->fresh()->transaction_id);
         }
@@ -2831,6 +2955,9 @@ class ConsultationApiTest extends TestCase
                 );
             },
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/calendarView*' => Http::response([
+                'value' => [],
+            ]),
             'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events' => Http::response([
                 'id' => 'automatic-paid-shared-outlook-event-id',
                 'webLink' => 'https://outlook.office.com/automatic-paid-shared-event',

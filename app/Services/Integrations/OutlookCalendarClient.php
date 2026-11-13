@@ -2,6 +2,7 @@
 
 namespace App\Services\Integrations;
 
+use App\Exceptions\OutlookAvailabilityUnavailableException;
 use App\Models\Consultation;
 use App\Models\ConsultationParticipant;
 use App\Models\ExternalCalendarEvent;
@@ -9,6 +10,7 @@ use App\Models\QuestionnaireSubmission;
 use App\Services\QuestionnaireTemplateService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -58,6 +60,46 @@ class OutlookCalendarClient
         [$start, $end] = $this->rollingSyncWindow();
 
         return $this->syncWindow($start, $end);
+    }
+
+    public function firstBusyOverlap(
+        CarbonImmutable $startsAt,
+        CarbonImmutable $endsAt,
+        ?string $ignoreConsultationId = null,
+    ): ?array {
+        if (! config('services.outlook.enabled')) {
+            return null;
+        }
+
+        try {
+            $overlaps = collect($this->calendarView($startsAt, $endsAt))
+                ->reject(fn (array $event) => ($event['isCancelled'] ?? false)
+                    || ($event['showAs'] ?? 'busy') === 'free'
+                    || ($ignoreConsultationId !== null
+                        && $this->consultationIdFromOutlookEvent($event) === $ignoreConsultationId))
+                ->map(function (array $event) {
+                    return [
+                        'starts_at' => $this->graphDateTime(
+                            data_get($event, 'start.dateTime'),
+                            data_get($event, 'start.timeZone')
+                        ),
+                        'ends_at' => $this->graphDateTime(
+                            data_get($event, 'end.dateTime'),
+                            data_get($event, 'end.timeZone')
+                        ),
+                    ];
+                })
+                ->filter(fn (array $interval) => $interval['starts_at']->lessThan($endsAt)
+                    && $interval['ends_at']->greaterThan($startsAt))
+                ->sortBy(fn (array $interval) => $interval['starts_at']->timestamp)
+                ->values();
+
+            return $overlaps->first();
+        } catch (OutlookAvailabilityUnavailableException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            throw new OutlookAvailabilityUnavailableException($exception);
+        }
     }
 
     public function syncFutureConsultations(?CarbonImmutable $from = null, ?CarbonImmutable $until = null): array
@@ -163,7 +205,9 @@ class OutlookCalendarClient
                 ?? ($trackedEvent?->metadata['participant_id'] ?? null);
 
             if ($consultationId !== null) {
-                $stillExists = $this->consultationStillExists($consultationId);
+                $stillExists = ($trackedEvent?->metadata['is_hold'] ?? false)
+                    ? $this->bookingHoldStillExists($consultationId)
+                    : $this->consultationStillExists($consultationId);
 
                 if (! $stillExists) {
                     $this->deleteEvent('shared', $event['id']);
@@ -259,6 +303,22 @@ class OutlookCalendarClient
             return $this->syncConsultationToCalendar($consultation, $source);
         } catch (\Throwable $exception) {
             throw new \RuntimeException('Outlook consultation sync failed: '.$exception->getMessage(), previous: $exception);
+        }
+    }
+
+    public function syncBookingHold(Consultation $consultation, string $source = 'automatic_booking_hold'): ExternalCalendarEvent
+    {
+        $this->assertEnabled();
+        $consultation->loadMissing(['type', 'professional']);
+
+        if ($consultation->starts_at === null || $consultation->ends_at === null) {
+            throw new \DomainException('Consultation must have a selected time before creating an Outlook hold.');
+        }
+
+        try {
+            return $this->syncConsultationToCalendar($consultation, $source, true);
+        } catch (\Throwable $exception) {
+            throw new OutlookAvailabilityUnavailableException($exception);
         }
     }
 
@@ -387,9 +447,9 @@ class OutlookCalendarClient
         }
     }
 
-    private function syncConsultationToCalendar(Consultation $consultation, string $source): ExternalCalendarEvent
+    private function syncConsultationToCalendar(Consultation $consultation, string $source, bool $isHold = false): ExternalCalendarEvent
     {
-        $payload = $this->consultationEventPayload($consultation);
+        $payload = $this->consultationEventPayload($consultation, $isHold);
         $externalId = $this->trackedConsultationExternalId($consultation);
         $existing = ExternalCalendarEvent::query()
             ->where('provider', 'outlook')
@@ -440,6 +500,7 @@ class OutlookCalendarClient
                 'outlook_web_link' => $event['webLink'] ?? null,
                 'outlook_response' => $this->eventResponsePayload($event),
                 'source' => $source,
+                'is_hold' => $isHold,
                 'synced_at' => now()->toIso8601String(),
             ],
         ]);
@@ -526,8 +587,7 @@ class OutlookCalendarClient
         $nextUrl = $this->calendarViewUrl($calendarUrl.'/calendarView', $windowQuery + ['$top' => 100]);
 
         do {
-            $response = Http::withToken($this->tokenProvider->accessToken())
-                ->acceptJson()
+            $response = $this->graphRequest()
                 ->get($nextUrl);
 
             if ($response->failed()) {
@@ -562,12 +622,19 @@ class OutlookCalendarClient
         return $scheme.$host.$port.$path.'?'.http_build_query($existingQuery, '', '&', PHP_QUERY_RFC3986).$fragment;
     }
 
+    private function graphRequest(): PendingRequest
+    {
+        return Http::withToken($this->tokenProvider->accessToken())
+            ->acceptJson()
+            ->connectTimeout((int) config('services.outlook.live_connect_timeout_seconds', 2))
+            ->timeout((int) config('services.outlook.live_timeout_seconds', 5));
+    }
+
     private function createEvent(array $payload): array
     {
         $calendarUrl = $this->calendarUrl();
 
-        $response = Http::withToken($this->tokenProvider->accessToken())
-            ->acceptJson()
+        $response = $this->graphRequest()
             ->post($calendarUrl.'/events', $payload);
 
         if ($response->failed()) {
@@ -581,8 +648,7 @@ class OutlookCalendarClient
     {
         $calendarUrl = $this->calendarUrl();
 
-        $response = Http::withToken($this->tokenProvider->accessToken())
-            ->acceptJson()
+        $response = $this->graphRequest()
             ->patch($calendarUrl.'/events/'.$eventId, $payload);
 
         if ($response->failed()) {
@@ -592,14 +658,14 @@ class OutlookCalendarClient
         return $response->json();
     }
 
-    public function consultationEventPayload(Consultation $consultation): array
+    public function consultationEventPayload(Consultation $consultation, bool $isHold = false): array
     {
         $timezone = $consultation->timezone ?: config('app.booking_timezone');
         $body = trim(($consultation->description ?: 'Consultation booking').' '.$consultation->primary_email);
         $outlookTimezone = $this->outlookTimezone($timezone);
 
         return [
-            'subject' => $consultation->booking_number.' - '.$consultation->type->name,
+            'subject' => ($isHold ? '[HOLD] ' : '').$consultation->booking_number.' - '.$consultation->type->name,
             'body' => [
                 'contentType' => 'Text',
                 'content' => $body,
@@ -685,7 +751,23 @@ class OutlookCalendarClient
         $consultationId = $event->metadata['consultation_uuid']
             ?? $this->consultationIdFromTrackedExternalId((string) $event->external_id);
 
-        return $this->consultationStillExists($consultationId);
+        return ($event->metadata['is_hold'] ?? false)
+            ? $this->bookingHoldStillExists($consultationId)
+            : $this->consultationStillExists($consultationId);
+    }
+
+    private function bookingHoldStillExists(?string $consultationId): bool
+    {
+        if (blank($consultationId)) {
+            return false;
+        }
+
+        return Consultation::query()
+            ->whereKey($consultationId)
+            ->whereNotNull('starts_at')
+            ->whereNotNull('ends_at')
+            ->whereIn('status', ['payment_pending', 'paid', 'scheduled', 'rescheduled'])
+            ->exists();
     }
 
     private function consultationStillExists(?string $consultationId): bool
@@ -875,5 +957,4 @@ class OutlookCalendarClient
             throw new \DomainException('Outlook sync is disabled.');
         }
     }
-
 }
