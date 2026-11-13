@@ -17,7 +17,7 @@
             <div class="text-center">
                 <img class="mx-auto h-24 w-full rounded-2xl object-contain" src="{{ asset('admin-icons/logo.png') }}" alt="SoCal Mediation">
                 {{-- <h1 class="mt-7 text-xl font-bold tracking-tight text-[#111827] sm:text-2xl">SoCal Mediation Admin</h1> --}}
-                <p class="mt-3 text-md font-semibold text-gray-500">Sign in to manage consultations.<br>admin@socal.test/password</p>
+                {{-- <p class="mt-3 text-md font-semibold text-gray-500">Sign in to manage consultations.<br>admin@socal.test/password</p> --}}
             </div>
 
             <div class="mt-10 space-y-7">
