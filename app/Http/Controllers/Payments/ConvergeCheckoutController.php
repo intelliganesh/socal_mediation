@@ -70,7 +70,7 @@ class ConvergeCheckoutController extends Controller
         path: '/v1/payments/converge/return',
         tags: ['Payments'],
         summary: 'Receive the Hosted Payment Page browser return',
-        description: 'Configure this URL in the Converge Hosted Payment Page profile. The callback is stored and processed immediately, then the browser is redirected without waiting for XML transaction verification.',
+        description: 'Configure this URL in the Converge Hosted Payment Page profile. The callback is recorded as untrusted, verified immediately through Converge XML transaction lookup, and redirected to pending if verification is unavailable or delayed.',
         requestBody: new OA\RequestBody(required: true, content: new OA\MediaType(
             mediaType: 'application/x-www-form-urlencoded',
             schema: new OA\Schema(properties: [
@@ -84,8 +84,7 @@ class ConvergeCheckoutController extends Controller
         )),
         responses: [
             new OA\Response(response: 302, description: 'Redirect to the signed payment status page'),
-            new OA\Response(response: 404, description: 'Payment request not found'),
-            new OA\Response(response: 422, description: 'Payment reference missing'),
+            new OA\Response(response: 422, description: 'Payment reference is missing or invalid'),
         ]
     )]
     public function return(Request $request, PaymentReconciliationService $payments): RedirectResponse
@@ -174,38 +173,21 @@ class ConvergeCheckoutController extends Controller
             ?? $request->input('payment_request_id')
             ?? $request->input('payment_request_uuid');
 
-        if (filled($paymentId)) {
-            return PaymentRequest::with(['consultation.type', 'participant'])
-                ->whereKey($paymentId)
-                ->orWhere('provider_reference', $paymentId)
-                ->orWhere('transaction_id', $paymentId)
-                ->orWhere('metadata->invoice_number', $paymentId)
-                ->firstOrFail();
-        }
+        abort_if(! is_scalar($paymentId) || blank(trim((string) $paymentId)), 422, 'Payment reference is required.');
+        $paymentId = trim((string) $paymentId);
 
-        $bookingNumber = $request->input('ssl_customer_code');
-        $email = strtolower(trim((string) $request->input('ssl_email')));
-        $amount = $request->input('ssl_amount');
-
-        abort_if(blank($bookingNumber) || $email === '' || ! is_numeric($amount), 422, 'Payment reference is required.');
-
-        $amountCents = (int) round((float) $amount * 100);
-        $matches = PaymentRequest::query()
+        $payment = PaymentRequest::query()
             ->with(['consultation.type', 'participant'])
             ->where('provider', 'converge')
-            ->where('amount_cents', $amountCents)
-            ->whereHas('consultation', fn ($query) => $query->where('booking_number', $bookingNumber))
-            ->get()
-            ->filter(function (PaymentRequest $payment) use ($email) {
-                $participantEmail = $payment->participant?->email
-                    ?? data_get($payment->metadata, 'participant_email');
-
-                return strtolower(trim((string) $participantEmail)) === $email;
+            ->where(function ($query) use ($paymentId) {
+                $query->whereKey($paymentId)
+                    ->orWhere('provider_reference', $paymentId)
+                    ->orWhere('metadata->invoice_number', $paymentId);
             })
-            ->values();
+            ->first();
 
-        abort_if($matches->count() !== 1, 422, 'Payment reference is missing or ambiguous.');
+        abort_if($payment === null, 422, 'Payment reference is invalid.');
 
-        return $matches->first();
+        return $payment;
     }
 }

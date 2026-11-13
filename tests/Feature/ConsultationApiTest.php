@@ -1013,12 +1013,19 @@ class ConsultationApiTest extends TestCase
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
             'services.converge.return_url' => 'http://localhost/api/v1/payments/converge/return',
+            'services.converge.payment_sync_enabled' => false,
         ]);
+        $consultationUuid = null;
         Http::fake([
-            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
-                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>verified-zoom-txn</ssl_txn_id></txn>',
-                200
-            ),
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => function () use (&$consultationUuid) {
+                $payment = PaymentRequest::where('consultation_id', $consultationUuid)->firstOrFail();
+                $amount = number_format($payment->amount_cents / 100, 2, '.', '');
+
+                return Http::response(
+                    '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>verified-zoom-txn</ssl_txn_id><ssl_approval_code>916299</ssl_approval_code><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$payment->provider_reference.'</ssl_invoice_number></txn>',
+                    200
+                );
+            },
         ]);
 
         $type = ConsultationType::where('slug', 'socal-half-day-mediation')->firstOrFail();
@@ -1069,6 +1076,7 @@ class ConsultationApiTest extends TestCase
 
     public function test_converge_confirmation_marks_full_payment_paid_and_finalizes_consultation(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         $this->seed();
         Mail::fake();
         config([
@@ -1078,6 +1086,7 @@ class ConsultationApiTest extends TestCase
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
             'services.converge.return_url' => 'http://localhost/api/v1/payments/converge/return',
+            'services.converge.payment_sync_enabled' => false,
             'services.zoom.enabled' => true,
             'services.zoom.oauth_base_url' => 'https://zoom.test',
             'services.zoom.base_url' => 'https://api.zoom.test/v2',
@@ -1086,11 +1095,17 @@ class ConsultationApiTest extends TestCase
             'services.zoom.client_secret' => 'client-secret',
             'app.payment_redirect_urls.socal' => 'https://socal.example.test',
         ]);
+        $consultationUuid = null;
         Http::fake([
-            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
-                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>converge-txn-100</ssl_txn_id><ssl_approval_code>916299</ssl_approval_code></txn>',
-                200
-            ),
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => function () use (&$consultationUuid) {
+                $payment = PaymentRequest::where('consultation_id', $consultationUuid)->firstOrFail();
+                $amount = number_format($payment->amount_cents / 100, 2, '.', '');
+
+                return Http::response(
+                    '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>converge-txn-100</ssl_txn_id><ssl_approval_code>916299</ssl_approval_code><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$payment->provider_reference.'</ssl_invoice_number></txn>',
+                    200
+                );
+            },
             'zoom.test/oauth/token' => Http::response(['access_token' => 'zoom-token'], 200),
             'api.zoom.test/v2/users/me/meetings' => Http::response([
                 'id' => 'questionnaire-zoom-meeting',
@@ -2095,8 +2110,217 @@ class ConsultationApiTest extends TestCase
         $this->assertSame('[FILTERED]', $log->request_payload['ssl_card_number']);
     }
 
+    public function test_forged_browser_return_cannot_mark_payment_paid(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config([
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.account_id' => 'account-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
+                '<txn><ssl_txn_count>0</ssl_txn_count></txn>',
+                200
+            ),
+        ]);
+
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+        $response = $this->post(route('payments.converge.return.payment', ['paymentRequest' => $payment]), [
+            'ssl_result' => '0',
+            'ssl_result_message' => 'APPROVAL',
+            'ssl_txn_id' => 'forged-browser-transaction',
+        ]);
+
+        $response->assertRedirect();
+        $this->assertStringContainsString('/status/pending', $response->headers->get('Location'));
+        $this->assertSame('pending', $payment->fresh()->status);
+        $this->assertNull($payment->transaction_id);
+        Mail::assertNotSent(ConsultationQuestionnaireMail::class);
+        Mail::assertNotSent(ConsultationZoomLinkMail::class);
+    }
+
+    public function test_browser_return_cannot_resolve_payment_from_booking_email_and_amount(): void
+    {
+        $this->seed();
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+
+        $this->post(route('payments.converge.return.web'), [
+            'ssl_customer_code' => $payment->consultation->booking_number,
+            'ssl_email' => $payment->participant->email,
+            'ssl_amount' => number_format($payment->amount_cents / 100, 2, '.', ''),
+            'ssl_result' => '0',
+            'ssl_result_message' => 'APPROVAL',
+            'ssl_txn_id' => 'forged-lookup-transaction',
+        ])->assertUnprocessable();
+
+        $this->assertSame('pending', $payment->fresh()->status);
+        $this->assertNull($payment->transaction_id);
+    }
+
+    public function test_complete_replay_returns_conflict_without_changing_paid_booking(): void
+    {
+        $this->seed();
+        Mail::fake();
+        $consultation = Consultation::where('booking_number', 'SAMPLE-07')->firstOrFail();
+        $participantIds = $consultation->participants()->pluck('id')->all();
+        $paymentIds = $consultation->paymentRequests()->pluck('id')->all();
+
+        $this->postJson('/api/v1/consultations/'.$consultation->id.'/complete', [
+            'starts_at' => now()->addWeek()->toIso8601String(),
+            'payment_mode' => 'full',
+            'payment_method' => 'card',
+        ])
+            ->assertConflict()
+            ->assertJsonPath('message', 'This consultation has already been completed.');
+
+        $consultation->refresh();
+        $this->assertSame('paid', $consultation->payment_status);
+        $this->assertSame($participantIds, $consultation->participants()->pluck('id')->all());
+        $this->assertSame($paymentIds, $consultation->paymentRequests()->pluck('id')->all());
+        $this->assertSame('paid', $consultation->paymentRequests()->firstOrFail()->status);
+        Mail::assertNothingSent();
+    }
+
+    public function test_verified_transaction_requires_invoice_and_cannot_be_reused(): void
+    {
+        $this->seed();
+        Mail::fake();
+        config([
+            'services.converge.mode' => 'sandbox',
+            'services.converge.sandbox_base_url' => 'https://api.demo.convergepay.com',
+            'services.converge.account_id' => 'account-id',
+            'services.converge.user_id' => 'api-user',
+            'services.converge.pin' => 'secret-pin',
+        ]);
+
+        $payments = Consultation::where('booking_number', 'SAMPLE-03')
+            ->firstOrFail()
+            ->paymentRequests()
+            ->where('status', 'pending')
+            ->get();
+        $first = $payments->firstOrFail();
+        $second = $payments->skip(1)->firstOrFail();
+        $amount = number_format($first->amount_cents / 100, 2, '.', '');
+        $wrongAmount = number_format(($first->amount_cents + 100) / 100, 2, '.', '');
+        $calendarEventCount = ExternalCalendarEvent::count();
+        $questionnaireCount = QuestionnaireSubmission::count();
+
+        Http::fake([
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::sequence()
+                ->push('<txn><ssl_txn_id>missing-invoice-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_result_message>APPROVAL</ssl_result_message><ssl_approval_code>111111</ssl_approval_code></txn>', 200)
+                ->push('<txn><ssl_txn_id>wrong-invoice-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>another-payment</ssl_invoice_number><ssl_result_message>APPROVAL</ssl_result_message><ssl_approval_code>111112</ssl_approval_code></txn>', 200)
+                ->push('<txn><ssl_txn_id>wrong-amount-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$wrongAmount.'</ssl_amount><ssl_invoice_number>'.$first->provider_reference.'</ssl_invoice_number><ssl_result_message>APPROVAL</ssl_result_message><ssl_approval_code>111112</ssl_approval_code></txn>', 200)
+                ->push('<txn><ssl_txn_id>shared-verified-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$first->provider_reference.'</ssl_invoice_number><ssl_result_message>APPROVAL</ssl_result_message><ssl_approval_code>222222</ssl_approval_code></txn>', 200)
+                ->push('<txn><ssl_txn_id>shared-verified-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$second->provider_reference.'</ssl_invoice_number><ssl_result_message>APPROVAL</ssl_result_message><ssl_approval_code>222222</ssl_approval_code></txn>', 200),
+        ]);
+
+        $this->postJson('/api/v1/payments/converge/confirmation', [
+            'payment_request_id' => $first->id,
+            'ssl_txn_id' => 'missing-invoice-txn',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Converge transaction could not be linked to this payment.');
+        $this->assertSame('pending', $first->fresh()->status);
+        $this->assertSame($calendarEventCount, ExternalCalendarEvent::count());
+        $this->assertSame($questionnaireCount, QuestionnaireSubmission::count());
+        Mail::assertNothingSent();
+
+        $this->postJson('/api/v1/payments/converge/confirmation', [
+            'payment_request_id' => $first->id,
+            'ssl_txn_id' => 'wrong-invoice-txn',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Converge transaction could not be linked to this payment.');
+        $this->assertSame('pending', $first->fresh()->status);
+
+        $this->postJson('/api/v1/payments/converge/confirmation', [
+            'payment_request_id' => $first->id,
+            'ssl_txn_id' => 'wrong-amount-txn',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Converge transaction could not be linked to this payment.');
+        $this->assertSame('pending', $first->fresh()->status);
+
+        $this->postJson('/api/v1/payments/converge/confirmation', [
+            'payment_request_id' => $first->id,
+            'ssl_txn_id' => 'shared-verified-txn',
+        ])->assertOk();
+        $this->assertSame('paid', $first->fresh()->status);
+        $calendarEventCount = ExternalCalendarEvent::count();
+        $questionnaireCount = QuestionnaireSubmission::count();
+        $questionnaireMailCount = Mail::sent(ConsultationQuestionnaireMail::class)->count();
+        $zoomMailCount = Mail::sent(ConsultationZoomLinkMail::class)->count();
+        $confirmationMailCount = Mail::sent(ConsultationConfirmationMail::class)->count();
+
+        $this->postJson('/api/v1/payments/converge/confirmation', [
+            'payment_request_id' => $second->id,
+            'ssl_txn_id' => 'shared-verified-txn',
+        ])->assertUnprocessable();
+        $this->assertSame('pending', $second->fresh()->status);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => PaymentRequest::class,
+            'loggable_id' => $second->id,
+            'provider' => 'converge',
+            'action' => 'payment_confirmation',
+            'status' => 'failed',
+            'message' => 'This Converge transaction has already been applied to another payment request.',
+        ]);
+        $this->assertSame($calendarEventCount, ExternalCalendarEvent::count());
+        $this->assertSame($questionnaireCount, QuestionnaireSubmission::count());
+        $this->assertCount($questionnaireMailCount, Mail::sent(ConsultationQuestionnaireMail::class));
+        $this->assertCount($zoomMailCount, Mail::sent(ConsultationZoomLinkMail::class));
+        $this->assertCount($confirmationMailCount, Mail::sent(ConsultationConfirmationMail::class));
+    }
+
+    public function test_unverified_converge_audit_reports_legacy_browser_credits_without_changes(): void
+    {
+        $this->seed();
+        $payment = PaymentRequest::where('provider', 'converge')->firstOrFail();
+        $payment->update([
+            'status' => 'paid',
+            'paid_at' => now(),
+            'transaction_id' => 'legacy-unverified-transaction',
+        ]);
+        $payment->integrationLogs()->create([
+            'provider' => 'converge',
+            'action' => 'payment_return',
+            'status' => 'paid',
+            'message' => 'Legacy unverified browser return.',
+        ]);
+
+        $this->artisan('payments:audit-unverified-converge')
+            ->expectsOutputToContain('1 paid Converge request(s) require manual review. No records were changed.')
+            ->assertExitCode(0);
+
+        $this->assertSame('paid', $payment->fresh()->status);
+        $this->assertSame('legacy-unverified-transaction', $payment->transaction_id);
+    }
+
+    public function test_database_rejects_duplicate_provider_transaction_ids(): void
+    {
+        $this->seed();
+        $payments = PaymentRequest::where('provider', 'converge')->limit(2)->get();
+        $first = $payments->firstOrFail();
+        $second = $payments->skip(1)->firstOrFail();
+
+        $first->update(['transaction_id' => 'database-unique-transaction']);
+
+        try {
+            $second->update(['transaction_id' => 'database-unique-transaction']);
+            $this->fail('The provider and transaction ID uniqueness constraint was not enforced.');
+        } catch (\Illuminate\Database\QueryException) {
+            $this->assertSame('database-unique-transaction', $first->fresh()->transaction_id);
+            $this->assertNull($second->fresh()->transaction_id);
+        }
+    }
+
     public function test_converge_return_processes_approved_payload_and_redirects_to_success(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         $this->seed();
         Mail::fake();
         config([
@@ -2183,12 +2407,19 @@ class ConsultationApiTest extends TestCase
             'loggable_id' => $paymentRequestId,
             'provider' => 'converge',
             'action' => 'payment_return',
+            'status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => PaymentRequest::class,
+            'loggable_id' => $paymentRequestId,
+            'provider' => 'converge',
+            'action' => 'payment_return_verification',
             'status' => 'paid',
         ]);
-        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
     }
 
-    public function test_converge_path_return_processes_approved_response_without_xml_lookup(): void
+    public function test_converge_path_return_verifies_approved_response_with_xml_lookup(): void
     {
         $this->seed();
         config([
@@ -2199,14 +2430,14 @@ class ConsultationApiTest extends TestCase
             'services.converge.pin' => 'secret-pin',
         ]);
 
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+        $amount = number_format($payment->amount_cents / 100, 2, '.', '');
         Http::fake([
             'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
-                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>browser-approved-txn</ssl_txn_id><ssl_approval_code>654321</ssl_approval_code></txn>',
+                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>browser-approved-txn</ssl_txn_id><ssl_approval_code>654321</ssl_approval_code><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$payment->provider_reference.'</ssl_invoice_number></txn>',
                 200
             ),
         ]);
-
-        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
 
         $response = $this->post(route('payments.converge.return.payment', ['paymentRequest' => $payment]), [
             'ssl_result' => '0',
@@ -2226,7 +2457,7 @@ class ConsultationApiTest extends TestCase
             'transaction_id' => 'browser-approved-txn',
         ]);
 
-        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
     }
 
     public function test_converge_post_return_redirects_a_declined_payment_to_failed_status(): void
@@ -2240,14 +2471,14 @@ class ConsultationApiTest extends TestCase
             'services.converge.pin' => 'secret-pin',
         ]);
 
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+        $amount = number_format($payment->amount_cents / 100, 2, '.', '');
         Http::fake([
             'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
-                '<txn><ssl_result>1</ssl_result><ssl_result_message>DECLINED</ssl_result_message><ssl_txn_id>declined-return-txn</ssl_txn_id></txn>',
+                '<txn><ssl_result>1</ssl_result><ssl_result_message>DECLINED</ssl_result_message><ssl_txn_id>declined-return-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$payment->provider_reference.'</ssl_invoice_number></txn>',
                 200
             ),
         ]);
-
-        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
         $response = $this->post(route('payments.converge.return.payment', ['paymentRequest' => $payment]), [
             'ssl_result' => '1',
             'ssl_result_message' => 'DECLINED',
@@ -2260,7 +2491,7 @@ class ConsultationApiTest extends TestCase
             ->assertOk()
             ->assertSee('The payment was not approved.')
             ->assertSee('Try Payment Again');
-        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
     }
 
     public function test_converge_webhook_resolves_short_invoice_and_verifies_transaction(): void
@@ -2274,14 +2505,14 @@ class ConsultationApiTest extends TestCase
             'services.converge.pin' => 'secret-pin',
         ]);
 
+        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
+        $amount = number_format($payment->amount_cents / 100, 2, '.', '');
         Http::fake([
             'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
-                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>export-script-txn</ssl_txn_id></txn>',
+                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>export-script-txn</ssl_txn_id><ssl_approval_code>123456</ssl_approval_code><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$payment->provider_reference.'</ssl_invoice_number></txn>',
                 200
             ),
         ]);
-
-        $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
 
         $this->post('/api/v1/payments/converge/webhook', [
             'ssl_invoice_number' => $payment->provider_reference,
@@ -2301,6 +2532,7 @@ class ConsultationApiTest extends TestCase
 
     public function test_converge_payment_sync_command_updates_pending_payment_from_xml_api(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-07-01'));
         $this->seed();
         config([
             'services.converge.payment_sync_enabled' => true,
@@ -2336,7 +2568,7 @@ class ConsultationApiTest extends TestCase
         $convergeAmount = number_format($paymentRequest->amount_cents / 100, 2, '.', '');
         Http::fake([
             'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
-                '<txn><ssl_txn_count>1</ssl_txn_count><transactions><transaction><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>poll-txn-200</ssl_txn_id><ssl_approval_code>123456</ssl_approval_code><ssl_amount>'.$convergeAmount.'</ssl_amount></transaction></transactions></txn>',
+                '<txn><ssl_txn_count>1</ssl_txn_count><transactions><transaction><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>poll-txn-200</ssl_txn_id><ssl_approval_code>123456</ssl_approval_code><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$convergeAmount.'</ssl_amount><ssl_invoice_number>'.$invoiceNumber.'</ssl_invoice_number></transaction></transactions></txn>',
                 200
             ),
         ]);
@@ -2425,9 +2657,9 @@ class ConsultationApiTest extends TestCase
         $this->get(str_replace('/status/pending', '/status/success', $pendingUrl))->assertForbidden();
 
         $payment->refresh();
-        $this->assertSame('stored-return-txn', $payment->metadata['converge_transaction_id']);
-        $this->assertContains('stored-return-txn', $payment->metadata['converge_transaction_ids']);
-        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
+        $this->assertNull($payment->transaction_id);
+        $this->assertSame('stored-return-txn', $payment->metadata['payment_return']['transaction_id']);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
     }
 
     public function test_converge_cron_verifies_a_pending_return_in_the_background(): void
@@ -2445,10 +2677,10 @@ class ConsultationApiTest extends TestCase
         $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
         $amount = number_format($payment->amount_cents / 100, 2, '.', '');
         Http::fake([
-            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
-                '<txn><ssl_txn_id>background-audit-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_result_message>APPROVAL</ssl_result_message><ssl_approval_code>654321</ssl_approval_code></txn>',
-                200
-            ),
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::sequence()
+                ->push('temporarily unavailable', 503)
+                ->push('<txn><ssl_txn_id>background-audit-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$payment->provider_reference.'</ssl_invoice_number><ssl_result_message>APPROVAL</ssl_result_message><ssl_approval_code>654321</ssl_approval_code></txn>', 200)
+                ->push('<txn><ssl_txn_id>background-audit-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$payment->provider_reference.'</ssl_invoice_number><ssl_result_message>APPROVAL</ssl_result_message><ssl_approval_code>654321</ssl_approval_code></txn>', 200),
         ]);
 
         $this->post(route('payments.converge.return.payment', ['paymentRequest' => $payment]), [
@@ -2456,11 +2688,11 @@ class ConsultationApiTest extends TestCase
             'ssl_amount' => $amount,
         ])->assertRedirect();
 
-        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'processxml.do'));
         $this->assertDatabaseHas('payment_requests', [
             'id' => $payment->id,
             'status' => 'pending',
-            'transaction_id' => 'background-audit-txn',
+            'transaction_id' => null,
         ]);
 
         $this->artisan('payments:sync-converge', ['--payment-request' => $payment->id])
@@ -2480,7 +2712,7 @@ class ConsultationApiTest extends TestCase
         $this->artisan('payments:sync-converge', ['--payment-request' => $payment->id])
             ->expectsOutputToContain('checked 1 payment(s): 1 paid, 0 failed, 0 skipped, 0 error(s).')
             ->assertExitCode(0);
-        $this->assertCount(2, Http::recorded()->filter(fn ($entry) => str_contains($entry[0]->url(), 'processxml.do')));
+        $this->assertCount(3, Http::recorded()->filter(fn ($entry) => str_contains($entry[0]->url(), 'processxml.do')));
     }
 
     public function test_converge_cron_marks_a_pending_decline_failed_and_stops_checking(): void
@@ -2497,9 +2729,10 @@ class ConsultationApiTest extends TestCase
 
         $payment = PaymentRequest::where('status', 'pending')->firstOrFail();
         $payment->update(['transaction_id' => 'background-declined-txn']);
+        $amount = number_format($payment->amount_cents / 100, 2, '.', '');
         Http::fake([
             'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
-                '<txn><ssl_txn_id>background-declined-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_result_message>DECLINED</ssl_result_message></txn>',
+                '<txn><ssl_txn_id>background-declined-txn</ssl_txn_id><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$payment->provider_reference.'</ssl_invoice_number><ssl_result_message>DECLINED</ssl_result_message></txn>',
                 200
             ),
         ]);
@@ -2545,10 +2778,11 @@ class ConsultationApiTest extends TestCase
                 'converge_transaction_id' => 'stored-return-txn',
             ]),
         ]);
+        $amount = number_format($payment->amount_cents / 100, 2, '.', '');
 
         Http::fake([
             'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::response(
-                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>stored-return-txn</ssl_txn_id><ssl_approval_code>123456</ssl_approval_code></txn>',
+                '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>stored-return-txn</ssl_txn_id><ssl_approval_code>123456</ssl_approval_code><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$payment->provider_reference.'</ssl_invoice_number></txn>',
                 200
             ),
         ]);
@@ -2583,9 +2817,19 @@ class ConsultationApiTest extends TestCase
         ]);
 
         Http::fake([
-            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => Http::sequence()
-                ->push('<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>split-first-txn</ssl_txn_id></txn>', 200)
-                ->push('<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>split-final-txn</ssl_txn_id></txn>', 200),
+            'api.demo.convergepay.com/VirtualMerchantDemo/processxml.do' => function ($request) {
+                preg_match('/<ssl_invoice_number>([^<]+)<\/ssl_invoice_number>/', urldecode((string) $request['xmldata']), $matches);
+                $payment = PaymentRequest::where('provider_reference', $matches[1] ?? null)->firstOrFail();
+                $amount = number_format($payment->amount_cents / 100, 2, '.', '');
+                $transactionId = $payment->participant?->email === 'final.primary@example.com'
+                    ? 'split-first-txn'
+                    : 'split-final-txn';
+
+                return Http::response(
+                    '<txn><ssl_result>0</ssl_result><ssl_result_message>APPROVAL</ssl_result_message><ssl_txn_id>'.$transactionId.'</ssl_txn_id><ssl_approval_code>916299</ssl_approval_code><ssl_transaction_type>SALE</ssl_transaction_type><ssl_amount>'.$amount.'</ssl_amount><ssl_invoice_number>'.$payment->provider_reference.'</ssl_invoice_number></txn>',
+                    200
+                );
+            },
             'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response(['access_token' => 'graph-token'], 200),
             'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events' => Http::response([
                 'id' => 'automatic-paid-shared-outlook-event-id',

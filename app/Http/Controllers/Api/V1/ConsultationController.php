@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exceptions\ConsultationAlreadyCompletedException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\CompleteConsultationRequest;
 use App\Http\Requests\Api\CreateDraftConsultationRequest;
@@ -121,6 +122,8 @@ class ConsultationController extends Controller
     {
         try {
             $consultation = $completion->complete($consultation, $request->validated());
+        } catch (ConsultationAlreadyCompletedException $exception) {
+            return ApiResponse::error($exception->getMessage(), 409);
         } catch (\DomainException $exception) {
             return ApiResponse::error($exception->getMessage(), 422);
         }

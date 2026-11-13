@@ -23,9 +23,11 @@ Route::get('payments/{paymentRequest}/checkout', [ConvergeCheckoutController::cl
     ->name('payments.checkout');
 
 Route::post('payments/converge/return', [ConvergeCheckoutController::class, 'return'])
+    ->middleware('throttle:30,1')
     ->name('payments.converge.return.web');
 
 Route::post('payments/{paymentRequest}/converge-return', [ConvergeCheckoutController::class, 'returnForPayment'])
+    ->middleware('throttle:30,1')
     ->name('payments.converge.return.payment');
 
 Route::get('payments/{paymentRequest}/status/{state}', [ConvergeCheckoutController::class, 'status'])

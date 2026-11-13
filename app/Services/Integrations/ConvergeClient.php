@@ -149,11 +149,22 @@ class ConvergeClient
         $payload     = $this->parseXmlResponse($response->body());
         $transaction = $this->transactionFromQueryResponse($payload, $payment);
 
+        $returnedTransactionId = $callbackPayload['ssl_txn_id'] ?? null;
+        if (! isset($transaction['errorCode'])
+            && filled($returnedTransactionId)
+            && (string) ($transaction['ssl_txn_id'] ?? '') !== (string) $returnedTransactionId) {
+            $transaction = [
+                'errorCode' => 'returned_transaction_id_mismatch',
+                'errorMessage' => 'Converge transaction ID does not match the browser return.',
+            ];
+        }
+
         return [
             'status'         => $this->statusFromResponse($transaction),
             'transaction_id' => $transaction['ssl_txn_id'] ?? null,
             'approval_code'  => $transaction['ssl_approval_code'] ?? null,
             'result_message' => $transaction['ssl_result_message'] ?? $transaction['errorMessage'] ?? null,
+            'verification_error_code' => $transaction['errorCode'] ?? null,
             'raw'            => $payload,
         ];
     }
@@ -167,7 +178,10 @@ class ConvergeClient
             'ssl_transaction_type' => 'txnquery',
         ];
 
-        $transactionId = $callbackPayload['ssl_txn_id'] ?? $payment->transaction_id ?? data_get($payment->metadata, 'converge_transaction_id');
+        $transactionId = $callbackPayload['ssl_txn_id']
+            ?? $payment->transaction_id
+            ?? data_get($payment->metadata, 'converge_transaction_id')
+            ?? data_get($payment->metadata, 'payment_return.transaction_id');
         $invoiceNumber = $payment->metadata['invoice_number'] ?? null;
 
         if (filled($transactionId)) {
@@ -230,6 +244,8 @@ class ConvergeClient
             ? $transactions
             : [$transactions];
 
+        $firstValidationError = null;
+
         foreach ($candidates as $transaction) {
             if (! is_array($transaction)) {
                 continue;
@@ -243,9 +259,11 @@ class ConvergeClient
             if (! isset($validated['errorCode'])) {
                 return $validated;
             }
+
+            $firstValidationError ??= $validated;
         }
 
-        return [
+        return $firstValidationError ?? [
             'errorCode'    => 'transaction_mismatch',
             'errorMessage' => 'No matching Converge transaction was found.',
         ];
@@ -253,7 +271,17 @@ class ConvergeClient
 
     private function validateTransaction(array $transaction, PaymentRequest $payment): array
     {
-        $expectedTransactionId = $payment->transaction_id ?? data_get($payment->metadata, 'converge_transaction_id');
+        $expectedTransactionId = $payment->status === 'paid'
+            ? ($payment->transaction_id ?? data_get($payment->metadata, 'converge_transaction_id'))
+            : (data_get($payment->metadata, 'payment_return.transaction_id')
+                ?? data_get($payment->metadata, 'converge_transaction_id'));
+
+        if (blank($transaction['ssl_txn_id'] ?? null)) {
+            return [
+                'errorCode' => 'transaction_id_missing',
+                'errorMessage' => 'Converge transaction is missing its transaction ID.',
+            ];
+        }
 
         if (filled($expectedTransactionId)
             && isset($transaction['ssl_txn_id'])
@@ -267,7 +295,14 @@ class ConvergeClient
         // Verify amount
         $expectedAmount = number_format($payment->amount_cents / 100, 2, '.', '');
 
-        if (isset($transaction['ssl_amount']) && number_format((float) $transaction['ssl_amount'], 2, '.', '') !== $expectedAmount) {
+        if (! isset($transaction['ssl_amount']) || ! is_numeric($transaction['ssl_amount'])) {
+            return [
+                'errorCode' => 'amount_missing',
+                'errorMessage' => 'Converge transaction is missing its amount.',
+            ];
+        }
+
+        if (number_format((float) $transaction['ssl_amount'], 2, '.', '') !== $expectedAmount) {
             return [
                 'errorCode'    => 'amount_mismatch',
                 'errorMessage' =>
@@ -279,7 +314,14 @@ class ConvergeClient
         $expectedInvoice =
         $payment->metadata['invoice_number'] ?? $payment->provider_reference;
 
-        if (filled($expectedInvoice) && isset($transaction['ssl_invoice_number']) && (string) $transaction['ssl_invoice_number'] !== (string) $expectedInvoice) {
+        if (blank($transaction['ssl_invoice_number'] ?? null)) {
+            return [
+                'errorCode' => 'invoice_missing',
+                'errorMessage' => 'Converge transaction is missing its invoice number.',
+            ];
+        }
+
+        if (filled($expectedInvoice) && (string) $transaction['ssl_invoice_number'] !== (string) $expectedInvoice) {
             return [
                 'errorCode'    => 'invoice_mismatch',
                 'errorMessage' => 'Converge transaction invoice does not match the payment request.',
@@ -297,9 +339,14 @@ class ConvergeClient
 
         // HPP/direct transaction response
         if (isset($payload['ssl_result'])) {
-            return (string) $payload['ssl_result'] === '0'
-                ? 'paid'
-                : 'failed';
+            if ((string) $payload['ssl_result'] !== '0') {
+                return 'failed';
+            }
+
+            return filled($payload['ssl_approval_code'] ?? null)
+                && $this->isPurchaseTransaction($payload['ssl_transaction_type'] ?? null)
+                    ? 'paid'
+                    : 'unknown';
         }
 
         // txnquery response
@@ -307,7 +354,7 @@ class ConvergeClient
         $resultMessage   = strtoupper((string) ($payload['ssl_result_message'] ?? ''));
         $approvalCode    = $payload['ssl_approval_code'] ?? null;
 
-        if ($transactionType === 'SALE' && $resultMessage === 'APPROVAL' && filled($approvalCode)) {
+        if ($this->isPurchaseTransaction($transactionType) && $resultMessage === 'APPROVAL' && filled($approvalCode)) {
             return 'paid';
         }
 
@@ -319,6 +366,15 @@ class ConvergeClient
         }
 
         return 'unknown';
+    }
+
+    private function isPurchaseTransaction(mixed $transactionType): bool
+    {
+        return in_array(strtoupper(trim((string) $transactionType)), [
+            'SALE',
+            'CCSALE',
+            'ECSPURCHASE',
+        ], true);
     }
 
     private function xmlEndpoint(): string

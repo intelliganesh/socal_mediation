@@ -1,6 +1,7 @@
 <?php
 namespace App\Services;
 
+use App\Exceptions\ConsultationAlreadyCompletedException;
 use App\Models\Consultation;
 use App\Models\PaymentRequest;
 use App\Services\Integrations\ConvergeClient;
@@ -23,7 +24,10 @@ class PaymentLinkService
         }
 
         return DB::transaction(function () use ($consultation, $mode, $participantIds, $method) {
-            $consultation->paymentRequests()->delete();
+            if ($consultation->paymentRequests()->exists()) {
+                throw new ConsultationAlreadyCompletedException();
+            }
+
             $consultation->participants()->update(['should_pay' => false, 'share_amount_cents' => 0]);
 
             if ($consultation->total_amount_cents === 0) {

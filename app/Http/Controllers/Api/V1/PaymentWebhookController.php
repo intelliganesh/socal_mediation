@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Exceptions\UnlinkedConvergeTransactionException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ConsultationResource;
 use App\Services\ApiResponse;
@@ -30,8 +31,7 @@ class PaymentWebhookController extends Controller
                 new OA\Property(property: 'message', type: 'string', example: 'Payment verification completed.'),
                 new OA\Property(property: 'data', ref: '#/components/schemas/Consultation'),
             ])),
-            new OA\Response(response: 404, description: 'Payment request not found'),
-            new OA\Response(response: 422, description: 'Payment reference is missing or confirmation is invalid'),
+            new OA\Response(response: 422, description: 'Payment reference is missing, invalid, or confirmation could not be verified'),
         ]
     )]
     public function confirmation(Request $request, PaymentReconciliationService $payments)
@@ -52,6 +52,8 @@ class PaymentWebhookController extends Controller
 
         try {
             $consultation = $payments->confirmFromConvergePayload($data + $request->all());
+        } catch (UnlinkedConvergeTransactionException $exception) {
+            return ApiResponse::error($exception->getMessage(), 422);
         } catch (\DomainException|\RuntimeException $exception) {
             return ApiResponse::error('Converge payment verification failed: '.$exception->getMessage(), 422);
         }

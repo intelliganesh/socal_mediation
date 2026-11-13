@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\ConsultationAlreadyCompletedException;
 use App\Models\Consultation;
 use App\Services\Integrations\OutlookCalendarClient;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,14 @@ class ConsultationCompletionService
     public function complete(Consultation $consultation, array $data): Consultation
     {
         $consultation = DB::transaction(function () use ($consultation, $data) {
+            $consultation = Consultation::query()
+                ->lockForUpdate()
+                ->findOrFail($consultation->id);
+
+            if ($consultation->status !== 'draft' || $consultation->paymentRequests()->exists()) {
+                throw new ConsultationAlreadyCompletedException;
+            }
+
             $data = $this->mergeDraftDetails($consultation->load(['participants']), $data);
             $this->assertRequiredDetailsPresent($data);
 

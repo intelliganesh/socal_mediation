@@ -2,19 +2,20 @@
 
 namespace App\Services;
 
+use App\Exceptions\UnlinkedConvergeTransactionException;
 use App\Models\Consultation;
 use App\Models\PaymentRequest;
 use App\Services\Integrations\ConvergeClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 
 class PaymentReconciliationService
 {
     public function __construct(
         private readonly ConvergeClient $converge,
         private readonly BookingFinalizer $finalizer,
-    ) {
-    }
+    ) {}
 
     public function confirmFromConvergePayload(array $payload): Consultation
     {
@@ -29,16 +30,40 @@ class PaymentReconciliationService
             throw new \DomainException('Only Converge payment requests can be verified through Converge.');
         }
 
-        $this->rememberConvergeTransactionId($payment, $callbackPayload);
-
         if ($payment->status === 'paid') {
             return $payment->consultation->refresh();
         }
 
-        $result = $this->converge->lookupPaymentStatus($payment, $callbackPayload);
+        try {
+            $result = $this->converge->lookupPaymentStatus($payment, $callbackPayload);
+        } catch (\Throwable $exception) {
+            $payment->integrationLogs()->create([
+                'provider' => 'converge',
+                'action' => $source,
+                'status' => 'failed',
+                'request_payload' => $this->safePayload($callbackPayload),
+                'message' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        }
+
         $status = $result['status'] ?? 'unknown';
 
         if ($status === 'unknown') {
+            if ($this->isUnlinkedTransaction($result)) {
+                $payment->integrationLogs()->create([
+                    'provider' => 'converge',
+                    'action' => $source,
+                    'status' => 'failed',
+                    'request_payload' => $this->safePayload($callbackPayload),
+                    'response_payload' => $this->safePayload($result),
+                    'message' => 'Converge transaction could not be linked to this payment.',
+                ]);
+
+                throw new UnlinkedConvergeTransactionException();
+            }
+
             $payment->integrationLogs()->create([
                 'provider' => 'converge',
                 'action' => $source,
@@ -65,10 +90,6 @@ class PaymentReconciliationService
             throw new \DomainException('Only Converge payment requests can process a Converge return.');
         }
 
-        $this->rememberConvergeTransactionId($payment, $payload);
-        $payment->refresh();
-
-        $status = $this->statusFromReturnPayload($payment, $payload);
         $transactionId = trim((string) ($payload['ssl_txn_id'] ?? ''));
         $metadata = array_merge($payment->metadata ?? [], [
             'payment_return' => [
@@ -80,31 +101,19 @@ class PaymentReconciliationService
             ],
         ]);
 
-        if ($payment->status === 'paid') {
-            $status = 'paid';
-        }
-
         $payment->update([
-            'status' => $status,
-            'transaction_id' => $transactionId !== '' ? $transactionId : $payment->transaction_id,
-            'paid_at' => $status === 'paid' ? ($payment->paid_at ?? now()) : $payment->paid_at,
-            'approval_code' => $payload['ssl_approval_code'] ?? $payment->approval_code,
             'metadata' => $metadata,
         ]);
 
         $payment->integrationLogs()->create([
             'provider' => 'converge',
             'action' => 'payment_return',
-            'status' => $status,
+            'status' => 'pending',
             'request_payload' => $this->safePayload($payload),
-            'message' => match ($status) {
-                'paid' => 'Payment marked paid from the Converge return response; background verification is pending.',
-                'failed' => 'Payment marked failed from the Converge return response; background verification is pending.',
-                default => 'Converge return response did not contain a final payment result.',
-            },
+            'message' => 'Converge browser return recorded as untrusted pending server verification.',
         ]);
 
-        return $this->finalizer->syncPaymentStatus($payment->consultation, deferExternalSync: true);
+        return $this->verifyPayment($payment->refresh(), 'payment_return_verification', $payload);
     }
 
     public function syncPendingPayments(?Consultation $consultation = null, ?PaymentRequest $paymentRequest = null, ?int $limit = null, bool $dryRun = false): array
@@ -160,6 +169,7 @@ class PaymentReconciliationService
 
                 if ($dryRun) {
                     $status === 'paid' ? $paid++ : $failed++;
+
                     return;
                 }
 
@@ -205,6 +215,18 @@ class PaymentReconciliationService
         }
 
         $status = $result['status'] ?? 'unknown';
+        $transactionId = $result['transaction_id'] ?? null;
+
+        if ($status === 'paid') {
+            try {
+                $this->assertTransactionAvailable($payment, $transactionId);
+            } catch (\DomainException $exception) {
+                $this->logRejectedTransaction($payment, $source, $result, $exception->getMessage());
+
+                throw $exception;
+            }
+        }
+
         $metadata = array_merge($payment->metadata ?? [], [
             $source => [
                 'synced_at' => now()->toIso8601String(),
@@ -215,13 +237,39 @@ class PaymentReconciliationService
             ],
         ]);
 
-        $payment->update([
-            'status' => $status,
-            'transaction_id' => $result['transaction_id'] ?? $payment->transaction_id,
-            'paid_at' => $status === 'paid' ? now() : $payment->paid_at,
-            'approval_code' => $result['approval_code'] ?? $payment->approval_code,
-            'metadata' => $metadata,
-        ]);
+        if ($status === 'paid') {
+            $transactionIds = array_values(array_unique(array_filter([
+                ...((array) ($metadata['converge_transaction_ids'] ?? [])),
+                $transactionId,
+            ])));
+            $metadata['converge_transaction_id'] = $transactionId;
+            $metadata['converge_transaction_ids'] = $transactionIds;
+            $metadata['converge_transaction_received_at'] = now()->toIso8601String();
+            $metadata['gateway_verification'] = [
+                'verified_at' => now()->toIso8601String(),
+                'source' => $source,
+                'transaction_id' => $transactionId,
+            ];
+        }
+
+        try {
+            $payment->update([
+                'status' => $status,
+                'transaction_id' => $transactionId ?? $payment->transaction_id,
+                'paid_at' => $status === 'paid' ? now() : $payment->paid_at,
+                'approval_code' => $result['approval_code'] ?? $payment->approval_code,
+                'metadata' => $metadata,
+            ]);
+        } catch (QueryException $exception) {
+            if ($transactionId !== null && $this->transactionBelongsToAnotherPayment($payment, $transactionId)) {
+                $message = 'This Converge transaction has already been applied to another payment request.';
+                $this->logRejectedTransaction($payment, $source, $result, $message);
+
+                throw new \DomainException($message, previous: $exception);
+            }
+
+            throw $exception;
+        }
 
         $payment->integrationLogs()->create([
             'provider' => 'converge',
@@ -234,52 +282,50 @@ class PaymentReconciliationService
         return $this->finalizer->syncPaymentStatus($payment->consultation);
     }
 
-    private function rememberConvergeTransactionId(PaymentRequest $payment, array $payload): void
+    private function logRejectedTransaction(PaymentRequest $payment, string $source, array $result, string $message): void
     {
-        $transactionId = $payload['ssl_txn_id'] ?? null;
-
-        if (! is_scalar($transactionId) || blank(trim((string) $transactionId))) {
-            return;
-        }
-
-        $transactionId = trim((string) $transactionId);
-        $metadata = $payment->metadata ?? [];
-        $transactionIds = array_values(array_unique(array_filter([
-            ...((array) ($metadata['converge_transaction_ids'] ?? [])),
-            $transactionId,
-        ])));
-
-        $metadata['converge_transaction_id'] = $transactionId;
-        $metadata['converge_transaction_ids'] = $transactionIds;
-        $metadata['converge_transaction_received_at'] = now()->toIso8601String();
-
-        $payment->update([
-            'transaction_id' => $transactionId,
-            'metadata' => $metadata,
+        $payment->integrationLogs()->create([
+            'provider' => 'converge',
+            'action' => $source,
+            'status' => 'failed',
+            'response_payload' => $this->safePayload($result),
+            'message' => $message,
         ]);
     }
 
-    private function statusFromReturnPayload(PaymentRequest $payment, array $payload): string
+    private function isUnlinkedTransaction(array $result): bool
     {
-        $transactionId = trim((string) ($payload['ssl_txn_id'] ?? ''));
-        $result = isset($payload['ssl_result']) ? trim((string) $payload['ssl_result']) : null;
-        $resultMessage = strtoupper(trim((string) ($payload['ssl_result_message'] ?? '')));
-        $amount = $payload['ssl_amount'] ?? null;
+        return in_array($result['verification_error_code'] ?? null, [
+            'returned_transaction_id_mismatch',
+            'transaction_id_missing',
+            'transaction_id_mismatch',
+            'amount_missing',
+            'amount_mismatch',
+            'invoice_missing',
+            'invoice_mismatch',
+        ], true);
+    }
 
-        if ($amount !== null && (! is_numeric($amount)
-            || (int) round((float) $amount * 100) !== (int) $payment->amount_cents)) {
-            return 'pending';
+    private function assertTransactionAvailable(PaymentRequest $payment, mixed $transactionId): void
+    {
+        if (! is_scalar($transactionId) || blank(trim((string) $transactionId))) {
+            throw new \DomainException('Verified Converge payment is missing a transaction ID.');
         }
 
-        if ($transactionId !== '' && $result === '0' && $resultMessage === 'APPROVAL') {
-            return 'paid';
-        }
+        $transactionId = trim((string) $transactionId);
 
-        if ($result !== null && $result !== '' && $result !== '0') {
-            return 'failed';
+        if ($this->transactionBelongsToAnotherPayment($payment, $transactionId)) {
+            throw new \DomainException('This Converge transaction has already been applied to another payment request.');
         }
+    }
 
-        return 'pending';
+    private function transactionBelongsToAnotherPayment(PaymentRequest $payment, mixed $transactionId): bool
+    {
+        return PaymentRequest::query()
+            ->where('provider', $payment->provider)
+            ->where('transaction_id', (string) $transactionId)
+            ->whereKeyNot($payment->id)
+            ->exists();
     }
 
     private function pendingPaymentQuery(?Consultation $consultation, ?PaymentRequest $paymentRequest): Builder
@@ -319,34 +365,29 @@ class PaymentReconciliationService
             ?? $payload['app_payment_reference']
             ?? $payload['ssl_invoice_number']
             ?? $payload['invoice_number']
+            ?? $payload['provider_reference']
             ?? null;
 
-        if ($reference !== null) {
-            $payment = PaymentRequest::find($reference);
-            if ($payment) {
-                return $payment;
-            }
-
-            $payment = PaymentRequest::where('provider_reference', $reference)->first();
-            if ($payment) {
-                return $payment;
-            }
-
-            $payment = PaymentRequest::where('transaction_id', $reference)->first();
-            if ($payment) {
-                return $payment;
-            }
+        if (! is_scalar($reference) || blank(trim((string) $reference))) {
+            abort(422, 'Payment reference is required.');
         }
 
-        $providerReference = $payload['provider_reference'] ?? $payload['ssl_txn_id'] ?? null;
-        if ($providerReference !== null) {
-            return PaymentRequest::query()
-                ->where('transaction_id', $providerReference)
-                ->orWhere('provider_reference', $providerReference)
-                ->firstOrFail();
+        $reference = trim((string) $reference);
+
+        $payment = PaymentRequest::query()
+            ->where('provider', 'converge')
+            ->where(function (Builder $query) use ($reference) {
+                $query->whereKey($reference)
+                    ->orWhere('provider_reference', $reference)
+                    ->orWhere('metadata->invoice_number', $reference);
+            })
+            ->first();
+
+        if ($payment === null) {
+            abort(422, 'Payment reference is invalid.');
         }
 
-        abort(422, 'Payment reference is required.');
+        return $payment;
     }
 
     private function safePayload(array $payload): array
