@@ -160,9 +160,16 @@ class ConsultationController extends Controller
                 new OA\Property(property: 'data', ref: '#/components/schemas/Consultation'),
             ])),
             new OA\Response(response: 422, description: 'Unavailable slot, inactive booking, or validation failed'),
+            new OA\Response(response: 503, description: 'Live Outlook availability could not be verified'),
         ]
     )]
-    public function reschedule(Request $request, Consultation $consultation, ConsultationRescheduleService $rescheduler)
+    public function reschedule(
+        Request $request,
+        Consultation $consultation,
+        ConsultationRescheduleService $rescheduler,
+        AvailabilityService $availability,
+        BookingDateTimeService $dateTimes,
+    )
     {
         $data = $request->validate([
             'starts_at' => ['required', 'date'],
@@ -170,9 +177,25 @@ class ConsultationController extends Controller
             'professional_id' => ['nullable', 'integer', 'exists:professionals,id'],
         ]);
 
+        $consultation->load('type');
+        [$startsAt] = $dateTimes->startsAtFromRequest($data['starts_at']);
+
         try {
-            $consultation = $rescheduler->reschedule($consultation->load('type'), $data, 'api_reschedule');
+            $consultation = $rescheduler->reschedule($consultation, $data, 'api_reschedule');
+        } catch (OutlookAvailabilityUnavailableException $exception) {
+            return ApiResponse::error($exception->getMessage(), 503);
         } catch (\DomainException $exception) {
+            if ($exception instanceof TimeSlotUnavailableException) {
+                return $this->timeSlotUnavailableResponse(
+                    $exception,
+                    $consultation->type,
+                    $startsAt,
+                    $data['professional_id'] ?? $consultation->professional_id,
+                    $availability,
+                    ignoreConsultationId: $consultation->id,
+                );
+            }
+
             return ApiResponse::error($exception->getMessage(), 422);
         }
 
@@ -228,9 +251,16 @@ class ConsultationController extends Controller
                 new OA\Property(property: 'data', ref: '#/components/schemas/Consultation'),
             ])),
             new OA\Response(response: 422, description: 'Invalid token, unavailable slot, or unsupported consultation type'),
+            new OA\Response(response: 503, description: 'Live Outlook availability could not be verified'),
         ]
     )]
-    public function scheduleFreeIntroParticipantSlot(Request $request, string $schedulingToken, FreeIntroCallWorkflowService $workflow)
+    public function scheduleFreeIntroParticipantSlot(
+        Request $request,
+        string $schedulingToken,
+        FreeIntroCallWorkflowService $workflow,
+        AvailabilityService $availability,
+        BookingDateTimeService $dateTimes,
+    )
     {
         $data = $request->validate([
             'starts_at' => ['required', 'date'],
@@ -240,7 +270,26 @@ class ConsultationController extends Controller
 
         try {
             $consultation = $workflow->scheduleParticipantByToken($schedulingToken, $data);
+        } catch (OutlookAvailabilityUnavailableException $exception) {
+            return ApiResponse::error($exception->getMessage(), 503);
         } catch (\DomainException $exception) {
+            if ($exception instanceof TimeSlotUnavailableException) {
+                $participant = ConsultationParticipant::query()
+                    ->with('consultation.type')
+                    ->where('scheduling_token', $schedulingToken)
+                    ->firstOrFail();
+                [$startsAt] = $dateTimes->startsAtFromRequest($data['starts_at']);
+
+                return $this->timeSlotUnavailableResponse(
+                    $exception,
+                    $participant->consultation->type,
+                    $startsAt,
+                    $data['professional_id'] ?? $participant->consultation->professional_id,
+                    $availability,
+                    ignoreParticipantId: $participant->id,
+                );
+            }
+
             return ApiResponse::error($exception->getMessage(), 422);
         }
 
@@ -360,17 +409,25 @@ class ConsultationController extends Controller
             $overlap = $exception instanceof TimeSlotUnavailableException
                 ? $exception->overlap
                 : null;
-            $nextAvailableStart = $exception instanceof TimeSlotUnavailableException && $exception->liveOutlookConflict
-                ? null
-                : $availability->nextAvailableStart(
+            if ($exception instanceof TimeSlotUnavailableException) {
+                return $this->timeSlotUnavailableResponse(
+                    $exception,
                     $type,
                     $startsAt,
-                    $data['professional_id'] ?? null
+                    $data['professional_id'] ?? null,
+                    $availability,
                 );
+            }
+
+            $nextAvailableStart = $availability->nextAvailableStart(
+                $type,
+                $startsAt,
+                $data['professional_id'] ?? null,
+            );
 
             return ApiResponse::error(
                 $this->availabilityConflictMessage($startsAt, $endsAt, $overlap, $nextAvailableStart),
-                422
+                422,
             );
         }
 
@@ -401,5 +458,36 @@ class ConsultationController extends Controller
         }
 
         return $message.' The next available start time is '.$nextAvailableStart->format('M d, Y').' at '.$nextAvailableStart->format('g:i A').'.';
+    }
+
+    private function timeSlotUnavailableResponse(
+        TimeSlotUnavailableException $exception,
+        ConsultationType $type,
+        CarbonImmutable $startsAt,
+        ?int $professionalId,
+        AvailabilityService $availability,
+        ?string $ignoreConsultationId = null,
+        ?int $ignoreParticipantId = null,
+    ) {
+        $endsAt = $startsAt->addMinutes($type->duration_minutes);
+        $additionalBusyIntervals = $exception->overlap === null ? [] : [$exception->overlap];
+        $nextAvailableStart = $availability->nextAvailableStart(
+            $type,
+            $startsAt,
+            $professionalId,
+            $additionalBusyIntervals,
+            $ignoreConsultationId,
+            $ignoreParticipantId,
+        );
+
+        return ApiResponse::error(
+            $this->availabilityConflictMessage(
+                $startsAt,
+                $endsAt,
+                $exception->overlap,
+                $nextAvailableStart,
+            ),
+            422,
+        );
     }
 }

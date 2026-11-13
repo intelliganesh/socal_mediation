@@ -103,7 +103,8 @@ class FreeIntroCallWorkflowService
             $consultation->type,
             $startsAt,
             $data['professional_id'] ?? $consultation->professional_id,
-            ignoreParticipantId: $participant->id
+            ignoreParticipantId: $participant->id,
+            checkLiveOutlook: true,
         );
 
         $participant->update([

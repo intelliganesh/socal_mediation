@@ -823,6 +823,104 @@ class ConsultationApiTest extends TestCase
         $this->assertStringNotContainsString('https://payment-result.example.test', $html);
     }
 
+    public function test_free_intro_participant_conflict_suggests_next_available_start(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-01 09:00:00', 'Asia/Kolkata'));
+        config([
+            'app.booking_timezone' => 'Asia/Kolkata',
+            'services.outlook.enabled' => false,
+        ]);
+        $this->seed();
+        Mail::fake();
+
+        $type = ConsultationType::where('slug', 'socal-free-intro-call')->firstOrFail();
+        $consultationId = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'phone',
+            'primary_client' => [
+                'first_name' => 'Primary',
+                'last_name' => 'Client',
+                'email' => 'free.intro.primary@example.com',
+            ],
+            'participants' => [[
+                'first_name' => 'Invited',
+                'last_name' => 'Client',
+                'email' => 'free.intro.invited@example.com',
+            ]],
+        ])->assertCreated()->json('data.uuid');
+
+        $this->postJson('/api/v1/consultations/'.$consultationId.'/complete', [
+            'starts_at' => '2026-09-08T09:00:00+05:30',
+        ])->assertOk();
+
+        $participant = Consultation::findOrFail($consultationId)
+            ->participants()
+            ->where('is_primary', false)
+            ->firstOrFail();
+
+        $this->enableSharedOutlookForTest();
+        $this->fakeLiveOutlookConflict('2026-09-10T15:20:00', '2026-09-10T15:50:00');
+
+        $response = $this->postJson('/api/v1/free-intro-slots/'.$participant->scheduling_token, [
+            'starts_at' => '2026-09-10T15:30:00+05:30',
+        ]);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/calendarView'));
+
+        $response->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'Another appointment from 3:20 PM to 3:50 PM conflicts with your selected time, 3:30 PM to 3:45 PM. Please choose another start time. The next available start time is Sep 10, 2026 at 4:00 PM.'
+            );
+
+        $this->assertNull($participant->refresh()->scheduled_starts_at);
+    }
+
+    public function test_reschedule_conflict_suggests_next_available_start(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-01 09:00:00', 'Asia/Kolkata'));
+        config([
+            'app.booking_timezone' => 'Asia/Kolkata',
+            'services.outlook.enabled' => false,
+        ]);
+        $this->seed();
+        Mail::fake();
+
+        $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
+        $consultationId = $this->postJson('/api/v1/consultations/draft', [
+            'consultation_type_id' => $type->id,
+            'consultation_mode' => 'phone',
+            'primary_client' => [
+                'first_name' => 'Reschedule',
+                'last_name' => 'Client',
+                'email' => 'reschedule.conflict@example.com',
+            ],
+        ])->assertCreated()->json('data.uuid');
+
+        $this->postJson('/api/v1/consultations/'.$consultationId.'/complete', [
+            'starts_at' => '2026-09-08T09:00:00+05:30',
+            'payment_mode' => 'full',
+            'payment_method' => 'card',
+        ])->assertOk();
+
+        $this->enableSharedOutlookForTest();
+        $this->fakeLiveOutlookConflict('2026-09-10T15:20:00', '2026-09-10T15:50:00');
+
+        $response = $this->postJson('/api/v1/consultations/'.$consultationId.'/reschedule', [
+            'starts_at' => '2026-09-10T15:30:00+05:30',
+        ]);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/calendarView'));
+
+        $response->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'Another appointment from 3:20 PM to 3:50 PM conflicts with your selected time, 3:30 PM to 4:30 PM. Please choose another start time. The next available start time is Sep 10, 2026 at 4:00 PM.'
+            );
+
+        $this->assertSame('2026-09-08 09:00:00', Consultation::findOrFail($consultationId)->getRawOriginal('starts_at'));
+    }
+
     public function test_split_payment_links_are_sent_only_to_selected_payment_participant_emails(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-07-01'));
@@ -3765,6 +3863,39 @@ class ConsultationApiTest extends TestCase
             'services.converge.user_id' => 'api-user',
             'services.converge.pin' => 'secret-pin',
             'services.converge.return_url' => 'https://app.example.test/api/v1/payments/converge/return',
+        ]);
+    }
+
+    private function enableSharedOutlookForTest(): void
+    {
+        config([
+            'services.outlook.enabled' => true,
+            'services.outlook.tenant_id' => 'tenant-id',
+            'services.outlook.client_id' => 'client-id',
+            'services.outlook.client_secret' => 'client-secret',
+            'services.outlook.login_base_url' => 'https://login.microsoftonline.com',
+            'services.outlook.base_url' => 'https://graph.microsoft.com/v1.0',
+            'services.outlook.user_id' => 'shared@example.com',
+            'services.outlook.calendar_id' => 'shared-calendar',
+        ]);
+    }
+
+    private function fakeLiveOutlookConflict(string $startsAt, string $endsAt): void
+    {
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response([
+                'access_token' => 'graph-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/calendarView*' => Http::response([
+                'value' => [[
+                    'id' => 'new-live-conflict',
+                    'subject' => 'Client appointment',
+                    'showAs' => 'busy',
+                    'start' => ['dateTime' => $startsAt, 'timeZone' => 'Asia/Kolkata'],
+                    'end' => ['dateTime' => $endsAt, 'timeZone' => 'Asia/Kolkata'],
+                ]],
+            ]),
         ]);
     }
 }

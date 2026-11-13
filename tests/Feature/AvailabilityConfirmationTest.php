@@ -203,12 +203,42 @@ class AvailabilityConfirmationTest extends TestCase
         ])->assertUnprocessable()
             ->assertJsonPath(
                 'message',
-                'Another appointment from 12:45 PM to 1:15 PM conflicts with your selected time, 12:30 PM to 1:30 PM. Please choose another start time.'
+                'Another appointment from 12:45 PM to 1:15 PM conflicts with your selected time, 12:30 PM to 1:30 PM. Please choose another start time. The next available start time is Sep 10, 2026 at 1:30 PM.'
             );
 
         Http::assertSent(fn ($request) => str_contains($request->url(), '/calendarView')
             && str_contains($request->url(), 'startDateTime=2026-09-10T12%3A30%3A00%2B05%3A30')
             && str_contains($request->url(), 'endDateTime=2026-09-10T13%3A30%3A00%2B05%3A30'));
+    }
+
+    public function test_free_intro_live_conflict_suggests_the_next_fifteen_minute_start(): void
+    {
+        $this->enableOutlook();
+        Http::fake([
+            'login.microsoftonline.com/tenant-id/oauth2/v2.0/token' => Http::response([
+                'access_token' => 'graph-token',
+                'expires_in' => 3600,
+            ]),
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/calendarView*' => Http::response([
+                'value' => [[
+                    'id' => 'new-free-intro-conflict',
+                    'subject' => 'Client appointment',
+                    'showAs' => 'busy',
+                    'start' => ['dateTime' => '2026-09-10T15:20:00', 'timeZone' => 'Asia/Kolkata'],
+                    'end' => ['dateTime' => '2026-09-10T15:50:00', 'timeZone' => 'Asia/Kolkata'],
+                ]],
+            ]),
+        ]);
+        $type = ConsultationType::where('slug', 'socal-free-intro-call')->firstOrFail();
+
+        $this->postJson('/api/v1/availability/confirm', [
+            'consultation_type_id' => $type->id,
+            'starts_at' => '2026-09-10T15:30:00+05:30',
+        ])->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'Another appointment from 3:20 PM to 3:50 PM conflicts with your selected time, 3:30 PM to 3:45 PM. Please choose another start time. The next available start time is Sep 10, 2026 at 4:00 PM.'
+            );
     }
 
     public function test_confirmation_fails_closed_when_live_outlook_cannot_be_checked(): void

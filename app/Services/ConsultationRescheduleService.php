@@ -30,7 +30,13 @@ class ConsultationRescheduleService
         $type = $consultation->type;
         $professionalId = $data['professional_id'] ?? $consultation->professional_id;
 
-        $this->availability->assertAvailable($type, $startsAt, $professionalId, $consultation->id);
+        $this->availability->assertAvailable(
+            $type,
+            $startsAt,
+            $professionalId,
+            $consultation->id,
+            checkLiveOutlook: true,
+        );
 
         return DB::transaction(function () use ($consultation, $startsAt, $timezone, $type, $professionalId, $source) {
             $oldStartsAt = $consultation->starts_at?->toIso8601String();

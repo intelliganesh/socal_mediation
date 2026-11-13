@@ -74,7 +74,14 @@ class AvailabilityService
             ->first();
     }
 
-    public function nextAvailableStart(ConsultationType $type, CarbonImmutable $after, ?int $professionalId = null): ?CarbonImmutable
+    public function nextAvailableStart(
+        ConsultationType $type,
+        CarbonImmutable $after,
+        ?int $professionalId = null,
+        array $additionalBusyIntervals = [],
+        ?string $ignoreConsultationId = null,
+        ?int $ignoreParticipantId = null,
+    ): ?CarbonImmutable
     {
         $now = CarbonImmutable::now($after->timezone);
         $searchEnd = $now->startOfDay()->addMonths(4)->endOfDay();
@@ -84,7 +91,15 @@ class AvailabilityService
         }
 
         $searchStart = $after->greaterThan($now) ? $after : $now;
-        $busyIntervals = $this->busyIntervalsForRange($searchStart->startOfDay(), $searchEnd);
+        $busyIntervals = array_merge(
+            $this->busyIntervalsForRange(
+                $searchStart->startOfDay(),
+                $searchEnd,
+                $ignoreConsultationId,
+                $ignoreParticipantId,
+            ),
+            $additionalBusyIntervals,
+        );
 
         for ($day = $searchStart->startOfDay(); $day->lessThanOrEqualTo($searchEnd); $day = $day->addDay()) {
             if ($day->isSunday()) {
@@ -205,6 +220,14 @@ class AvailabilityService
 
         $result = ExternalCalendarEvent::query()
             ->where('is_busy', true)
+            ->when($ignoreConsultationId, fn ($query) => $query->where(function ($query) use ($ignoreConsultationId) {
+                $query->whereNull('metadata->consultation_uuid')
+                    ->orWhere('metadata->consultation_uuid', '!=', $ignoreConsultationId);
+            }))
+            ->when($ignoreParticipantId, fn ($query) => $query->where(function ($query) use ($ignoreParticipantId) {
+                $query->whereNull('metadata->participant_id')
+                    ->orWhere('metadata->participant_id', '!=', $ignoreParticipantId);
+            }))
             ->where('starts_at', '<', $endsAtDatabase)
             ->where('ends_at', '>', $startsAtDatabase)
             ->exists();
@@ -220,25 +243,40 @@ class AvailabilityService
         return $this->busyIntervalsForRange($rangeStart, $rangeEnd);
     }
 
-    private function busyIntervalsForRange(CarbonImmutable $rangeStart, CarbonImmutable $rangeEnd): array
+    private function busyIntervalsForRange(
+        CarbonImmutable $rangeStart,
+        CarbonImmutable $rangeEnd,
+        ?string $ignoreConsultationId = null,
+        ?int $ignoreParticipantId = null,
+    ): array
     {
         $rangeStartDatabase = $this->databaseDateTime($rangeStart);
         $rangeEndDatabase = $this->databaseDateTime($rangeEnd);
 
         $consultations = Consultation::query()
             ->whereIn('status', ['payment_pending', 'paid', 'scheduled'])
+            ->when($ignoreConsultationId, fn ($query) => $query->whereKeyNot($ignoreConsultationId))
             ->where('starts_at', '<', $rangeEndDatabase)
             ->where('ends_at', '>', $rangeStartDatabase)
             ->get(['starts_at', 'ends_at']);
 
         $participantSlots = ConsultationParticipant::query()
             ->where('scheduling_status', 'scheduled')
+            ->when($ignoreParticipantId, fn ($query) => $query->whereKeyNot($ignoreParticipantId))
             ->where('scheduled_starts_at', '<', $rangeEndDatabase)
             ->where('scheduled_ends_at', '>', $rangeStartDatabase)
             ->get(['scheduled_starts_at', 'scheduled_ends_at']);
 
         $outlookEvents = ExternalCalendarEvent::query()
             ->where('is_busy', true)
+            ->when($ignoreConsultationId, fn ($query) => $query->where(function ($query) use ($ignoreConsultationId) {
+                $query->whereNull('metadata->consultation_uuid')
+                    ->orWhere('metadata->consultation_uuid', '!=', $ignoreConsultationId);
+            }))
+            ->when($ignoreParticipantId, fn ($query) => $query->where(function ($query) use ($ignoreParticipantId) {
+                $query->whereNull('metadata->participant_id')
+                    ->orWhere('metadata->participant_id', '!=', $ignoreParticipantId);
+            }))
             ->where('starts_at', '<', $rangeEndDatabase)
             ->where('ends_at', '>', $rangeStartDatabase)
             ->get(['starts_at', 'ends_at']);
