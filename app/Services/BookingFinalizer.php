@@ -4,11 +4,13 @@ namespace App\Services;
 
 use App\Models\Consultation;
 use App\Models\PaymentRequest;
+use App\Services\Integrations\OutlookCalendarClient;
 
 class BookingFinalizer
 {
     public function __construct(
         private readonly QuestionnaireWorkflowService $questionnaires,
+        private readonly OutlookCalendarClient $outlook,
     ) {}
 
     public function markPaidByAdmin(Consultation $consultation, bool $triggerWorkflow = true): Consultation
@@ -56,6 +58,7 @@ class BookingFinalizer
         ]);
 
         $consultation = $consultation->refresh()->load(['participants', 'paymentRequests.participant']);
+        $this->removeOutlookHoldPrefix($consultation);
         $this->questionnaires->sendQuestionnairesAfterManualPayment($consultation);
         $this->questionnaires->releaseIfComplete($consultation);
 
@@ -72,6 +75,7 @@ class BookingFinalizer
             $updates = ['payment_status' => 'paid', 'status' => 'paid', 'confirmed_at' => now()];
 
             $consultation->update($updates);
+            $this->removeOutlookHoldPrefix($consultation->refresh());
             $this->questionnaires->sendQuestionnairesForPaidParticipants($consultation->refresh()->load(['participants', 'paymentRequests.participant']));
 
             if (! $wasFullyPaid) {
@@ -95,5 +99,37 @@ class BookingFinalizer
         }
 
         return $consultation->refresh();
+    }
+
+    private function removeOutlookHoldPrefix(Consultation $consultation): void
+    {
+        if (! config('services.outlook.enabled')) {
+            return;
+        }
+
+        try {
+            $syncedConsultation = $consultation->refresh()->load(['type', 'professional']);
+            $outlookEvent = $this->outlook->removeBookingHoldPrefix($syncedConsultation);
+
+            if ($outlookEvent === null) {
+                return;
+            }
+
+            $consultation->integrationLogs()->create([
+                'provider' => 'outlook',
+                'action' => 'payment_completed_hold_update',
+                'status' => 'synced',
+                'request_payload' => $this->outlook->consultationEventPayload($syncedConsultation),
+                'response_payload' => $outlookEvent->metadata['outlook_response'] ?? $outlookEvent->metadata,
+                'message' => 'Outlook HOLD prefix removed after payment completion.',
+            ]);
+        } catch (\Throwable $exception) {
+            $consultation->integrationLogs()->create([
+                'provider' => 'outlook',
+                'action' => 'payment_completed_hold_update',
+                'status' => 'failed',
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 }

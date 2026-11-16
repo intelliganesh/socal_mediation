@@ -290,6 +290,12 @@ class OutlookCalendarClient
         $consultation->loadMissing('questionnaireSubmissions');
 
         if (! $this->isReadyForOutlook($consultation)) {
+            $existing = $this->trackedConsultationEvent($consultation);
+
+            if (($existing?->metadata['is_hold'] ?? false) && $this->bookingHoldStillExists($consultation->id)) {
+                return $existing;
+            }
+
             $this->deleteConsultationEvent($consultation);
 
             return null;
@@ -319,6 +325,31 @@ class OutlookCalendarClient
             return $this->syncConsultationToCalendar($consultation, $source, true);
         } catch (\Throwable $exception) {
             throw new OutlookAvailabilityUnavailableException($exception);
+        }
+    }
+
+    public function removeBookingHoldPrefix(
+        Consultation $consultation,
+        string $source = 'payment_completed_hold_update',
+    ): ?ExternalCalendarEvent {
+        $this->assertEnabled();
+        $consultation->loadMissing(['type', 'professional']);
+
+        if ($consultation->payment_status !== 'paid') {
+            throw new \DomainException('Consultation payment must be complete before removing the Outlook hold prefix.');
+        }
+
+        $existing = $this->trackedConsultationEvent($consultation);
+
+        if (! ($existing?->metadata['is_hold'] ?? false)
+            || ! str_starts_with((string) $existing->title, '[HOLD] ')) {
+            return null;
+        }
+
+        try {
+            return $this->syncConsultationToCalendar($consultation, $source, true, false);
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException('Outlook booking hold update failed: '.$exception->getMessage(), previous: $exception);
         }
     }
 
@@ -447,25 +478,19 @@ class OutlookCalendarClient
         }
     }
 
-    private function syncConsultationToCalendar(Consultation $consultation, string $source, bool $isHold = false): ExternalCalendarEvent
-    {
-        $payload = $this->consultationEventPayload($consultation, $isHold);
+    private function syncConsultationToCalendar(
+        Consultation $consultation,
+        string $source,
+        bool $isHold = false,
+        ?bool $showHoldPrefix = null,
+    ): ExternalCalendarEvent {
+        $showHoldPrefix ??= $isHold;
+        $payload = $this->consultationEventPayload($consultation, $showHoldPrefix);
         $externalId = $this->trackedConsultationExternalId($consultation);
-        $existing = ExternalCalendarEvent::query()
-            ->where('provider', 'outlook')
-            ->where('external_id', $externalId)
-            ->first();
+        $existing = $this->trackedConsultationEvent($consultation);
 
-        if (! $existing) {
-            $existing = ExternalCalendarEvent::query()
-                ->where('provider', 'outlook')
-                ->where('metadata->consultation_uuid', $consultation->id)
-                ->whereNotNull('metadata->outlook_event_id')
-                ->first();
-
-            if ($existing) {
-                $existing->update(['external_id' => $externalId]);
-            }
+        if ($existing && $existing->external_id !== $externalId) {
+            $existing->update(['external_id' => $externalId]);
         }
 
         if ($existing?->metadata['outlook_event_id'] ?? false) {
@@ -501,9 +526,29 @@ class OutlookCalendarClient
                 'outlook_response' => $this->eventResponsePayload($event),
                 'source' => $source,
                 'is_hold' => $isHold,
+                'hold_prefix_visible' => $showHoldPrefix,
                 'synced_at' => now()->toIso8601String(),
             ],
         ]);
+    }
+
+    private function trackedConsultationEvent(Consultation $consultation): ?ExternalCalendarEvent
+    {
+        $externalId = $this->trackedConsultationExternalId($consultation);
+        $existing = ExternalCalendarEvent::query()
+            ->where('provider', 'outlook')
+            ->where('external_id', $externalId)
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        return ExternalCalendarEvent::query()
+            ->where('provider', 'outlook')
+            ->where('metadata->consultation_uuid', $consultation->id)
+            ->whereNotNull('metadata->outlook_event_id')
+            ->first();
     }
 
     private function syncParticipantSlotToCalendar(ConsultationParticipant $participant, string $source): ExternalCalendarEvent

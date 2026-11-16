@@ -16,7 +16,9 @@ use App\Models\ExternalCalendarEvent;
 use App\Models\PaymentRequest;
 use App\Models\QuestionnaireSubmission;
 use App\Services\BookingDateTimeService;
+use App\Services\BookingFinalizer;
 use App\Services\Integrations\ConvergeClient;
+use App\Services\Integrations\OutlookCalendarClient;
 use App\Services\QuestionnaireWorkflowService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
@@ -229,6 +231,10 @@ class ConsultationApiTest extends TestCase
                 'id' => 'completion-shared-event-id',
                 'webLink' => 'https://outlook.office.com/completion-shared-event',
             ], 201),
+            'graph.microsoft.com/v1.0/users/shared%40example.com/calendars/shared-calendar/events/completion-shared-event-id' => Http::response([
+                'id' => 'completion-shared-event-id',
+                'webLink' => 'https://outlook.office.com/completion-shared-event',
+            ]),
         ]);
 
         $type = ConsultationType::where('slug', 'legal-professional-consultation')->firstOrFail();
@@ -264,6 +270,32 @@ class ConsultationApiTest extends TestCase
             'action' => 'automatic_booking_hold',
             'status' => 'synced',
         ]);
+
+        $consultation = Consultation::findOrFail($consultationId);
+        $consultation->paymentRequests()->update([
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        app(BookingFinalizer::class)->syncPaymentStatus($consultation);
+
+        $event = ExternalCalendarEvent::where('external_id', 'consultation-'.$consultationId)->firstOrFail();
+        $this->assertSame($consultation->booking_number.' - '.$type->name, $event->title);
+        $this->assertTrue((bool) $event->metadata['is_hold']);
+        $this->assertFalse((bool) $event->metadata['hold_prefix_visible']);
+        $this->assertDatabaseHas('integration_logs', [
+            'loggable_type' => Consultation::class,
+            'loggable_id' => $consultationId,
+            'provider' => 'outlook',
+            'action' => 'payment_completed_hold_update',
+            'status' => 'synced',
+        ]);
+
+        $preservedEvent = app(OutlookCalendarClient::class)
+            ->syncConsultation($consultation->refresh());
+
+        $this->assertSame($event->id, $preservedEvent?->id);
+        Http::assertNotSent(fn ($request) => $request->method() === 'DELETE');
     }
 
     public function test_completion_rechecks_live_outlook_and_preserves_the_draft_on_conflict(): void
