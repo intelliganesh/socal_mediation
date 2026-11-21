@@ -35,13 +35,17 @@
                 </label>
             </div>
 
+            @if(session('status'))
+                <p class="mt-5 rounded-lg border border-[#BBF7D0] bg-[#BBF7D0] px-4 py-3 text-sm font-bold text-[#166534]">{{ session('status') }}</p>
+            @endif
+
             @error('email')
                 <p class="mt-5 rounded-lg border border-[#F8EEF1] bg-[#F8EEF1] px-4 py-3 text-sm font-bold text-[#B91C1C]">{{ $message }}</p>
             @enderror
 
             <button class="mt-9 h-12 w-full rounded-lg bg-[#082BC3] text-lg font-bold text-white shadow-[0_12px_28px_rgba(8,43,195,0.26)] hover:bg-[#111827]" type="submit">Sign In</button>
 
-            {{-- <a class="mt-6 block text-center text-lg font-semibold text-[#082BC3]" href="{{ route('admin.login') }}">Forgot password?</a> --}}
+            <a class="mt-6 block text-center text-sm font-bold text-[#082BC3] hover:text-[#111827]" href="{{ route('admin.password.request') }}">Forgot password?</a>
         </form>
     </main>
 

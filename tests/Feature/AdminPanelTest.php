@@ -91,6 +91,7 @@ class AdminPanelTest extends TestCase
                 'name' => 'Legal Admin',
                 'email' => 'legal.admin@example.com',
                 'password' => 'password123',
+                'password_confirmation' => 'password123',
                 'application' => 'legal',
             ])
             ->assertRedirect(route('admin.users.index'));

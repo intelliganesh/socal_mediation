@@ -22,10 +22,15 @@
             </label>
 
             <label class="grid gap-2">
-                <span class="text-sm font-bold text-[#111827]">Password</span>
-                <input class="h-11 rounded-lg border border-[#E5E7EB] px-3 text-sm font-semibold text-[#111827]" type="password" name="password" @required($mode === 'create')>
-                <span class="text-xs font-semibold text-gray-500">{{ $mode === 'create' ? 'Minimum 8 characters.' : 'Leave blank to keep the current password.' }}</span>
+                <span class="text-sm font-bold text-[#111827]">{{ $mode === 'create' ? 'Password' : 'Reset Password' }}</span>
+                <input class="h-11 rounded-lg border border-[#E5E7EB] px-3 text-sm font-semibold text-[#111827]" type="password" name="password" autocomplete="new-password" @required($mode === 'create')>
+                <span class="text-xs font-semibold text-gray-500">{{ $mode === 'create' ? 'Minimum 8 characters.' : 'Enter a new password only when resetting this user’s password.' }}</span>
                 @error('password')<span class="text-sm font-bold text-[#B91C1C]">{{ $message }}</span>@enderror
+            </label>
+
+            <label class="grid gap-2">
+                <span class="text-sm font-bold text-[#111827]">Confirm Password</span>
+                <input class="h-11 rounded-lg border border-[#E5E7EB] px-3 text-sm font-semibold text-[#111827]" type="password" name="password_confirmation" autocomplete="new-password" @required($mode === 'create')>
             </label>
 
             <label class="grid gap-2">

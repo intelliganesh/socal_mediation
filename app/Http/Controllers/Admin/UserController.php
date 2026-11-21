@@ -92,7 +92,7 @@ class UserController extends Controller
                 'max:255',
                 Rule::unique('users', 'email')->ignore($user),
             ],
-            'password' => [$user ? 'nullable' : 'required', 'string', 'min:8'],
+            'password' => [$user ? 'nullable' : 'required', 'string', 'min:8', 'confirmed'],
             'application' => ['nullable', 'string', Rule::in(['socal', 'legal'])],
         ]);
     }

@@ -4,6 +4,8 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\CalendarController;
 use App\Http\Controllers\Admin\ConsultationAdminController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\PasswordController;
+use App\Http\Controllers\Admin\PasswordResetController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\WebsiteFormAdminController;
@@ -17,6 +19,19 @@ Route::get('/', function () {
 Route::get('/login', function () {
     return redirect()->route('admin.login');
 })->name('login');
+
+Route::prefix('admin')->middleware('guest')->group(function () {
+    Route::get('forgot-password', [PasswordResetController::class, 'create'])
+        ->name('admin.password.request');
+    Route::post('forgot-password', [PasswordResetController::class, 'store'])
+        ->middleware('throttle:5,1')
+        ->name('admin.password.email');
+    Route::get('reset-password/{token}', [PasswordResetController::class, 'edit'])
+        ->name('password.reset');
+    Route::post('reset-password', [PasswordResetController::class, 'update'])
+        ->middleware('throttle:5,1')
+        ->name('admin.password.reset.update');
+});
 
 Route::get('payments/{paymentRequest}/checkout', [ConvergeCheckoutController::class, 'checkout'])
     ->middleware('signed')
@@ -44,6 +59,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     Route::middleware('auth')->group(function () {
         Route::post('logout', [AuthController::class, 'logout'])->name('logout');
+        Route::get('password', [PasswordController::class, 'edit'])->name('password.edit');
+        Route::put('password', [PasswordController::class, 'update'])->name('password.update');
         Route::get('/', DashboardController::class)->name('dashboard');
         Route::get('consultations', [ConsultationAdminController::class, 'index'])->name('consultations.index');
         Route::get('consultations/{consultation}', [ConsultationAdminController::class, 'show'])->name('consultations.show');

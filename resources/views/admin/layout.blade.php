@@ -120,6 +120,9 @@
                         <div class="grid h-10 w-10 place-items-center rounded-full text-sm font-bold text-white" style="background: {{ $brand['color'] }}">{{ $initials }}</div>
                         <div class="hidden text-sm font-bold text-[#111827] sm:block">{{ $userName }}</div>
                         @auth
+                            <a class="grid h-9 w-9 place-items-center rounded-lg text-gray-500 hover:bg-[#F7F8FC] hover:text-[#111827]" href="{{ route('admin.password.edit') }}" aria-label="Change password" title="Change password">
+                                <i data-lucide="key-round" class="h-5 w-5"></i>
+                            </a>
                             <form method="post" action="{{ route('admin.logout') }}">
                                 @csrf
                                 <button class="grid h-9 w-9 place-items-center rounded-lg text-gray-500 hover:bg-[#F7F8FC] hover:text-[#111827]" aria-label="Logout">
