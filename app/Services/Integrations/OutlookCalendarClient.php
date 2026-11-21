@@ -72,7 +72,7 @@ class OutlookCalendarClient
         }
 
         try {
-            $overlaps = collect($this->calendarView($startsAt, $endsAt))
+            $overlaps = collect($this->calendarView($startsAt, $endsAt, true))
                 ->reject(fn (array $event) => ($event['isCancelled'] ?? false)
                     || ($event['showAs'] ?? 'busy') === 'free'
                     || ($ignoreConsultationId !== null
@@ -620,7 +620,7 @@ class OutlookCalendarClient
         return 'free-intro-participant-'.$participant->id;
     }
 
-    private function calendarView(CarbonImmutable $start, CarbonImmutable $end): array
+    private function calendarView(CarbonImmutable $start, CarbonImmutable $end, bool $liveCheck = false): array
     {
         $calendarUrl = $this->calendarUrl();
         $events = [];
@@ -632,7 +632,7 @@ class OutlookCalendarClient
         $nextUrl = $this->calendarViewUrl($calendarUrl.'/calendarView', $windowQuery + ['$top' => 100]);
 
         do {
-            $response = $this->graphRequest()
+            $response = $this->graphRequest($liveCheck)
                 ->get($nextUrl);
 
             if ($response->failed()) {
@@ -667,12 +667,19 @@ class OutlookCalendarClient
         return $scheme.$host.$port.$path.'?'.http_build_query($existingQuery, '', '&', PHP_QUERY_RFC3986).$fragment;
     }
 
-    private function graphRequest(): PendingRequest
+    private function graphRequest(bool $liveCheck = true): PendingRequest
     {
+        $connectTimeout = $liveCheck
+            ? (int) config('services.outlook.live_connect_timeout_seconds', 2)
+            : (int) config('services.outlook.sync_connect_timeout_seconds', 10);
+        $timeout = $liveCheck
+            ? (int) config('services.outlook.live_timeout_seconds', 5)
+            : (int) config('services.outlook.sync_timeout_seconds', 120);
+
         return Http::withToken($this->tokenProvider->accessToken())
             ->acceptJson()
-            ->connectTimeout((int) config('services.outlook.live_connect_timeout_seconds', 2))
-            ->timeout((int) config('services.outlook.live_timeout_seconds', 5));
+            ->connectTimeout($connectTimeout)
+            ->timeout($timeout);
     }
 
     private function createEvent(array $payload): array

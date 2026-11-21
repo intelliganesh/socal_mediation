@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Services;
 
 use App\Mail\ConsultationPaymentLinkMail;
@@ -36,7 +35,7 @@ class AdminPaymentNotificationService
             ->whereNotNull('payment_url')
             ->get();
 
-        $sent = 0;
+        $sent         = 0;
         $isReschedule = str_contains($action, 'reschedule');
 
         foreach ($paymentRequests as $paymentRequest) {
@@ -50,15 +49,15 @@ class AdminPaymentNotificationService
                 Mail::to($recipient)->send(new $mailable($paymentRequest, $isReschedule));
             } catch (\Throwable $exception) {
                 $consultation->integrationLogs()->create([
-                    'provider' => 'mail',
-                    'action' => $action,
-                    'status' => 'failed',
+                    'provider'        => 'mail',
+                    'action'          => $action,
+                    'status'          => 'failed',
                     'request_payload' => [
-                        'recipient' => $recipient,
-                        'template' => $mailable,
+                        'recipient'            => $recipient,
+                        'template'             => $mailable,
                         'payment_request_uuid' => $paymentRequest->id,
                     ],
-                    'message' => 'Payment email failed: '.$exception->getMessage(),
+                    'message'         => 'Payment email failed: ' . $exception->getMessage(),
                 ]);
 
                 continue;
@@ -66,15 +65,15 @@ class AdminPaymentNotificationService
 
             $paymentRequest->forceFill(['sent_at' => now()])->save();
             $consultation->integrationLogs()->create([
-                'provider' => 'mail',
-                'action' => $action,
-                'status' => 'sent',
+                'provider'        => 'mail',
+                'action'          => $action,
+                'status'          => 'sent',
                 'request_payload' => [
-                    'recipient' => $recipient,
-                    'template' => $mailable,
+                    'recipient'            => $recipient,
+                    'template'             => $mailable,
                     'payment_request_uuid' => $paymentRequest->id,
                 ],
-                'message' => $this->sentMessage($action),
+                'message'         => $this->sentMessage($action),
             ]);
             $sent++;
         }
@@ -82,9 +81,9 @@ class AdminPaymentNotificationService
         if ($sent === 0) {
             $consultation->integrationLogs()->create([
                 'provider' => 'mail',
-                'action' => $action,
-                'status' => 'skipped',
-                'message' => 'No unpaid payment requests with email recipients were found.',
+                'action'   => $action,
+                'status'   => 'skipped',
+                'message'  => 'No unpaid payment requests with email recipients were found.',
             ]);
         }
 
@@ -100,9 +99,9 @@ class AdminPaymentNotificationService
     private function sentMessage(string $action): string
     {
         return match ($action) {
-            'manual_payment_reminder' => 'Manual reminder email sent to unpaid payer.',
+            'manual_payment_reminder'    => 'Manual reminder email sent to unpaid payer.',
             'automatic_payment_reminder' => 'Automatic payment reminder email sent to unpaid payer.',
-            default => 'Payment link email sent to unpaid payer.',
+            default                      => 'Payment link email sent to unpaid payer.',
         };
     }
 }

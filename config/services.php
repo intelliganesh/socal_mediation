@@ -73,6 +73,8 @@ return [
         'sync_interval_minutes' => env('OUTLOOK_SYNC_INTERVAL_MINUTES', 15),
         'live_connect_timeout_seconds' => env('OUTLOOK_LIVE_CONNECT_TIMEOUT_SECONDS', 2),
         'live_timeout_seconds' => env('OUTLOOK_LIVE_TIMEOUT_SECONDS', 5),
+        'sync_connect_timeout_seconds' => env('OUTLOOK_SYNC_CONNECT_TIMEOUT_SECONDS', 10),
+        'sync_timeout_seconds' => env('OUTLOOK_SYNC_TIMEOUT_SECONDS', 120),
         'tenant_id' => env('OUTLOOK_TENANT_ID'),
         'client_id' => env('OUTLOOK_CLIENT_ID'),
         'client_secret' => env('OUTLOOK_CLIENT_SECRET'),
